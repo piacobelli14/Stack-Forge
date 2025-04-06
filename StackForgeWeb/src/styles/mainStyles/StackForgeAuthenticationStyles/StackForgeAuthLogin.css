@@ -1,0 +1,245 @@
+@keyframes loginCellFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.loginCellFadeIn {
+    animation: loginCellFadeIn 2s ease-out;
+}
+
+.loginPageWrapper {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-start; 
+    overflow: scroll; 
+    height: 100vh; 
+}
+
+@media (min-width: 1700px) {
+    .loginCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        min-height: calc(100vh - 8vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (min-width: 1300px) and (max-width: 1699px) {
+    .loginCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        min-height: calc(100vh - 10vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (min-width: 700px) and (max-width: 1299px) {
+    .loginCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        min-height: calc(100vh - 10vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (min-width: 500px) and (max-width: 699px) {
+    .loginCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        min-height: calc(100vh - 8vh) !important; 
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (max-width: 499px) {
+    .loginCellHeaderContainer {
+        display: flex;
+        flex-direction: column; 
+        justify-content: flex-start;
+        align-items: center;
+        width: 100vw;
+        min-height: calc(100vh - 6vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll;  
+    }
+}
+
+.loginVideoBackhground {
+    width: calc(100% - 30rem); 
+    height: 100%; 
+    top: 0; 
+    left: 0; 
+    object-fit: cover;
+    z-index: 1; 
+    pointer-events: none;
+}
+
+.loginBlock {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-start;
+    align-items: center;
+    top: 0;
+    right: 0;  
+    z-index: 10;
+    border-radius: 0; 
+    border: none; 
+    height: 100%; 
+    width: 30rem;
+    background: linear-gradient(to bottom, #0C042F, #2D2C33);
+}
+
+@media (min-width: 700px) {
+    .loginBlock {
+        width: 30rem; 
+    }
+
+    .loginVideoBackhground {
+        width: calc(100% - 30rem); 
+    }
+}
+
+@media (max-width: 699px) {
+    .loginBlock {
+        width: 26rem; 
+    }
+
+    .loginVideoBackhground {
+        width: calc(100% - 26rem); 
+    }
+}
+
+.loginLogo {
+    height: 10rem;
+    margin-right: 1rem;
+    margin-top: 3rem; 
+    margin-bottom: 2rem; 
+}
+
+.loginInputWrapper {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    align-items: center;
+    position: relative;
+    height: 2.8rem; 
+    width: 20rem; 
+    margin-bottom: 0.8rem; 
+}
+
+.loginInput {
+    height: 100%; 
+    width: 100%; 
+    font-size: 0.7rem; 
+    font-weight: 500; 
+    color: black; 
+    box-shadow: 0 0 3px rgba(255, 255, 255, 0.8);
+    background: #f5f5f8; 
+    border: 0.2vh solid grey; 
+    border-radius: 0.4vw;
+    outline: black; 
+    text-indent: 0.8vw;
+}
+
+.loginInputButton {
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    width: 20rem; 
+    height: 2.4rem; 
+    border: 0.2vh solid #2D3436; 
+    border-radius: 0.4vw; 
+    cursor: pointer; 
+    margin-top: 0.8rem; 
+    box-shadow: 0 0 3px white; 
+    padding: 0; 
+    
+}
+
+.loginInputText {
+    font-size: 0.7rem; 
+    font-weight: 600; 
+    color: white; 
+    cursor: pointer; 
+}
+
+.loginInput:hover {
+    opacity: 0.8;
+}
+
+.envelopeIcon {
+    font-size: 0.9rem; 
+    color: white;
+    margin-right: 0.5rem; 
+}
+
+.loginInputButton:hover .envelopeIcon,
+.loginInputButton:hover .loginInputText, 
+.loginInputButton:hover {
+    opacity: 0.7;
+}
+
+.loginSupplementalButton {
+    margin-top: 1rem; 
+    background-color: rgba(255,255,255,0.0); 
+    border: none; 
+    outline: none; 
+    color: #f5f5f5; 
+    font-size: 0.8rem; 
+    font-weight: 700; 
+    opacity: 0.7;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.loginSupplementalButton:hover {
+    opacity: 0.4; 
+    text-decoration: underline; 
+    transform: scale(1.05); 
+}
+
+.loginSupplementalButton:focus {
+    outline: none; 
+}
+
+.passwordToggleIcon {
+    display: flex; 
+    color: black; 
+    font-size: 0.7rem; 
+    position: absolute; 
+    top: 50%;  
+    right: 5%; 
+    transform: translateY(-50%); 
+    cursor: pointer; 
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    padding: 0; 
+}
+
+.loginError {
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    text-align: center; 
+    color: #E54B4B;
+    margin-top: 1rem;  
+}
+
+

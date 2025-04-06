@@ -1,0 +1,63 @@
+@media (min-width: 1700px) {
+    .tippy-box[data-theme~='tooltip-light'] {
+        background-color: #3a3a3a;
+        color: #c0c0c0;
+        padding: 0.4vw 5vw;
+        font-size: 0.8vw;
+        font-weight: 600;
+        border-radius: 0.4vw;
+        white-space: nowrap;
+        text-align: center;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-sizing: border-box;
+        box-shadow: 0 0 10px black; 
+    }
+
+    .tippy-box[data-theme~='tooltip-light'][data-placement^='top']>.tippy-arrow::before {
+        border-top-color: #3a3a3a;
+    }
+
+    .tippy-box[data-theme~='tooltip-light'][data-placement^='bottom']>.tippy-arrow::before {
+        border-bottom-color: #3a3a3a;
+    }
+
+    .tippy-box[data-theme~='tooltip-light'][data-placement^='left']>.tippy-arrow::before {
+        border-left-color: #3a3a3a;
+    }
+
+    .tippy-box[data-theme~='tooltip-light'][data-placement^='right']>.tippy-arrow::before {
+        border-right-color: #3a3a3a;
+    }
+}
+
+@media (max-width: 1699px) {
+    .tippy-box[data-theme~='tooltip-light'] {
+        background-color: #3a3a3a;
+        color: #c0c0c0;
+        padding: 0.4vw;
+        font-size: 0.9vw;
+        font-weight: 600;
+        border-radius: 0.4vw;
+        white-space: nowrap;
+        text-align: center;
+        box-shadow: 0 0 10px black; 
+    }
+
+    .tippy-box[data-theme~='tooltip-light'][data-placement^='top']>.tippy-arrow::before {
+        border-top-color: #3a3a3a;
+    }
+
+    .tippy-box[data-theme~='tooltip-light'][data-placement^='bottom']>.tippy-arrow::before {
+        border-bottom-color: #3a3a3a;
+    }
+
+    .tippy-box[data-theme~='tooltip-light'][data-placement^='left']>.tippy-arrow::before {
+        border-left-color: #3a3a3a;
+    }
+
+    .tippy-box[data-theme~='tooltip-light'][data-placement^='right']>.tippy-arrow::before {
+        border-right-color: #3a3a3a;
+    }
+}

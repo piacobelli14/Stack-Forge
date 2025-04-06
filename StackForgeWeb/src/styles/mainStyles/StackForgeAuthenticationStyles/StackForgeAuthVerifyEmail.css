@@ -1,0 +1,15 @@
+.verificationPageWrapper {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-start;
+    overflow: scroll;    
+} 
+
+.verificationHeaderContainer {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100vw;
+    height: 100vh;
+}

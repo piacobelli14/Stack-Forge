@@ -1,0 +1,220 @@
+.color-picker-tippy {
+    background: none;
+    border: none; 
+    box-shadow: none; 
+    padding: 0; 
+}
+
+.color-picker-tippy .tippy-arrow {
+    display: none; 
+}
+
+
+@media (min-width: 700px) and (max-width: 5399px) {
+    .stackforgeIDEColorPickerBackground {
+        padding: 2vw; 
+        background-color: #222222; 
+        color: #c0c0c0; 
+        display: inline-block; 
+        border-radius: 1vw;
+        border: 0.6vh solid black; 
+        box-shadow: 0 0 4px white; 
+        width: 30vw;
+    }
+
+    .stackforgeIDEColorPickerSaturationSquare {
+        cursor: crosshair; 
+        margin-bottom: 1vw; 
+        position: relative;
+        border: 0.05vh solid #989898;
+        border-radius: 0.6vw; 
+        width: 100%; 
+        height: 12vw; 
+    }
+
+    .stackforgeIDEColorPickerSaturationSquareGradient {
+        border-radius: 0.6vw;
+        border: 0.05vh solid #989898;
+        pointer-events: none; 
+        top: 0;
+        left: 0; 
+        right: 0; 
+        bottom: 0; 
+        position: absolute; 
+    }
+
+    .stackforgeIDESaturationSquareCursor {
+        position: absolute; 
+        width: 1.5vw; 
+        height: 1.5vw; 
+        border: 0.4vh solid #f5f5f5; 
+        border-radius: 50%; 
+        box-shadow: 0 0 4px #000;
+        transform: translate(-50%, -50%); 
+        pointer-events: none;
+    }
+
+    .stackforgeIDESliderStack {
+        display: flex; 
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        min-width: 100%; 
+    }
+
+    .stackforgeIDEColorSliderWrapper {
+        display: flex; 
+        justify-content: space-between;
+        align-items: center;
+        width: 100%; 
+    }
+
+    .stackforgeIDEColorSliderIcon {
+        width: 20%; 
+        display: flex; 
+        justify-content: center;
+        align-items: center;
+        font-size: 2vw; 
+        font-style: italic;
+    }
+
+    .stackforgeIDEColorSliderWrapperStack {
+        width: 80%; 
+        display: flex; 
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 1vw;
+    }
+
+    .stackforgeIDEHueSlider {
+        position: relative; 
+        cursor: pointer; 
+        border-radius: 0.4vw; 
+        border: 0.1vh solid #989898;
+        overflow: hidden;
+        height: 2vw; 
+        width: 100%; 
+    }
+
+    .stackforgeIDEHueSliderCursor {
+        position: absolute; 
+        top: 0; 
+        bottom: 0; 
+        width: 0.8vw; 
+        border: 0.4vh solid #f5f5f5; 
+        box-shadow: 0 0 4px #000; 
+        transform: translateX(-50%); 
+        pointer-events: none;
+        background-color: rgba(255,255,255,0.0); 
+        border-radius: 0.2vw;
+    }
+
+    .stackforgeIDEColorFormattingFlex {
+        display: flex; 
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        overflow: hidden;
+        margin-top: 2vw;
+    }
+    
+    .stackforgeIDEColorFormatSelection {
+        border: 0.4vh solid rgba(255,255,255,0.4); 
+        border-radius: 0.6vw; 
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        font-size: 1.1vw; 
+        font-weight: 800;
+        color: rgba(255,255,255,0.8); 
+        padding: 1vw; 
+        width: 25%;
+        background-color: rgba(123, 123, 123, 0.2);
+        box-sizing: border-box;
+        cursor: pointer;
+        text-align: center;
+        outline: none;
+    }
+    
+    .stackforgeIDEColorFormatSelection::-ms-expand {
+        display: none; 
+    }
+    
+    .stackforgeIDEColorFormatSelection {
+        -webkit-appearance: none;  
+        -moz-appearance: none;    
+        appearance: none;          
+    }
+    
+    .stackforgeIDEColorFormatSelection:hover {
+        opacity: 0.6; 
+        outline: none;
+        border: 0.4vh solid rgba(255,255,255,0.4); 
+    }
+
+    .stackforgeIDEColorFormatSelection:focus {
+        outline: none;
+        border: 0.4vh solid rgba(255,255,255,0.4); 
+    }
+    
+    .stackforgeIDEColorFormatEntryWrapper {
+        width: 100%; 
+        display: flex; 
+        justify-content: center;
+        align-items: center;
+        box-sizing: border-box;
+        height: 100%; 
+    }
+    
+    .stackforgeIDEColorInput, 
+    .stackforgeIDEColorInputBig, 
+    .stackforgeIDEAlphaInput {
+        box-sizing: border-box;
+        border: 0.4vh solid rgba(255,255,255,0.4);
+        border-radius: 0.6vw; 
+        font-size: 1.1vw; 
+        font-weight: 800;
+        color: #f5f5f5; 
+        padding: 1vw; 
+        background-color: rgba(123, 123, 123, 0.2);
+        height: 100%; ;
+    }
+    
+    .stackforgeIDEColorInputBig {
+        width: 100%; 
+        border-top-left-radius: 0; 
+        border-bottom-left-radius: 0;
+        border-left: none;
+        text-align: center;
+    }
+    
+    .stackforgeIDEColorInput {
+        width: 65%; 
+        border-radius: 0; 
+        border-left: none;
+        border-right: none; 
+        text-align: center;
+    }
+    
+    .stackforgeIDEAlphaInput {
+        width: 35%; 
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        text-align: center;
+        color: rgba(255,255,255,0.8);
+    }
+
+    .stackforgeIDEColorInput:hover, 
+    .stackforgeIDEColorInputBig:hover, 
+    .stackforgeIDEAlphaInput:hover {
+        outline: none; 
+        opacity: 0.6; 
+    }
+
+    .stackforgeIDEColorInput:focus, 
+    .stackforgeIDEColorInputBig:focus, 
+    .stackforgeIDEAlphaInput:focus {
+        outline: none; 
+    }
+    
+}

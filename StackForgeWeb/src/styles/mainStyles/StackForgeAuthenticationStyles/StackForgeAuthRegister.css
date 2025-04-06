@@ -1,0 +1,241 @@
+.registerPageWrapper {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-start; 
+    overflow: scroll; 
+    height: 100vh; 
+}
+
+@media (min-width: 1700px) {
+    .registerCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: calc(100vh - 8vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (min-width: 1300px) and (max-width: 1699px) {
+    .registerCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: calc(100vh - 10vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (min-width: 700px) and (max-width: 1299px) {
+    .registerCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: calc(100vh - 10vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (min-width: 500px) and (max-width: 699px) {
+    .registerCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: calc(100vh - 8vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (max-width: 499px) {
+    .registerCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: calc(100vh - 6vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+.registerTitle {
+    font-size: 1.2rem;
+    font-weight: 800;  
+    color: #f5f5f5;
+    opacity: 0.95; 
+    text-align: center;
+    width: 100%; 
+}
+
+.registerSubtitles {
+    font-size: 0.7rem;
+    font-weight: 400; 
+    color: #f5f5f5; 
+    opacity: 0.8; 
+    margin-top: 0.2rem; 
+    text-shadow: 0 0 1.5px rgba(255, 255, 255, 0.8); 
+    text-align: center; 
+    width: 100%; 
+    margin-bottom: 1rem;
+}
+
+.registerBlock {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-start;
+    align-items: center;
+    top: 0;
+    right: 0;  
+    z-index: 10;
+    border-radius: 0; 
+    border: none; 
+    height: 100%; 
+    width: 30rem;
+    background: linear-gradient(to bottom, #0C042F, #2D2C33);
+}
+
+@media (min-width: 700px) {
+    .registerBlock {
+        width: 30rem; 
+    }
+}
+
+@media (max-width: 699px) {
+    .registerBlock {
+        width: 26rem; 
+    }
+}
+
+.registerInputFlex, 
+.passwordInputFlex, 
+.passwordInputFlexLeading {
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    position: relative; 
+    min-width: 20rem; 
+    max-width: 20rem; 
+    height: 2.6rem; 
+    margin-bottom: 0.8rem;  
+}
+
+.registerInput, 
+.registerNameInput, 
+.passwordInput {
+    width: 100%; 
+    height: 100%; 
+    font-size: 0.7rem; 
+    font-weight: 500; 
+    color: black; 
+    box-shadow: 0 0 3px grey;
+    background: #f5f5f8; 
+    border: 0.2vh solid grey; 
+    border-radius: 0.4vw;
+    outline: black; 
+    text-indent: 0.8rem;
+    padding: 0; 
+    min-width: 20rem; 
+    max-width: 20rem; 
+}
+
+.registerNameInput {
+    min-width: calc((20rem / 2) - 0.4rem) !important; 
+    max-width: calc((20rem / 2) - 0.4rem) !important; 
+}
+
+.registerInput:hover,
+.registerNameInput:hover 
+.registerInputFlex:hover, 
+.passwordInput:hover {
+    opacity: 0.8;
+}
+
+.registerContinueButton, 
+.passwordContinueButton {
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    height: 2.6rem; 
+    background-color: #2D3436;
+    border: 0.2vh solid #2D3436; 
+    border-radius: 0.4vw; 
+    cursor: pointer; 
+    font-size: 0.7rem;  
+    font-weight: 600; 
+    color: lightgrey; 
+    box-shadow: 0 0 3px grey;
+    min-width: 20rem;
+    max-width: 20rem;
+}
+
+.profilePictureUpload {
+    display: flex;
+    justify-content: center; 
+    align-items: center;
+    height: 2.6rem; 
+    overflow: hidden;
+    background-color: rgba(255,255,255,0.0);
+    border: 0.2vh solid lightgrey; 
+    border-radius: 0.4vw;
+    font-size: 0.7rem; 
+    font-weight: 900; 
+    cursor: pointer; 
+    color: darkgrey;
+    padding: 0; 
+    margin-bottom: 1rem;  
+    box-shadow: 0 0 3px grey;
+    min-width: 20rem; 
+    max-width: 20rem; 
+}
+
+.registerContinueButton:hover .registerNextArrowIcon,
+.registerContinueButton:hover .registerPersonIcon,
+.registerContinueButton:hover, 
+.passwordContinueButton:hover {
+    opacity: 0.7;
+}
+
+.profilePictureUpload input {
+    display: none; 
+}
+
+.profileImageText {
+    cursor: pointer; 
+    font-weight: 900; 
+}
+
+.profilePictureUpload:hover .profileImageText, 
+.profilePictureUpload:hover {
+    opacity: 0.6; 
+}
+
+.registerToggleIcon {
+    display: flex; 
+    color: black; 
+    font-size: 0.7rem; 
+    position: absolute; 
+    top: 50%;  
+    right: 5%; 
+    transform: translateY(-50%); 
+    cursor: pointer; 
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    padding: 0; 
+}
+
+
+
+
+

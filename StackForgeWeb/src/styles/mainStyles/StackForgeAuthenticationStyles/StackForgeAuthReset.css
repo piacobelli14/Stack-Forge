@@ -1,0 +1,107 @@
+.resetPageWrapper {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-start; 
+    overflow: scroll; 
+    height: 100vh; 
+}
+
+
+@media (min-width: 1700px) {
+    .resetCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: calc(100vh - 8vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (min-width: 1300px) and (max-width: 1699px) {
+    .resetCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: calc(100vh - 10vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (min-width: 700px) and (max-width: 1299px) {
+    .resetCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: calc(100vh - 10vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (min-width: 500px) and (max-width: 699px) {
+    .resetCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: calc(100vh - 8vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+@media (max-width: 499px) {
+    .resetCellHeaderContainer {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: calc(100vh - 6vh) !important; 
+        overflow: hidden;
+        position: relative; 
+        overflow: scroll; 
+    }
+}
+
+.resetBlock {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-start;
+    align-items: center;
+    top: 0;
+    right: 0;  
+    z-index: 10;
+    border-radius: 0; 
+    border: none; 
+    height: 100%; 
+    width: 30rem;
+    background: linear-gradient(to bottom, #0C042F, #2D2C33);
+}
+
+.resetLogo {
+    height: 6rem;
+    margin-right: 1rem;
+    margin-top: 3rem; 
+    margin-bottom: 2rem; 
+}
+
+@media (min-width: 700px) {
+    .resetBlock {
+        width: 30rem; 
+    }
+}
+
+@media (max-width: 699px) {
+    .resetBlock {
+        width: 26rem; 
+    }
+}
