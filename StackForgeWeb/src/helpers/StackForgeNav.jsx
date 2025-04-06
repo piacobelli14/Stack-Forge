@@ -111,23 +111,6 @@ const StackForgeNav = ({ activePage }) => {
             className="homeHamburgerPopout"
           >
             <div className="homeHamburgerContent">
-              {token && !isTokenExpired && (
-                <button
-                  className="navigationButtonWrapper"
-                  onClick={() => navigate("/stackforge-ide")}
-                >
-                  <div className="navigationButton" style={{ color: "#ced6dd" }}>
-                    <FontAwesomeIcon icon={faCode} className="navigationButtonIcon" />
-                    StackForge IDE
-                  </div>
-
-                  <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="navigationButtonIconTrailer"
-                  />
-                </button>
-              )}
-
               {!token && (
                 <button
                   className="navigationButtonWrapper"
@@ -186,22 +169,6 @@ const StackForgeNav = ({ activePage }) => {
             className="homeHamburgerPopout"
           >
             <div className="homeHamburgerContent">
-              {isAdmin && token && !isTokenExpired && (
-                <button
-                  className="navigationButtonWrapper"
-                  onClick={() => navigate("/stackforge-ide")}
-                >
-                  <div className="navigationButton" style={{ color: "#ced6dd" }}>
-                    <FontAwesomeIcon icon={faCode} className="navigationButtonIcon" />
-                    StackForge IDE
-                  </div>
-
-                  <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="navigationButtonIconTrailer"
-                  />
-                </button>
-              )}
               <button className="navigationButtonWrapper" onClick={handleLogout}>
                 <div className="navigationButton" style={{ color: "#ced6dd" }}>
                   <FontAwesomeIcon

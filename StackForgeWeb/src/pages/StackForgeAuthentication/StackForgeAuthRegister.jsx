@@ -47,7 +47,7 @@ const Register = () => {
             }
 
             try {
-                const response = await fetch("https://www.dinolaboratories.com/stackforge/stackforge-web-api/validate-new-user-info", {
+                const response = await fetch("http://localhost:3000/validate-new-user-info", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -127,7 +127,7 @@ const Register = () => {
             };
     
             try {
-                const response = await fetch("https://www.dinolaboratories.com/stackforge/stackforge-web-api/create-user", {
+                const response = await fetch("http://localhost:3000/create-user", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",

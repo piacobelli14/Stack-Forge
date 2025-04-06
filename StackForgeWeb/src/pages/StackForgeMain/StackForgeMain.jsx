@@ -19,7 +19,11 @@ const StackForgeMain = () => {
     return (
         <div className="loginPageWrapper" style={{"background": "linear-gradient(to left, #111111, #090011)", "display": screenSize >= 5300 ? "none" : ""}}>
             <StackForgeNav activePage="main" />
-        
+
+
+            <button> 
+                Launch Website
+            </button> 
         </div>
     );
 };

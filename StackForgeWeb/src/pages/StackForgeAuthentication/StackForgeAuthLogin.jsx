@@ -18,7 +18,7 @@ const Login = () => {
 
     const handleLogin = async () => {
         try {
-            const response = await fetch("https://www.dinolaboratories.com/stackforge/stackforge-web-api/user-authentication", {
+            const response = await fetch("http://localhost:3000/user-authentication", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -43,6 +43,7 @@ const Login = () => {
                 setLoginError(data.message);
             }
         } catch (error) {
+            alert(error)
             setLoginError("An error occurred. Please try again.");
         }
     };
@@ -144,12 +145,10 @@ const Login = () => {
                             setIsEmail(!isEmail);
                             setLoginError("");
                         }}>
-                            ←   Return to Main
+                            Return to Main
                         </button>
                     )}
                 </div>
-
-               
             </div>
         </div>
     );
