@@ -35,7 +35,7 @@ const Reset = () => {
         try {
             setResetCode("xxx");
     
-            const response = await fetch("https://www.dinolaboratories.com/stackforge/stackforge-web-api/reset-password", {
+            const response = await fetch("http://172.20.10.2:3000/reset-password", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -83,7 +83,7 @@ const Reset = () => {
             setResetError("Passwords do not match.");
         } else {
             try {
-                const response = await fetch("https://www.dinolaboratories.com/stackforge/stackforge-web-api/change-password", {
+                const response = await fetch("http://172.20.10.2:3000/change-password", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -110,7 +110,7 @@ const Reset = () => {
                     loop
                     preload="auto"
                     id="animatedBackgroundEarth"
-                    className="loginVideoBackhground"
+                    className="loginVideoBackground"
                 >
                     <source src="/StackForgeBackground.mp4" type="video/mp4" />
                 </video>

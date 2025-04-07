@@ -7,7 +7,6 @@ import {
   faRightToBracket,
   faIdCard,
   faRightFromBracket,
-  faCode,
   faArrowUpRightFromSquare,
 } from "@fortawesome/free-solid-svg-icons";
 import "../styles/helperStyles/NavBar.css";
@@ -110,7 +109,7 @@ const StackForgeNav = ({ activePage }) => {
           <div
             className="homeHamburgerPopout"
           >
-            <div className="homeHamburgerContent">
+            <div className="homeHamburgerContent">      
               {!token && (
                 <button
                   className="navigationButtonWrapper"
@@ -169,6 +168,21 @@ const StackForgeNav = ({ activePage }) => {
             className="homeHamburgerPopout"
           >
             <div className="homeHamburgerContent">
+              <button className="navigationButtonWrapper" onClick={() => navigate("/profile")}>
+                <div className="navigationButton" style={{ color: "#ced6dd" }}>
+                  <FontAwesomeIcon
+                    icon={faIdCard}
+                    className="navigationButtonIcon"
+                  />
+                  Account
+                </div>
+
+                <FontAwesomeIcon
+                      icon={faArrowUpRightFromSquare}
+                      className="navigationButtonIconTrailer"
+                  />
+              </button>
+              
               <button className="navigationButtonWrapper" onClick={handleLogout}>
                 <div className="navigationButton" style={{ color: "#ced6dd" }}>
                   <FontAwesomeIcon

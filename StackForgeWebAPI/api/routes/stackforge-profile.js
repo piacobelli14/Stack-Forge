@@ -10,3 +10,199 @@ require('dotenv').config();
 secretKey = process.env.JWT_SECRET_KEY;
 
 const router = express.Router();
+
+router.post('/user-info', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const gatherUserInfoQuery = `
+            SELECT 
+                u.*, 
+                COALESCE(o.orgname, '') AS orgname,
+                COALESCE(o.orgemail, '') AS orgemail,
+                COALESCE(o.orgphone, '') AS orgphone,
+                COALESCE(o.orgdescription, '') AS orgdescription,
+                COALESCE(o.orgimage, '') AS orgimage, 
+                COALESCE(o.created_at) AS orgcreatedat
+            FROM users u
+            LEFT JOIN organizations o ON u.orgid = o.orgid
+            WHERE u.username = $1 AND ((u.orgid = $2) OR ($2 IS NULL AND u.orgid IS NULL))
+        `;
+        const gatherUserInfoInfo = await pool.query(gatherUserInfoQuery, [userID, organizationID]);
+
+        if (gatherUserInfoInfo.error) {
+            return res.status(500).json({ message: 'Unable to fetch user info at this time. Please try again later.' });
+        }
+
+        const formattedInfo = gatherUserInfoInfo.rows.map(row => ({
+            username: userID,
+            orgid: row.orgid,
+            email: row.email,
+            firstname: row.first_name,
+            lastname: row.last_name,
+            image: row.image,
+            phone: row.phone,
+            role: row.role,
+            isadmin: row.is_admin,
+            twofa: row.twofaenabled,
+            multifa: row.multifaenabled,
+            loginnotis: row.loginnotisenabled,
+            exportnotis: row.exportnotisenabled,
+            datashare: row.datashareenabled,
+            organizationid: row.orgid || userID,
+            organizationname: row.orgname,
+            organizationemail: row.orgemail,
+            organizationphone: row.orgphone,
+            organizationdescription: row.orgdescription,
+            organizationimage: row.orgimage,
+            organizationcreated: row.orgcreatedat,
+            showpersonalemail: row.showpersonalemail,
+            showpersonalphone: row.showpersonalphone,
+            showteamid: row.showteamid,
+            showteamemail: row.showteamemail,
+            showteamphone: row.showteamphone,
+            showteamadminstatus: row.showteamadminstatus,
+            showteamrole: row.showteamrole
+        }));
+
+        return res.status(200).json(formattedInfo);
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/usage-info', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID } = req.body; 
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const personalUsagePerDayQuery = `
+            WITH days AS (
+                SELECT generate_series(CURRENT_DATE - INTERVAL '29 days', CURRENT_DATE, '1 day')::date AS day
+            )
+            SELECT d.day, COALESCE(COUNT(a.timestamp), 0) AS usage_count
+            FROM days d
+            LEFT JOIN ide_edit_logs a 
+            ON d.day = a.timestamp::date AND a.username = $1 AND a.orgid = $2
+            GROUP BY d.day
+            ORDER BY d.day ASC;
+        `;
+
+        const usageLanguagesQuery = `
+            SELECT a.language, COUNT(a.language) AS language_count
+            FROM ide_edit_logs a
+            WHERE a.timestamp >= CURRENT_DATE - INTERVAL '29 days'
+              AND a.username = $1
+              AND a.orgid = $2
+            GROUP BY a.language
+            ORDER BY language_count DESC;
+        `;
+
+        const [personalUsagePerDay, usageLanguages] = await Promise.all([
+            pool.query(personalUsagePerDayQuery, [userID, organizationID]),
+            pool.query(usageLanguagesQuery, [userID, organizationID])
+        ]);
+
+        return res.status(200).json({  
+            message: 'Admin signin summary data fetched successfully.', 
+            personalUsageInfo: personalUsagePerDay.rows,
+            usageLanguages: usageLanguages.rows
+        });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/update-user-show-values', authenticateToken, async (req, res, next) => {
+    let { userID, organizationID, showColumn, showColumnValue } = req.body; 
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateShowColumnsQuery = `
+           UPDATE users
+           SET ${showColumn} = $3
+           WHERE username = $1 AND orgid = $2
+           ; 
+        `;
+
+        await pool.query(updateShowColumnsQuery, [userID, organizationID, showColumnValue]);
+        return res.status(200).json({ message: 'Successfully updated column value.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/edit-user-image', authenticateToken, async (req, res, next) => {
+    const { userID, image } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    if (!userID || !image) {
+        return res.status(400).json({ message: 'User ID and image are required.' });
+    }
+
+    try {
+        const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
+        if (!matches) {
+            return res.status(400).json({ message: 'Invalid image format.' });
+        }
+        const mimeType = matches[1];
+        const imageBuffer = Buffer.from(matches[2], 'base64');
+        const extension = mimeType.split('/')[1];
+
+        const imageName = `${crypto.randomBytes(16).toString('hex')}.${extension}`;
+
+        const uploadParams = {
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: `uploads/${imageName}`,
+            Body: imageBuffer,
+            ContentType: mimeType,
+        };
+
+        const data = await s3Client.send(new PutObjectCommand(uploadParams));
+        const imageUrl = `https://${uploadParams.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${uploadParams.Key}`;
+
+        const updateImageQuery = `
+            UPDATE users
+            SET image = $1
+            WHERE username = $2;
+        `;
+
+        const updateImageInfo = await pool.query(updateImageQuery, [imageUrl, userID]);
+
+        if (updateImageInfo.rowCount === 0) {
+            return res.status(404).json({ message: 'User not found or image not updated.' });
+        }
+
+        return res.status(200).json({ message: 'User image updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+
+module.exports = router;

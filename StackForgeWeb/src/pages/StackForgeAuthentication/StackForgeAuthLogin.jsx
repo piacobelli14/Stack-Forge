@@ -58,7 +58,7 @@ const Login = () => {
                     loop
                     preload="auto"
                     id="animatedBackgroundEarth"
-                    className="loginVideoBackhground"
+                    className="loginVideoBackground"
                 >
                     <source src="/StackForgeBackground.mp4" type="video/mp4" />
                 </video>

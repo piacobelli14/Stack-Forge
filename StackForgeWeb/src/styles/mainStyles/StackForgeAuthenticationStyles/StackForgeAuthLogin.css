@@ -84,7 +84,7 @@
     }
 }
 
-.loginVideoBackhground {
+.loginVideoBackground {
     width: calc(100% - 30rem); 
     height: 100%; 
     top: 0; 
@@ -114,7 +114,7 @@
         width: 30rem; 
     }
 
-    .loginVideoBackhground {
+    .loginVideoBackground {
         width: calc(100% - 30rem); 
     }
 }
@@ -124,7 +124,7 @@
         width: 26rem; 
     }
 
-    .loginVideoBackhground {
+    .loginVideoBackground {
         width: calc(100% - 26rem); 
     }
 }
@@ -235,7 +235,7 @@
 }
 
 .loginError {
-    font-size: 0.8rem; 
+    font-size: 0.7rem; 
     font-weight: 600; 
     text-align: center; 
     color: #E54B4B;

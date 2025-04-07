@@ -22,7 +22,7 @@ const VerifyEmail = () => {
       }
 
       try {
-        const response = await fetch(`https://www.dinolaboratories.com/stackforge/stackforge-web-api/verify-email?token=${token}`);
+        const response = await fetch(`http://172.20.10.2:3000/verify-email?token=${token}`);
         const data = await response.json();
 
         if (response.status === 200) {

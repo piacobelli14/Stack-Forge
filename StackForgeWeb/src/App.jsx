@@ -5,6 +5,7 @@ import Register from "./pages/StackForgeAuthentication/StackForgeAuthRegister";
 import Reset from "./pages/StackForgeAuthentication/StackForgeAuthReset";
 import Verification from "./pages/StackForgeAuthentication/StackForgeAuthVerifyEmail";
 import StackForgeMain from "./pages/StackForgeMain/StackForgeMain";
+import StackForgeProfile from "./pages/StackForgeProfile/StackForgeProfile";
 import { useEffect, useState } from "react";
 
 import "./styles/App.css";
@@ -36,6 +37,7 @@ function App() {
           <Route path="/reset" element={<Reset/>}/>
           <Route path="/verify" element={<Verification/>}/>
           <Route path="/stackforge" element={<StackForgeMain/>}/>
+          <Route path="/profile" element={<StackForgeProfile/>}/>
           <Route index element={<Navigate to="/login" replace />} />
         </Routes>
       </div>

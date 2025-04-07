@@ -1,0 +1,395 @@
+@keyframes profileCellFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.profileCellFadeIn {
+    animation: profileCellFadeIn 2s ease-out;
+}
+
+.profilePageWrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    height: 100vh;
+    background: linear-gradient(to bottom, #0E0B1B, #29282D);
+}
+
+@media (min-width: 1700px) {
+    .profileCellHeaderContainer {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        width: 100vw;
+        min-height: calc(100vh - 8vh) !important;
+        overflow: hidden;
+        position: relative;
+    }
+}
+
+@media (min-width: 1300px) and (max-width: 1699px) {
+    .profileCellHeaderContainer {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        width: 100vw;
+        min-height: calc(100vh - 10vh) !important;
+        overflow: hidden;
+        position: relative;
+    }
+}
+
+@media (min-width: 700px) and (max-width: 1299px) {
+    .profileCellHeaderContainer {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        width: 100vw;
+        min-height: calc(100vh - 10vh) !important;
+        position: relative;
+    }
+}
+
+@media (min-width: 500px) and (max-width: 699px) {
+    .profileCellHeaderContainer {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        width: 100vw;
+        min-height: calc(100vh - 8vh) !important;
+        position: relative;
+        overflow: hidden;
+    }
+}
+
+@media (max-width: 499px) {
+    .profileCellHeaderContainer {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        width: 100vw;
+        min-height: calc(100vh - 6vh) !important;
+        overflow: hidden;
+        position: relative;
+    }
+}
+
+.profileCellContentWrapper {
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    background-color: #24242B;
+    width: 100%;
+    flex: 1;
+}
+
+.profileContentSideBar {
+    width: 20%;
+    height: 100vh;
+    background-color: #191919;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    border-right: 0.5px solid rgba(255, 255, 255, 0.1);
+    box-sizing: border-box;
+    position: relative;
+    padding: 0;
+    overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+    .profileContentSideBar {
+        width: 40%;
+    }
+}
+
+.profileSodeBarSearchWrapper {
+    position: sticky;
+    width: 100%;
+    height: 50px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 2;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #f5f5f5;
+    font-size: 0.9rem;
+}
+
+.profileSideBarSearch {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #f5f5f5;
+    background-color: #191919;
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-radius: 0;
+    padding-left: 2.5rem;
+    outline: none;
+    transition: border-color 0.3s ease;
+}
+
+.profileSideBarSearch::placeholder {
+    color: #c1c1c1;
+    font-weight: 700;
+}
+
+.profileSideBarSearch:hover {
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-right: 0.2vh solid rgba(255, 255, 255, 0.1);
+    outline: none;
+    opacity: 0.6;
+}
+
+.profileSideBarSearch:focus {
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-right: 0.2vh solid rgba(255, 255, 255, 0.1);
+    outline: none;
+    opacity: 1.0;
+}
+
+.profileSideBarButtonWrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    min-width: 100% !important;
+    height: calc(100% - 50px);
+    box-sizing: border-box;
+    overflow-y: auto !important;
+}
+
+.profileSideBarButton {
+    width: 100% !important;
+    height: 50px;
+    background-color: #242425;
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-right: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-radius: 0;
+    padding: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+}
+
+.profileSideBarButton span {
+    display: flex;
+    align-items: center;
+    padding: 0 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #c0c0c0;
+    white-space: nowrap;
+}
+
+.profileSideBarButton span svg {
+    font-size: 0.8rem;
+    color: #c0c0c0;
+    margin-right: 1.5rem;
+}
+
+.profileSideBarButton svg {
+    font-size: 0.8rem;
+    color: #c0c0c0;
+    margin-right: 1.5rem;
+}
+
+@media (max-width: 700px) {
+    .profileSideBarButton svg {
+        display: none;
+    }
+}
+
+.profileSideBarButton:hover {
+    opacity: 0.6;
+    outline: none;
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-right: 0.2vh solid rgba(255, 255, 255, 0.1);
+}
+
+.profileSideBarButton:focus {
+    opacity: 0.6;
+    outline: none;
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-right: 0.2vh solid rgba(255, 255, 255, 0.1);
+}
+
+.profileContentMainFlex {
+    width: calc(100% - 20%);
+    height: 100vh;
+    background: linear-gradient(to bottom, #322A54, #29282D);
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 2vw;
+}
+
+.profileContentTopBar {
+    position: sticky;
+    top: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    height: 50px;
+    background-color: #191919;
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-right: 0.2vh solid rgba(255, 255, 255, 0.1);
+    box-sizing: border-box;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.profileContentTopBar h3 {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #c1c1c1;
+    margin: 0;
+    padding: 0;
+    margin-right: 4vw;
+    font-style: italic;
+}
+
+.profileContentMainScroll {
+    flex: 1;
+    overflow-y: auto;
+    display: flex; 
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 1vw 0 10vw 0;
+    height: 100%; 
+}
+
+.profileContentFlexCell {
+    display: flex;
+    flex-direction: column; 
+    justify-content: center;
+    align-items: center;
+    min-height: 250px;
+    max-height: 250px;
+    width: 90%;
+    background-color: rgba(255,255,255,0.1);
+    border-radius: 0.6rem;
+    margin: 1vw 0 2vw 0;
+    border: 0px solid #363636; 
+    box-shadow: 0 0 20px #191919;
+    box-sizing: border-box;
+}
+
+.profileContentFlexCellTop {
+    min-height: 80%; 
+    max-height: 80%;
+    width: 100%; 
+    display: flex; 
+    justify-content: space-between;
+    align-items: center;
+}
+
+.profileContentFlexCellBottom {
+    height: 20%; 
+    width: 100%;
+    border-top: 2px solid rgba(54, 54, 54, 0.8); 
+    display: flex; 
+    justify-content: flex-start;
+    align-items: center;
+    background-color: rgba(0,0,0,0.2);
+}
+
+.profileContentFlexCellBottom p {
+    padding: 0; 
+    margin: 0; 
+    font-size: 0.7rem; 
+    font-weight: 600; 
+    color: #c6c6c6; 
+    padding: 0 4%; 
+}
+
+.profileLeadingCellStack, 
+.profileTrailingCellStack {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-start;
+    align-items: flex-start;
+    box-sizing: border-box; 
+    height: 100%; 
+    width: 70%;
+}
+
+.profileLeadingCellStack {
+    width: 60%;
+    padding: 4%; 
+    gap: 1vw;
+}
+
+.profileTrailingCellStack {
+    width: 40%;
+}
+
+.profileLeadingCellStack h3 {
+    padding: 0; 
+    margin: 0; 
+    font-size: 1rem; 
+    font-weight: 700; 
+    color: #c6c6c6; 
+    font-style: italic;
+    text-shadow: 0 0 1px white; 
+}
+
+.profileLeadingCellStack p {
+    padding: 0; 
+    margin: 0; 
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #c6c6c6; 
+    width: 70%; 
+}
+
+.profileUserImageWrapper {
+    height: 70%; 
+    width: auto; 
+    min-width: 40%; 
+    background-color: rgba(0,0,0,0.2);
+    box-shadow: 0 0 4px rgba(0,0,0,0.8);
+    border-radius: 0.8rem; 
+    cursor: pointer; 
+}
+
+.profileUserImage {
+    height: 100%;
+    border-radius: 0.8rem; 
+} 
+
+.profileUserImage:hover {
+    opacity: 0.6; 
+    cursor: pointer; 
+    transform: scale(1.02);
+}

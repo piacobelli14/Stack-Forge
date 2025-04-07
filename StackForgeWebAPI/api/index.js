@@ -6,6 +6,7 @@ const bodyParser = require('body-parser');
 const { pool } = require('./config/db');
 const errorLogger = require('./middleware/errorLogger');
 const authenticationRoutes = require('./routes/stackforge-authentication');
+const profileRoutes = require('./routes/stackforge-profile');
 
 require('dotenv').config();
 
@@ -20,6 +21,7 @@ app.use(cors({
 app.use(bodyParser.json({ limit: '1gb' }));
 app.use(errorLogger);
 app.use(authenticationRoutes);
+app.use(profileRoutes);
 
 app.set('trust proxy', 1);
 
