@@ -204,5 +204,148 @@ router.post('/edit-user-image', authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post('/edit-user-first-name', authenticateToken, async (req, res, next) => {
+    const { userID, firstName } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateFirstNameQuery = `
+            UPDATE users
+            SET first_name = $1
+            WHERE username = $2;
+        `;
+
+        const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [firstName, userID]);
+
+        if (updateFirstNameInfo.error) {
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'First name updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/edit-user-last-name', authenticateToken, async (req, res, next) => {
+    const { userID, lastName } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+
+    try {
+        const updateLastNameQuery = `
+            UPDATE users
+            SET last_name = $1
+            WHERE username = $2;
+        `;
+
+        const updateLastNameInfo = await pool.query(updateLastNameQuery, [lastName, userID]);
+
+        if (updateLastNameInfo.error) {
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Last name updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/edit-user-email', authenticateToken, async (req, res, next) => {
+    const { userID, email } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateEmailQuery = `
+            UPDATE users
+            SET email = $1
+            WHERE username = $2;
+        `;
+
+        const updateEmailInfo = await pool.query(updateEmailQuery, [email, userID]);
+        if (updateEmailInfo.error) {
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Email updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/edit-user-phone', authenticateToken, async (req, res, next) => {
+    const { userID, phone } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updatePhoneQuery = `
+            UPDATE users
+            SET phone = $1
+            WHERE username = $2;
+        `;
+
+        const updatePhoneInfo = await pool.query(updatePhoneQuery, [phone, userID]);
+        if (updatePhoneInfo.error) {
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Phone updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/edit-user-role', authenticateToken, async (req, res, next) => {
+    const { userID, role } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateRoleQuery = `
+            UPDATE users
+            SET role = $1
+            WHERE username = $2;
+        `;
+
+        const updateRoleInfo = await pool.query(updateRoleQuery, [role, userID]);
+        if (updateRoleInfo.error) {
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Role updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
 
 module.exports = router;
