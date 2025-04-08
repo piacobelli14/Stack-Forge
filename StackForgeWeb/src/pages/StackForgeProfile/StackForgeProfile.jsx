@@ -3,14 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowUpRightFromSquare, faUserGear, faUsersGear, faPersonChalkboard, faLock, faChartColumn, faMoneyBills, faGear, faBookmark, faPenToSquare } from "@fortawesome/free-solid-svg-icons";
 import "../../styles/mainStyles/StackForgeProfileStyles/StackForgeProfile.css";
+import "../../styles/helperStyles/LoadingSpinner.css";
 import StackForgeNav from "../../helpers/StackForgeNav";
-import {showDialog} from "../../helpers/StackForgeAlert";
+import { showDialog } from "../../helpers/StackForgeAlert";
 import useAuth from "../../UseAuth";
 import useIsTouchDevice from "../../TouchDevice.jsx";
 
 const StackForgeProfile = () => {
     const navigate = useNavigate(), isTouchDevice = useIsTouchDevice();
-    const { token, userID, loading } = useAuth();
+    const { token, userID, loading, organizationID } = useAuth();
     const [isLoaded, setIsLoaded] = useState(false);
     const [screenSize, setScreenSize] = useState(window.innerWidth);
     const [resizeTrigger, setResizeTrigger] = useState(false);
@@ -27,7 +28,14 @@ const StackForgeProfile = () => {
         multifaEnabled: false,
         loginNotis: false,
         exportNotis: false,
-        dataSharing: false
+        dataSharing: false,
+        orgid: "",
+        orgname: "",
+        orgemail: "",
+        orgphone: "",
+        orgdesc: "",
+        orgimage: "",
+        orgcreated: ""
     });
     const [editModes, setEditModes] = useState({
         firstName: false,
@@ -47,6 +55,16 @@ const StackForgeProfile = () => {
     ];
     const capitalizeWords = str => str.replace(/\b\w/g, char => char.toUpperCase());
     const formatPhoneNumber = value => value.replace(/\D/g, "").replace(/^(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3");
+    const [createTeamMessage, setCreateTeamMessage] = useState("");
+    const [joinTeamMessage, setJoinTeamMessage] = useState("");
+    const [createTeamError, setCreateTeamError] = useState("");
+    const [joinTeamError, setJoinTeamError] = useState("");
+    const [teamName, setTeamName] = useState("");
+    const [teamCode, setTeamCode] = useState("");
+    const [teamCreationLogout, setTeamCreationLogout] = useState(false);
+    const [isTeamCreateLoad, setIsTeamCreateLoad] = useState(false);
+    const [isTeamJoinLoad, setIsTeamJoinLoad] = useState(false);
+    const [isPasswordLoad, setIsPasswordLoad] = useState(false);
 
     useEffect(() => {
         if (!loading && !token) navigate("/login");
@@ -57,7 +75,7 @@ const StackForgeProfile = () => {
             try {
                 await fetchUserInfo(userID);
                 setIsLoaded(true);
-            } catch (error) { }
+            } catch (error) {}
         };
         if (!loading && token) fetchData();
     }, [userID, loading, token]);
@@ -73,13 +91,49 @@ const StackForgeProfile = () => {
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
+    useEffect(() => {
+        if (teamCreationLogout) {
+            setIsLoaded(false);
+            setTimeout(() => {
+                localStorage.removeItem("token");
+                localStorage.removeItem("userid");
+                localStorage.removeItem("orgid");
+                navigate("/login");
+            }, 1200);
+        }
+    }, [teamCreationLogout]);
+
+    useEffect(() => {
+        if (createTeamMessage !== "") {
+            setCreateTeamError("");
+        }
+    }, [createTeamMessage]);
+
+    useEffect(() => {
+        if (createTeamError !== "") {
+            setCreateTeamMessage("");
+        }
+    }, [createTeamError]);
+
+    useEffect(() => {
+        if (joinTeamMessage !== "") {
+            setJoinTeamError("");
+        }
+    }, [joinTeamMessage]);
+
+    useEffect(() => {
+        if (joinTeamError !== "") {
+            setJoinTeamMessage("");
+        }
+    }, [joinTeamError]);
+
     const fetchUserInfo = async id => {
         try {
             const t = localStorage.getItem("token");
             const res = await fetch("http://localhost:3000/user-info", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` },
-                body: JSON.stringify({ userID: id })
+                body: JSON.stringify({ userID: id, organizationID })
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
             const data = await res.json();
@@ -96,9 +150,16 @@ const StackForgeProfile = () => {
                 multifaEnabled: d.multifa,
                 loginNotis: d.loginnotis,
                 exportNotis: d.exportnotis,
-                dataSharing: d.datashare
+                dataSharing: d.datashare,
+                orgid: d.orgid,
+                orgname: d.organizationname,
+                orgemail: d.organizationemail,
+                orgphone: d.organizationphone,
+                orgdesc: d.organizationdescription,
+                orgimage: d.organizationimage,
+                orgcreated: d.organizationcreated
             });
-        } catch (e) { }
+        } catch (e) {}
     };
 
     const handleImageChange = async e => {
@@ -146,7 +207,7 @@ const StackForgeProfile = () => {
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
             setEditModes(prev => ({ ...prev, [fieldKey]: false }));
-        } catch (e) { }
+        } catch (e) {}
     };
 
     const handleAccountDelete = async () => {
@@ -154,38 +215,102 @@ const StackForgeProfile = () => {
           title: "Confirm Account Deletion",
           message: "Type 'delete my account' to confirm deletion.",
           inputs: [{ name: "confirmation", type: "text", defaultValue: "" }],
-          showCancel: true,
+          showCancel: true
         });
-      
         if (!result || result.confirmation !== "delete my account") {
           return;
         }
-      
         try {
           const token = localStorage.getItem("token");
           const response = await fetch("http://localhost:3000/delete-account", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`,
+              "Authorization": `Bearer ${token}`
             },
-            body: JSON.stringify({ userID }),
+            body: JSON.stringify({ userID })
           });
-      
           if (response.status !== 200) {
             throw new Error("Internal Server Error");
           } else {
             navigate("/login");
           }
-      
         } catch (error) {
           return;
         }
-      };
-      
-      
+    };
 
+    const handleTeamCreation = async () => {
+        setIsTeamCreateLoad(true);
+        if (teamName === "" || !teamName) {
+            setCreateTeamError("Please enter a valid team name.");
+            setIsTeamCreateLoad(false);
+            return;
+        }
+        try {
+            const token = localStorage.getItem("token");
+            const response = await fetch("http://localhost:3000/create-team", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ userID, teamName })
+            });
+            const data = await response.json();
+            if (response.status === 200) {
+                setCreateTeamMessage("Your new team has been created successfully!");
+                setTeamCreationLogout(true);
+                setTimeout(() => {
+                    setIsTeamCreateLoad(false);
+                }, 1000);
+            } else {
+                setCreateTeamError("That team name is either taken or invalid. Please select another.");
+                setIsTeamCreateLoad(false);
+            }
+        } catch (error) {
+            setCreateTeamError("An error occurred while creating the team. Please try again.");
+            setIsTeamCreateLoad(false);
+        }
+    };
 
+    const handleTeamJoin = async () => {
+        setIsTeamJoinLoad(true);
+        if (teamCode === "" || !teamCode) {
+            setJoinTeamError("Please enter a valid access code.");
+            setIsTeamJoinLoad(false);
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem("token");
+            const response = await fetch("http://localhost:3000/join-team", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({ 
+                    userID, 
+                    firstName: userDetails.firstName,  
+                    lastName: userDetails.lastName, 
+                    teamCode 
+                })
+            });
+            if (response.status !== 200) {
+                setJoinTeamError("There are no teams associated with that code. Please try again or contact your admin to get the correct code.");
+                setIsTeamJoinLoad(false);
+            } else if (response.status === 200) {
+                setJoinTeamMessage("An access request has been sent to the appropriate administrators!");
+                window.location.reload();
+                setTimeout(() => {
+                    setIsTeamJoinLoad(false);
+                }, 1000);
+            }
+        } catch (error) {
+            return;
+        }
+    };
 
     return (
         <div className="profilePageWrapper" style={{ display: screenSize >= 5300 && screenSize < 700 ? "none" : "" }}>
@@ -195,7 +320,7 @@ const StackForgeProfile = () => {
                     <div className="profileContentSideBar">
                         <div className="profileSideBarButtonWrapper">
                             {settingsButtons.map(btn => (
-                                <button key={btn.state} className="profileSideBarButton" onClick={() => setSettingsState(btn.state)}>
+                                <button key={btn.state} className={"profileSideBarButton " + (settingsState === btn.state ? "profileSideBarButton--selected" : "")} onClick={() => setSettingsState(btn.state)}>
                                     <span>
                                         <FontAwesomeIcon icon={btn.icon} /> {capitalizeWords(btn.label)}
                                     </span>
@@ -216,7 +341,7 @@ const StackForgeProfile = () => {
                                             </div>
                                             <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
                                                 <label className="profileUserImageWrapper" htmlFor="imageUpload">
-                                                    <img src={userDetails.image} className="profileUserImage" alt="User profile" />
+                                                    <img src={userDetails.image} className="profileUserImage" alt="" />
                                                 </label>
                                                 <input style={{ display: "none", padding: 0 }} type="file" id="imageUpload" accept="image/*" onChange={handleImageChange} />
                                             </div>
@@ -311,8 +436,6 @@ const StackForgeProfile = () => {
                                     </div>
                                 </>
                             )}
-
-
                             {settingsState === "personal" && (
                                 <>
                                     <div className="profileContentFlexCell">
@@ -326,7 +449,7 @@ const StackForgeProfile = () => {
                                                     <strong>Username</strong>
                                                     <span>
                                                         <input placeholder={userID} disabled={true}/>
-                                                        <button className="profileEditButton" style={{"opacity": 0.6}}>
+                                                        <button className="profileEditButton" style={{ opacity: 0.6 }}>
                                                             <FontAwesomeIcon icon={faPenToSquare}/>
                                                         </button>
                                                     </span>
@@ -334,35 +457,113 @@ const StackForgeProfile = () => {
                                             </div>
                                         </div>
                                         <div className="profileContentFlexCellBottom">
-                                            <p>
-                                               You cannot change this username. You can change your display name in the general settings tab. 
-                                            </p>
+                                            <p>You cannot change this username. You can change your display name in the general settings tab.</p>
                                         </div>
                                     </div>
-
-                                    <div className="profileContentFlexCell" style={{"border": "1px solid #E54B4B"}}>
+                                    <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
                                         <div className="profileContentFlexCellTop">
-                                            <div className="profileLeadingCellStack" style={{"width": "100%"}}>
+                                            <div className="profileLeadingCellStack" style={{ width: "100%" }}>
                                                 <h3>Delete Account</h3>
-                                                <p style={{"width": "100%"}}>
-                                                    Permanently remove your Personal Account and all of its contents from the Vercel platform.
-                                                   
-                                                </p>
-
-                                                <button className="profileActionButton" onClick={handleAccountDelete}> 
+                                                <p style={{ width: "100%" }}>Permanently remove your Personal Account and all of its contents from the Vercel platform.</p>
+                                                <button className="profileDeleteButton" onClick={handleAccountDelete}>
                                                     Delete Personal Account
                                                 </button>
                                             </div>
-
-                  
                                         </div>
-                                        <div className="profileContentFlexCellBottom" style={{"border-top": "1px solid #E54B4B", "background-color": "rgba(229, 75, 75, 0.2)"}}>
-                                            <p style={{"color": "white"}}>
-                                            This action is not reversible, so please continue with caution. 
-                                            </p>
+                                        <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
+                                            <p>This action is not reversible, so please continue with caution.</p>
                                         </div>
                                     </div>
                                 </>
+                            )}
+                            {settingsState === "team" && (
+                                !userDetails.orgid ? (
+                                    <>
+                                        <div className="profileContentFlexCell"  style={{ border: createTeamError !== "" ? "1px solid #E54B4B" : ""}}>
+                                            <div className="profileContentFlexCellTop">
+                                                <div className="profileLeadingCellStack">
+                                                    <h3>Create a Team</h3>
+                                                    <p>If you are not a aprt of a team or orgnaization, you can create one here. Just enter a team name and you will be given administrative access as the founder.</p>
+                                                </div>
+                                                <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                    {isTeamCreateLoad ? (
+                                                        <div className="loading-circle" />
+                                                    ) : (
+                                                        <>
+                                                            <div className="profileFieldInput">
+                                                                <strong>Enter a Team Name</strong>
+                                                                <span>
+                                                                    <input placeholder={"New team name..."} onChange={e => setTeamName(e.target.value)}/>
+                                                                </span>
+                                                            </div>
+                                                            <div className="profileFieldInput">
+                                                                <span>
+                                                                    <button className="profileActionButton" onClick={handleTeamCreation}>
+                                                                        Create New Team
+                                                                    </button>
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="profileContentFlexCellBottom" style={{ borderTop: createTeamError !== "" ? "1px solid #E54B4B" : "", backgroundColor: createTeamError !== "" ? "rgba(229, 75, 75, 0.2)" : "" }}>
+                                                {(createTeamMessage === "" && createTeamError === "") && (
+                                                    <p>Once you successfully create your team, you will be logged out. Once you sign back in you should see your team info.</p>
+                                                )}
+                                                {(createTeamError !== "") && (
+                                                    <p>{createTeamError}</p>
+                                                )}
+                                                {(createTeamError === "" && createTeamMessage !== "") && (
+                                                    <p>{createTeamError}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="profileContentFlexCell" style={{ border: joinTeamError !== "" ? "1px solid #E54B4B" : ""}}>
+                                            <div className="profileContentFlexCellTop">
+                                                <div className="profileLeadingCellStack">
+                                                    <h3>Join a Team</h3>
+                                                    <p>If you need to join a team, your team administrator should have given you an access code. Once you have it you can enter it here to request access to the team.</p>
+                                                </div>
+                                                <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                    {isTeamJoinLoad ? (
+                                                        <div className="loading-circle" />
+                                                    ) : (
+                                                        <>
+                                                            <div className="profileFieldInput">
+                                                                <strong>Enter Your Access Code</strong>
+                                                                <span>
+                                                                    <input placeholder={"Access code..."} onChange={e => setTeamCode(e.target.value)}/>
+                                                                </span>
+                                                            </div>
+                                                            <div className="profileFieldInput">
+                                                                <span>
+                                                                    <button className="profileActionButton" onClick={handleTeamJoin}>
+                                                                        Join Team
+                                                                    </button>
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="profileContentFlexCellBottom" style={{ borderTop: joinTeamError !== "" ? "1px solid #E54B4B" : "", backgroundColor: joinTeamError !== "" ? "rgba(229, 75, 75, 0.2)" : "" }}>
+                                                {(joinTeamMessage === "" && joinTeamError === "") && (
+                                                    <p>Once you enter your access code, and access request will be sent to the team admins who can approve or deny your request.</p>
+                                                )}
+                                                {(joinTeamError !== "") && (
+                                                    <p>{joinTeamError}</p>
+                                                )}
+                                                {(joinTeamError === "" && joinTeamMessage !== "") && (
+                                                    <p>{joinTeamError}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                    </>
+                                )
                             )}
                         </div>
                     </div>

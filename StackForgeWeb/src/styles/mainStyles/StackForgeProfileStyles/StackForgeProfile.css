@@ -139,6 +139,10 @@
     box-sizing: border-box;
 }
 
+.profileSideBarButton--selected {
+    background-color: rgba(0,0,0,0.2);
+}  
+
 .profileSideBarButton span {
     display: flex;
     align-items: center;
@@ -407,7 +411,6 @@
     width: 70%; 
     padding: 0.8vw 0; 
     text-overflow: ellipsis;
-
 }
 
 .profileEditButton {
@@ -435,6 +438,41 @@
 }
 
 .profileActionButton {
+    color: #E7E7E7; 
+    background-color: rgba(255,255,255,0.1);
+    box-shadow: 0 0 4px rgba(0,0,0,0.8);
+    font-size: 0.8vw; 
+    font-weight: 800; 
+    text-indent: 0.8vw; 
+    border: 0.2vh solid #c1c1c1; 
+    border-radius: 0.2rem; 
+    width: 70%; 
+    padding: 0.8vw 0; 
+    text-overflow: ellipsis;
+    color: #c1c1c1;
+}
+
+.profileActionButton:hover {
+    opacity: 0.6; 
+    border: 0.2vh solid #c1c1c1; 
+    outline: none; 
+}
+
+.profileActionButton:focus {
+    opacity: 1.0; 
+    border: 0.2vh solid #c1c1c1;  
+    outline: none; 
+}
+
+.profileErrorText {
+    font-size: 1vw; 
+    font-weight: 600; 
+    color: #E54B4B; 
+    text-align: left;
+    height: 10%; 
+}
+
+.profileDeleteButton {
     display: flex; 
     justify-content: center; 
     align-items: center;
@@ -453,13 +491,13 @@
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
-.profileActionButton:hover {
+.profileDeleteButton:hover {
     opacity: 0.6; 
     transform: scale(1.05); 
     border: 0.2vh solid #E54B4B; 
     outline: none; 
 }
 
-.profileActionButton:focus {
+.profileDeleteButton:focus {
     outline: none; 
 }
