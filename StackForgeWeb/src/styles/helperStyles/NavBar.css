@@ -345,7 +345,7 @@
         box-shadow: none;
         position: relative; 
         border-radius: 0; 
-        height: 50px;
+        height: 3vw;
         border-bottom: 0.1vh solid rgba(193, 193, 193, 0.7); 
     }
 
@@ -407,7 +407,7 @@
         box-shadow: none;
         position: relative; 
         border-radius: 0; 
-        height: 50px;
+        height: 4vw;
         border-bottom: 0.1vh solid rgba(193, 193, 193, 0.7); 
     }
 
@@ -468,7 +468,7 @@
         box-shadow: none;
         position: relative; 
         border-radius: 0; 
-        height: 50px;
+        height: 6vw;
         border-bottom: 0.1vh solid rgba(193, 193, 193, 0.7); 
     }
 
@@ -530,7 +530,7 @@
         box-shadow: none;
         position: relative; 
         border-radius: 0; 
-        height: 50px;
+        height: 10vw;
         border-bottom: 0.1vh solid rgba(193, 193, 193, 0.7); 
     }
 
@@ -592,7 +592,7 @@
         box-shadow: none;
         position: relative; 
         border-radius: 0; 
-        height: 30px;
+        height: 10vw;
         border-bottom: 0.1vh solid rgba(193, 193, 193, 0.7); 
     }
 

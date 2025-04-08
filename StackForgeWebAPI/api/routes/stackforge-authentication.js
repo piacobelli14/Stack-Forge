@@ -266,7 +266,6 @@ router.post('/validate-new-user-info', rateLimiter(10, 15, authRateLimitExceeded
 
 router.post('/create-user', rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { firstName, lastName, username, email, password, phone, image } = req.body;
-    console.log(firstName, lastName, username, email, password, phone); 
 
     if (!firstName || !lastName || !username || !email || !password || !phone || !image) {
         return res.status(401).json({ message: 'Unable to verify registration info. Please try again later.' });

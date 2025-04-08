@@ -1,0 +1,151 @@
+
+.alertOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.alertMainWrapper {
+    background-color: #171717;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    box-sizing: border-box;
+    padding: 2vw 4vw;
+    border: none;
+    border-radius: 1vw;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+    min-width: 30%;
+    max-width: 30%;
+}
+
+.alertImage {
+    min-height: 6vw;
+    max-height: 6vw;
+}
+
+.alertHeader {
+    font-size: 1.6vw;
+    font-weight: 700;
+    color: #f5f5f5;
+    margin-top: 1vw;
+    text-align: center;
+}
+
+.alertSubHeader {
+    font-size: 1.1vw;
+    font-weight: 500;
+    color: #f5f5f5;
+    margin-top: 0.4vw;
+    margin-bottom: 0.8vw; 
+    opacity: 0.8;
+    text-align: center;
+}
+
+.alertButtonsFlex {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2vw 0;
+    width: 100%;
+    gap: 1vw;
+}
+
+.alertButtons {
+    width: 30%;
+    padding: 0;
+    padding: 0.6vw;
+    font-size: 1vw;
+    font-weight: 800;
+    color: white;
+    border-radius: 0.4vw;
+    cursor: pointer;
+}
+
+.alertButtons:hover {
+    opacity: 0.6;
+    border: none;
+    outline: none;
+}
+
+.alertButtons:focus {
+    opacity: 1.0;
+    border: none;
+    outline: none;
+}
+
+.alertInputWrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    padding: 1vw 0 0 0;
+}
+
+.alertInput.input-text {
+    background-color: #191919;
+    border: 0.2vh solid #c0c0c0;
+    padding: 1vw 0.6vw;
+    font-size: 0.9vw;
+    font-weight: 700;
+    color: #c0c0c0;
+    border-radius: 0.4vw;
+    width: 90%;
+    outline: none;
+    box-shadow: 0 0 4px #191919; 
+}
+
+.alertInput.input-text:hover {
+    opacity: 0.6;
+    outline: none;
+}
+
+.alertInput.input-text:focus {
+    opacity: 1.0;
+    outline: none;
+}
+
+.alertInput.input-select {
+    background-color: #191919;
+    border: 0.2vh solid #c0c0c0;
+    padding: 0.6vw;
+    font-size: 0.9vw;
+    font-weight: 700;
+    color: #c0c0c0;
+    border-radius: 0.4vw;
+    width: 55%;
+    outline: none;
+    cursor: pointer; 
+    box-shadow: 0 0 4px #191919;
+}
+
+.alertInput.input-select:hover {
+    opacity: 0.6;
+    outline: none;
+    cursor: pointer; 
+}
+
+.alertInput.input-select:focus {
+    opacity: 1.0;
+    outline: none;
+    cursor: pointer; 
+}
+
+.alertInput::-ms-expand {
+    display: none; 
+}
+
+.alertInput {
+    -webkit-appearance: none;  
+    -moz-appearance: none;    
+    appearance: none;          
+}

@@ -347,5 +347,32 @@ router.post('/edit-user-role', authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post('/delete-account', authenticateToken, async (req, res, next) => {
+    const { userID } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const deleteAccountQuery = `
+            DELETE FROM users 
+            WHERE username = $1
+        `;
+
+        const deleteAccountInfo = await pool.query(deleteAccountQuery, [userID]);
+        if (deleteAccountInfo.error) {
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Role updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
 
 module.exports = router;
