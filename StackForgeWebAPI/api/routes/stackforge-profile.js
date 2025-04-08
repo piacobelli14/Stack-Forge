@@ -13,7 +13,6 @@ const router = express.Router();
 
 router.post('/user-info', authenticateToken, async (req, res, next) => {
     const { userID, organizationID } = req.body;
-    console.log(userID); 
 
     req.on('close', () => {
         return;
@@ -69,8 +68,6 @@ router.post('/user-info', authenticateToken, async (req, res, next) => {
             showteamadminstatus: row.showteamadminstatus,
             showteamrole: row.showteamrole
         }));
-
-        console.log(formattedInfo); 
 
         return res.status(200).json(formattedInfo);
     } catch (error) {
@@ -207,6 +204,59 @@ router.post('/edit-user-image', authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post('/edit-team-image', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, image } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    if (!userID || !image) {
+        return res.status(400).json({ message: 'User ID, Organization ID, and image are required.' });
+    }
+
+    try {
+        const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
+        if (!matches) {
+            return res.status(400).json({ message: 'Invalid image format.' });
+        }
+        const mimeType = matches[1];
+        const imageBuffer = Buffer.from(matches[2], 'base64');
+        const extension = mimeType.split('/')[1];
+
+        const imageName = `${crypto.randomBytes(16).toString('hex')}.${extension}`;
+
+        const uploadParams = {
+            Bucket: process.env.S3_BUCKET_NAME,
+            Key: `uploads/${imageName}`,
+            Body: imageBuffer,
+            ContentType: mimeType,
+        };
+
+        const data = await s3Client.send(new PutObjectCommand(uploadParams));
+        const imageUrl = `https://${uploadParams.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${uploadParams.Key}`;
+
+        const updateImageQuery = `
+            UPDATE organizations
+            SET orgimage = $1
+            WHERE orgid = $2;
+        `;
+
+        const updateImageInfo = await pool.query(updateImageQuery, [imageUrl, organizationID]);
+
+        if (updateImageInfo.rowCount === 0) {
+            return res.status(404).json({ message: 'Team not found or image not updated.' });
+        }
+
+        return res.status(200).json({ message: 'Team image updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
 router.post('/edit-user-first-name', authenticateToken, async (req, res, next) => {
     const { userID, firstName } = req.body;
 
@@ -266,6 +316,35 @@ router.post('/edit-user-last-name', authenticateToken, async (req, res, next) =>
     }
 });
 
+router.post('/edit-team-name', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, orgName } = req.body;
+    
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateFirstNameQuery = `
+            UPDATE organizations
+            SET orgname = $1
+            WHERE orgid = $2;
+        `;
+
+        const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [orgName, organizationID]);
+
+        if (updateFirstNameInfo.error) {
+            return res.status(500).json({ message: 'Unable to update team info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Team name updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
 router.post('/edit-user-email', authenticateToken, async (req, res, next) => {
     const { userID, email } = req.body;
 
@@ -294,6 +373,36 @@ router.post('/edit-user-email', authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post('/edit-team-email', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, orgEmail } = req.body;
+    console.log(userID, organizationID); 
+    
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateFirstNameQuery = `
+            UPDATE organizations
+            SET orgemail = $1
+            WHERE orgid = $2;
+        `;
+
+        const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [orgEmail, organizationID]);
+
+        if (updateFirstNameInfo.error) {
+            return res.status(500).json({ message: 'Unable to update team info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Team name updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
 router.post('/edit-user-phone', authenticateToken, async (req, res, next) => {
     const { userID, phone } = req.body;
 
@@ -314,6 +423,35 @@ router.post('/edit-user-phone', authenticateToken, async (req, res, next) => {
         }
 
         return res.status(200).json({ message: 'Phone updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/edit-team-phone', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, orgPhone } = req.body;
+    
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateFirstNameQuery = `
+            UPDATE organizations
+            SET orgphone = $1
+            WHERE orgid = $2;
+        `;
+
+        const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [orgPhone, organizationID]);
+
+        if (updateFirstNameInfo.error) {
+            return res.status(500).json({ message: 'Unable to update team info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Team name updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
             return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
@@ -379,7 +517,6 @@ router.post('/delete-account', authenticateToken, async (req, res, next) => {
 
 router.post('/join-team', authenticateToken, (req, res) => {
     const { userID, firstName, lastName, teamCode } = req.body;
-    console.log(userID, firstName, lastName, teamCode ); 
 
     req.on('close', () => {
         return;
@@ -546,7 +683,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
 
 router.post('/create-team', authenticateToken, async (req, res, next) => {
     const { userID, teamName } = req.body;
-    console.log(userID, teamName); 
 
     req.on('close', () => {
         return;

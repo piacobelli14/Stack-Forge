@@ -108,12 +108,6 @@
     overflow-y: auto;
 }
 
-@media (max-width: 900px) {
-    .profileContentSideBar {
-        width: 50%;
-    }
-}
-
 .profileSideBarButtonWrapper {
     display: flex;
     flex-direction: column;
@@ -126,7 +120,7 @@
 
 .profileSideBarButton {
     width: 100% !important;
-    height: 60px;
+    height: 5vw;
     background-color: #242425;
     border: none;
     border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
@@ -147,20 +141,20 @@
     display: flex;
     align-items: center;
     padding: 0 0.8rem;
-    font-size: 0.7rem;
+    font-size: 1.2vw;
     font-weight: 800;
     color: #c0c0c0;
     white-space: nowrap;
 }
 
 .profileSideBarButton span svg {
-    font-size: 0.8rem;
+    font-size: 1.2vw;
     color: #c0c0c0;
     margin-right: 2vw;
 }
 
 .profileSideBarButton svg {
-    font-size: 0.8rem;
+    font-size: 1.2vw;
     color: #c0c0c0;
     margin-right: 1.5rem;
 }
@@ -169,6 +163,25 @@
     .profileSideBarButton svg {
         display: none;
     }
+}
+
+@media (min-width: 1200px) {
+    .profileSideBarButton {
+        height: 4vw;
+    }
+
+    .profileSideBarButton span {
+        font-size: 1vw; 
+    }
+
+    .profileSideBarButton span svg {
+        font-size: 1vw
+    }
+
+    .profileSideBarButton svg {
+        font-size: 1vw;
+    }
+
 }
 
 .profileSideBarButton:hover {
@@ -196,11 +209,6 @@
     padding-bottom: 2vw;
 }
 
-@media (max-width: 900px) {
-    .profileContentMainFlex {
-        width: calc(100% - 30%);
-    }
-}
 
 .profileContentTopBar {
     position: sticky;
@@ -395,7 +403,7 @@
     display: flex;
     justify-content: flex-start;
     align-items: center;
-    width: 100%;
+    width: 90%;
     padding: 0;
 }
 
@@ -405,11 +413,11 @@
     box-shadow: 0 0 4px rgba(0,0,0,0.8);
     font-size: 1vw; 
     font-weight: 600; 
-    text-indent: 0.8vw; 
+    text-indent: 0vw; 
     border: 0.2vh solid #E7E7E7; 
     border-radius: 0.2rem; 
     width: 70%; 
-    padding: 0.8vw 0; 
+    padding: 0.8vw 1vw; 
     text-overflow: ellipsis;
 }
 
@@ -450,6 +458,8 @@
     padding: 0.8vw 0; 
     text-overflow: ellipsis;
     color: #c1c1c1;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .profileActionButton:hover {
