@@ -169,7 +169,7 @@ const Register = () => {
                 {isPersonal && (
                     <div className="registerBlock">
                         <img
-                            className="resetLogo"
+                            className="resetLogoSub"
                             src="./StackForgeLogo-Letters.png"
                             alt="Logo"
                         />

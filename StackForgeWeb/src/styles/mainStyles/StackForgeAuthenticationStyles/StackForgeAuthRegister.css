@@ -71,27 +71,6 @@
     }
 }
 
-.registerTitle {
-    font-size: 1.2rem;
-    font-weight: 800;  
-    color: #f5f5f5;
-    opacity: 0.95; 
-    text-align: center;
-    width: 100%; 
-}
-
-.registerSubtitles {
-    font-size: 0.7rem;
-    font-weight: 400; 
-    color: #f5f5f5; 
-    opacity: 0.8; 
-    margin-top: 0.2rem; 
-    text-shadow: 0 0 1.5px rgba(255, 255, 255, 0.8); 
-    text-align: center; 
-    width: 100%; 
-    margin-bottom: 1rem;
-}
-
 .registerBlock {
     display: flex; 
     flex-direction: column; 
@@ -103,19 +82,20 @@
     border-radius: 0; 
     border: none; 
     height: 100%; 
-    width: 30rem;
+    width: 40vw;
     background: linear-gradient(to bottom, #0C042F, #2D2C33);
+    overflow: scroll;
 }
 
 @media (min-width: 700px) {
     .registerBlock {
-        width: 30rem; 
+        width: 40vw; 
     }
 }
 
 @media (max-width: 699px) {
     .registerBlock {
-        width: 26rem; 
+        width: 50vw; 
     }
 }
 
@@ -126,34 +106,33 @@
     justify-content: center;
     align-items: center;
     position: relative; 
-    min-width: 20rem; 
-    max-width: 20rem; 
-    height: 2.6rem; 
-    margin-bottom: 0.8rem;  
+    min-width: 28vw; 
+    max-width: 28vw;
+    margin-bottom: 1.5vw;  
 }
 
 .registerInput, 
 .registerNameInput, 
 .passwordInput {
     width: 100%; 
-    height: 100%; 
-    font-size: 0.7rem; 
-    font-weight: 500; 
+    font-size: 1vw; 
+    font-weight: 700; 
     color: black; 
     box-shadow: 0 0 3px grey;
     background: #f5f5f8; 
     border: 0.2vh solid grey; 
     border-radius: 0.4vw;
     outline: black; 
-    text-indent: 0.8rem;
+    text-indent: 0.8vw;
     padding: 0; 
-    min-width: 20rem; 
-    max-width: 20rem; 
+    min-width: 28vw; 
+    max-width: 28vw; 
+    padding: 1.2vw 0; 
 }
 
 .registerNameInput {
-    min-width: calc((20rem / 2) - 0.4rem) !important; 
-    max-width: calc((20rem / 2) - 0.4rem) !important; 
+    min-width: calc((28vw / 2) - 0.8vw) !important; 
+    max-width: calc((28vw / 2) - 0.8vw) !important; 
 }
 
 .registerInput:hover,
@@ -164,42 +143,36 @@
 }
 
 .registerContinueButton, 
-.passwordContinueButton {
+.passwordContinueButton, 
+.profilePictureUpload {
     display: flex; 
     justify-content: center;
     align-items: center;
-    height: 2.6rem; 
     background-color: #2D3436;
     border: 0.2vh solid #2D3436; 
     border-radius: 0.4vw; 
     cursor: pointer; 
-    font-size: 0.7rem;  
+    font-size: 1vw;  
     font-weight: 600; 
     color: lightgrey; 
     box-shadow: 0 0 3px grey;
-    min-width: 20rem;
-    max-width: 20rem;
+    min-width: 28vw;
+    max-width: 28vw;
+    padding: 1.2vw 0; 
+    margin-bottom: 1.5vw; 
 }
 
-.profilePictureUpload {
-    display: flex;
-    justify-content: center; 
-    align-items: center;
-    height: 2.6rem; 
-    overflow: hidden;
-    background-color: rgba(255,255,255,0.0);
-    border: 0.2vh solid lightgrey; 
-    border-radius: 0.4vw;
-    font-size: 0.7rem; 
-    font-weight: 900; 
-    cursor: pointer; 
-    color: darkgrey;
-    padding: 0; 
-    margin-bottom: 1rem;  
-    box-shadow: 0 0 3px grey;
-    min-width: 20rem; 
-    max-width: 20rem; 
+@media (max-width: 900px) {
+    .registerInputFlex, 
+    .passwordInputFlex, 
+    .passwordInputFlexLeading,
+    .registerContinueButton, 
+    .passwordContinueButton, 
+    .profilePictureUpload   {
+        margin-bottom: 1vw; 
+    }
 }
+
 
 .registerContinueButton:hover .registerNextArrowIcon,
 .registerContinueButton:hover .registerPersonIcon,
@@ -225,7 +198,7 @@
 .registerToggleIcon {
     display: flex; 
     color: black; 
-    font-size: 0.7rem; 
+    font-size: 1.2vw; 
     position: absolute; 
     top: 50%;  
     right: 5%; 

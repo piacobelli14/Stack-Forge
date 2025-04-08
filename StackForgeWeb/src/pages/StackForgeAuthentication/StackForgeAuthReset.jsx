@@ -9,9 +9,9 @@ import StackForgeNav from "../../helpers/StackForgeNav";
 const Reset = () => {
     const navigate = useNavigate(); 
 
-    const [isEmail, setIsEmail] = useState(false); 
+    const [isEmail, setIsEmail] = useState(true); 
     const [isCode, setIsCode] = useState(false);
-    const [isReset, setIsReset] = useState(true); 
+    const [isReset, setIsReset] = useState(false); 
     const [newPassword, setNewPassword] = useState(""); 
     const [confirmPassword, setConfirmPassword] = useState(""); 
     const [newPasswordVisible, setNewPasswordVisible] = useState(false); 

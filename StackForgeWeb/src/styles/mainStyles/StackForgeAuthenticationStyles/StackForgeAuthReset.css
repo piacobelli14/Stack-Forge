@@ -83,25 +83,53 @@
     border-radius: 0; 
     border: none; 
     height: 100%; 
-    width: 30rem;
+    width: 40vw;
     background: linear-gradient(to bottom, #0C042F, #2D2C33);
-}
-
-.resetLogo {
-    height: 6rem;
-    margin-right: 1rem;
-    margin-top: 3rem; 
-    margin-bottom: 2rem; 
 }
 
 @media (min-width: 700px) {
     .resetBlock {
-        width: 30rem; 
+        width: 40vw; 
+    }
+
+    .loginVideoBackground {
+        width: calc(100% - 40vw); 
     }
 }
 
 @media (max-width: 699px) {
     .resetBlock {
-        width: 26rem; 
+        width: 50vw; 
+    }
+
+    .loginVideoBackground {
+        width: calc(100% - 50vw); 
+    }
+}
+
+.resetLogo, 
+.resetLogoSub {
+    height: 8vw;
+    margin-right: 1vw;
+    margin-top: 6vw; 
+    margin-bottom: 3vw; 
+}
+
+@media (min-width: 1200px) {
+    .resetLogoSub {
+        margin-top: 2vw; 
+        margin-bottom: 2vw; 
+    }
+} 
+
+@media (min-width: 700px) {
+    .resetBlock {
+        width: 40vw; 
+    }
+}
+
+@media (max-width: 699px) {
+    .resetBlock {
+        width: 100vw; 
     }
 }

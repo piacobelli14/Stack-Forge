@@ -43,7 +43,6 @@ const Login = () => {
                 setLoginError(data.message);
             }
         } catch (error) {
-            alert(error)
             setLoginError("An error occurred. Please try again.");
         }
     };
@@ -87,7 +86,7 @@ const Login = () => {
                     {!isEmail && (
                         <button
                             className="loginInputButton"
-                            style={{ backgroundColor: "#4E3270", "margin": 0 }}
+                            style={{ backgroundColor: "#4E3270" }}
                             onClick={() => setIsEmail(!isEmail)}
                         >
                             <FontAwesomeIcon icon={faEnvelopeCircleCheck} className="envelopeIcon" />
@@ -131,7 +130,7 @@ const Login = () => {
                     {isEmail && (
                         <button
                             className="loginInputButton"
-                            style={{ backgroundColor: "#4E3270", "margin": 0 }}
+                            style={{ backgroundColor: "#4E3270" }}
                             onClick={handleLogin}
                         >
                             <label className="loginInputText">Sign In</label>
@@ -141,7 +140,7 @@ const Login = () => {
                     <div className="loginError">{loginError}</div>
 
                     {isEmail && (
-                        <button className="loginSupplementalButton" onClick={() => {
+                        <button className="loginSupplementalButton" style={{"text-decoration": "underline"}} onClick={() => {
                             setIsEmail(!isEmail);
                             setLoginError("");
                         }}>
