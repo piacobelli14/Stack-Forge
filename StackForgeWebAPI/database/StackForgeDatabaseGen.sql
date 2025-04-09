@@ -177,3 +177,34 @@ VALUES (
     '(803) 212-5172', 
     'Cofounder,CEO,CTO,COO'   
 );
+
+DROP TABLE IF EXISTS deployments;
+CREATE TABLE deployments 
+(
+    deployment_id TEXT,
+    orgid TEXT,
+    username TEXT,
+    project_name TEXT,
+    domain TEXT,
+    status TEXT,
+    url TEXT,
+    template TEXT,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    last_deployed_at TIMESTAMP
+);
+DROP INDEX IF EXISTS idx_deployments;
+CREATE INDEX idx_deployments ON deployments (orgid, username, deployment_id, created_at);
+
+DROP TABLE IF EXISTS deployment_logs;
+CREATE TABLE deployment_logs
+(
+    orgid TEXT,
+    username TEXT,
+    action TEXT,
+    deployment_id TEXT,
+    timestamp TIMESTAMP,
+    ip_address TEXT
+);
+DROP INDEX IF EXISTS idx_deployment_logs;
+CREATE INDEX idx_deployment_logs ON deployment_logs (orgid, deployment_id, timestamp);

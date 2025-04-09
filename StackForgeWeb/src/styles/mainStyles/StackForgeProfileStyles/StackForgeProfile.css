@@ -17,6 +17,7 @@
     justify-content: flex-start;
     overflow: hidden;
     height: 100vh;
+    width: 100vw; 
     background: linear-gradient(to bottom, #0E0B1B, #29282D);
 }
 

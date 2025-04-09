@@ -412,376 +412,390 @@ const StackForgeProfile = () => {
     return (
         <div className="profilePageWrapper" style={{ display: screenSize >= 5300 && screenSize < 700 ? "none" : "" }}>
             <StackForgeNav activePage="main" />
-            <div className="profileCellHeaderContainer">
-                <div className="profileCellContentWrapper">
-                    <div className="profileContentSideBar">
-                        <div className="profileSideBarButtonWrapper">
-                            {settingsButtons.map(btn => (
-                                <button key={btn.state} className={"profileSideBarButton " + (settingsState === btn.state ? "profileSideBarButton--selected" : "")} onClick={() => setSettingsState(btn.state)}>
-                                    <span>
-                                        <FontAwesomeIcon icon={btn.icon} /> {capitalizeWords(btn.label)}
-                                    </span>
-                                    <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
-                                </button>
-                            ))}
+            {isLoaded && (
+                <div className="profileCellHeaderContainer">
+                    <div className="profileCellContentWrapper">
+                        <div className="profileContentSideBar">
+                            <div className="profileSideBarButtonWrapper">
+                                {settingsButtons.map(btn => (
+                                    <button key={btn.state} className={"profileSideBarButton " + (settingsState === btn.state ? "profileSideBarButton--selected" : "")} onClick={() => setSettingsState(btn.state)}>
+                                        <span>
+                                            <FontAwesomeIcon icon={btn.icon} /> {capitalizeWords(btn.label)}
+                                        </span>
+                                        <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                    <div className="profileContentMainFlex">
-                        <div className="profileContentMainScroll">
-                            {settingsState === "general" && (
-                                <>
-                                    <div className="profileContentFlexCell">
-                                        <div className="profileContentFlexCellTop">
-                                            <div className="profileLeadingCellStack">
-                                                <h3>Profile Picture</h3>
-                                                <p>
-                                                    Your user profile image serves as your avatar. It is what other users will see you as.
-                                                    Click on it to upload a custom one.
-                                                
-                                                </p>
-                                            </div>
-                                            <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                <label className="profileUserImageWrapper" htmlFor="userImageUpload">
-                                                    <img src={userDetails.image} className="profileUserImage" alt="" />
-                                                </label>
-                                                <input style={{ display: "none", padding: 0 }} type="file" id="userImageUpload" accept="image/*" onChange={handleUserImageChange} />
-                                            </div>
-                                        </div>
-                                        <div className="profileContentFlexCellBottom">
-                                            <p>A profile picture for your account is required.</p>
-                                        </div>
-                                    </div>
-                                    <div className="profileContentFlexCell">
-                                        <div className="profileContentFlexCellTop">
-                                            <div className="profileLeadingCellStack">
-                                                <h3>Personal Information</h3>
-                                                <p>This is your first and last name as they will be displayed to other users.</p>
-                                            </div>
-                                            <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                <div className="profileFieldInput">
-                                                    <strong>First Name</strong>
-                                                    <span>
-                                                        <input placeholder={userDetails.firstName} disabled={!editModes.firstName} onChange={e => setUserDetails(prev => ({ ...prev, firstName: e.target.value }))} />
-                                                        <button className="profileEditButton" onClick={() => editModes.firstName ? handleSaveUserInfo("firstName", userDetails.firstName) : setEditModes(prev => ({ ...prev, firstName: true }))}>
-                                                            <FontAwesomeIcon icon={editModes.firstName ? faBookmark : faPenToSquare} />
-                                                        </button>
-                                                    </span>
-                                                </div>
-                                                <div className="profileFieldInput">
-                                                    <strong>Last Name</strong>
-                                                    <span>
-                                                        <input placeholder={userDetails.lastName} disabled={!editModes.lastName} onChange={e => setUserDetails(prev => ({ ...prev, lastName: e.target.value }))} />
-                                                        <button className="profileEditButton" onClick={() => editModes.lastName ? handleSaveUserInfo("lastName", userDetails.lastName) : setEditModes(prev => ({ ...prev, lastName: true }))}>
-                                                            <FontAwesomeIcon icon={editModes.lastName ? faBookmark : faPenToSquare} />
-                                                        </button>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="profileContentFlexCellBottom">
-                                            <p>Your first and last name is required.</p>
-                                        </div>
-                                    </div>
-                                    <div className="profileContentFlexCell">
-                                        <div className="profileContentFlexCellTop">
-                                            <div className="profileLeadingCellStack">
-                                                <h3>Contact Information</h3>
-                                                <p>This is the email address and phone number associated with your account. It won't be displayed to others.</p>
-                                            </div>
-                                            <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                <div className="profileFieldInput">
-                                                    <strong>Email Address</strong>
-                                                    <span>
-                                                        <input placeholder={userDetails.email} disabled={!editModes.email} onChange={e => setUserDetails(prev => ({ ...prev, email: e.target.value }))} />
-                                                        <button className="profileEditButton" onClick={() => editModes.email ? handleSaveUserInfo("email", userDetails.email) : setEditModes(prev => ({ ...prev, email: true }))}>
-                                                            <FontAwesomeIcon icon={editModes.email ? faBookmark : faPenToSquare} />
-                                                        </button>
-                                                    </span>
-                                                </div>
-                                                <div className="profileFieldInput">
-                                                    <strong>Phone Number</strong>
-                                                    <span>
-                                                        <input placeholder={formatPhoneNumber(userDetails.phone)} disabled={!editModes.phone} onChange={e => setUserDetails(prev => ({ ...prev, phone: e.target.value }))} />
-                                                        <button className="profileEditButton" onClick={() => editModes.phone ? handleSaveUserInfo("phone", userDetails.phone) : setEditModes(prev => ({ ...prev, phone: true }))}>
-                                                            <FontAwesomeIcon icon={editModes.phone ? faBookmark : faPenToSquare} />
-                                                        </button>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="profileContentFlexCellBottom">
-                                            <p>Your email address and phone number are required.</p>
-                                        </div>
-                                    </div>
-                                    <div className="profileContentFlexCell">
-                                        <div className="profileContentFlexCellTop">
-                                            <div className="profileLeadingCellStack">
-                                                <h3>Role</h3>
-                                                <p>This is your self-described position or role. It is not related to your team and it does not influence your permissions.</p>
-                                            </div>
-                                            <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                <div className="profileFieldInput">
-                                                    <strong>Role</strong>
-                                                    <span>
-                                                        <input placeholder={userDetails.role} disabled={!editModes.role} onChange={e => setUserDetails(prev => ({ ...prev, role: e.target.value }))} />
-                                                        <button className="profileEditButton" onClick={() => editModes.role ? handleSaveUserInfo("role", userDetails.role) : setEditModes(prev => ({ ...prev, role: true }))}>
-                                                            <FontAwesomeIcon icon={editModes.role ? faBookmark : faPenToSquare} />
-                                                        </button>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="profileContentFlexCellBottom">
-                                            <p>Assigning yourself a role is not required, but highly recommended.</p>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-                            {settingsState === "personal" && (
-                                <>
-                                    <div className="profileContentFlexCell">
-                                        <div className="profileContentFlexCellTop">
-                                            <div className="profileLeadingCellStack">
-                                                <h3>Username</h3>
-                                                <p>
-                                                    This is the username you selected when you created your account.
-                                                    This is what other users will see when they see you.
-                                                </p>
-                                            </div>
-                                            <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                <div className="profileFieldInput">
-                                                    <strong>Username</strong>
-                                                    <span>
-                                                        <input placeholder={userID} disabled={true}/>
-                                                        <button className="profileEditButton" onClick={handleUsernameCopy} style={{"opacity": usernameCopied ? "0.6" : "1.0"}}>
-                                                            <FontAwesomeIcon icon={usernameCopied ? faSquareCheck : faClone}/>
-                                                        </button>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="profileContentFlexCellBottom">
-                                            <p>You cannot change this username. You can change your display name in the general settings tab.</p>
-                                        </div>
-                                    </div>
-                                    <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
-                                        <div className="profileContentFlexCellTop">
-                                            <div className="profileLeadingCellStack" style={{ width: "100%" }}>
-                                                <h3>Delete Account</h3>
-                                                <p style={{ width: "100%" }}>Permanently remove your Personal Account and all of its contents from the Vercel platform.</p>
-                                                <button className="profileDeleteButton" onClick={handleAccountDelete}>
-                                                    Delete Personal Account
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
-                                            <p>This action is not reversible, so please continue with caution.</p>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-                            {settingsState === "team" && (
-                                !userDetails.orgid ? (
-                                    <>
-                                        <div className="profileContentFlexCell"  style={{ border: createTeamError !== "" ? "1px solid #E54B4B" : ""}}>
-                                            <div className="profileContentFlexCellTop">
-                                                <div className="profileLeadingCellStack">
-                                                    <h3>Create a Team</h3>
-                                                    <p>If you are not a aprt of a team or orgnaization, you can create one here. Just enter a team name and you will be given administrative access as the founder.</p>
-                                                </div>
-                                                <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                    {isTeamCreateLoad ? (
-                                                        <div className="loading-circle" />
-                                                    ) : (
-                                                        <>
-                                                            <div className="profileFieldInput">
-                                                                <strong>Enter a Team Name</strong>
-                                                                <span>
-                                                                    <input placeholder={"New team name..."} onChange={e => setTeamName(e.target.value)}/>
-                                                                </span>
-                                                            </div>
-                                                            <div className="profileFieldInput">
-                                                                <span>
-                                                                    <button className="profileActionButton" onClick={handleTeamCreation}>
-                                                                        Create New Team
-                                                                    </button>
-                                                                </span>
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="profileContentFlexCellBottom" style={{ borderTop: createTeamError !== "" ? "1px solid #E54B4B" : "", backgroundColor: createTeamError !== "" ? "rgba(229, 75, 75, 0.2)" : "" }}>
-                                                {(createTeamMessage === "" && createTeamError === "") && (
-                                                    <p>Once you successfully create your team, you will be logged out. Once you sign back in you should see your team info.</p>
-                                                )}
-                                                {(createTeamError !== "") && (
-                                                    <p>{createTeamError}</p>
-                                                )}
-                                                {(createTeamError === "" && createTeamMessage !== "") && (
-                                                    <p>{createTeamError}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="profileContentFlexCell" style={{ border: joinTeamError !== "" ? "1px solid #E54B4B" : ""}}>
-                                            <div className="profileContentFlexCellTop">
-                                                <div className="profileLeadingCellStack">
-                                                    <h3>Join a Team</h3>
-                                                    <p>If you need to join a team, your team administrator should have given you an access code. Once you have it you can enter it here to request access to the team.</p>
-                                                </div>
-                                                <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                    {isTeamJoinLoad ? (
-                                                        <div className="loading-circle" />
-                                                    ) : (
-                                                        <>
-                                                            <div className="profileFieldInput">
-                                                                <strong>Enter Your Access Code</strong>
-                                                                <span>
-                                                                    <input placeholder={"Access code..."} onChange={e => setTeamCode(e.target.value)}/>
-                                                                </span>
-                                                            </div>
-                                                            <div className="profileFieldInput">
-                                                                <span>
-                                                                    <button className="profileActionButton" onClick={handleTeamJoin}>
-                                                                        Join Team
-                                                                    </button>
-                                                                </span>
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="profileContentFlexCellBottom" style={{ borderTop: joinTeamError !== "" ? "1px solid #E54B4B" : "", backgroundColor: joinTeamError !== "" ? "rgba(229, 75, 75, 0.2)" : "" }}>
-                                                {(joinTeamMessage === "" && joinTeamError === "") && (
-                                                    <p>Once you enter your access code, and access request will be sent to the team admins who can approve or deny your request.</p>
-                                                )}
-                                                {(joinTeamError !== "") && (
-                                                    <p>{joinTeamError}</p>
-                                                )}
-                                                {(joinTeamError === "" && joinTeamMessage !== "") && (
-                                                    <p>{joinTeamError}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </>
-                                ) : (
+                        <div className="profileContentMainFlex">
+                            <div className="profileContentMainScroll">
+                                {settingsState === "general" && (
                                     <>
                                         <div className="profileContentFlexCell">
                                             <div className="profileContentFlexCellTop">
                                                 <div className="profileLeadingCellStack">
-                                                    <h3>Team Profile Picture</h3>
+                                                    <h3>Profile Picture</h3>
                                                     <p>
-                                                        This is the image associated with your team. It is what other users will see when they look at your team. 
+                                                        Your user profile image serves as your avatar. It is what other users will see you as.
+                                                        Click on it to upload a custom one.
+                                                    
                                                     </p>
                                                 </div>
                                                 <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                    <label className="profileUserImageWrapper" htmlFor="teamImageUpload">
-                                                        <img src={userDetails.orgImage} className="profileUserImage" alt="" />
+                                                    <label className="profileUserImageWrapper" htmlFor="userImageUpload">
+                                                        <img src={userDetails.image} className="profileUserImage" alt="" />
                                                     </label>
-                                                    <input style={{ display: "none", padding: 0 }} type="file" id="teamImageUpload" accept="image/*" onChange={handleTeamImageChange} />
+                                                    <input style={{ display: "none", padding: 0 }} type="file" id="userImageUpload" accept="image/*" onChange={handleUserImageChange} />
                                                 </div>
                                             </div>
                                             <div className="profileContentFlexCellBottom">
-                                                <p>A team profile picture is not required but highly recommended.</p>
+                                                <p>A profile picture for your account is required.</p>
                                             </div>
                                         </div>
-
                                         <div className="profileContentFlexCell">
                                             <div className="profileContentFlexCellTop">
                                                 <div className="profileLeadingCellStack">
-                                                    <h3>Team Information</h3>
-                                                    <p>This your team's Organization ID and date of creation. The Organization ID is the code that you will give to new users who need to access your team.</p>
+                                                    <h3>Personal Information</h3>
+                                                    <p>This is your first and last name as they will be displayed to other users.</p>
                                                 </div>
                                                 <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
                                                     <div className="profileFieldInput">
-                                                        <strong>Organization ID</strong>
+                                                        <strong>First Name</strong>
                                                         <span>
-                                                            <input placeholder={userDetails.orgid} disabled={true}/>
-                                                            <button className="profileEditButton" onClick={handleOrgidCopy} style={{"opacity": orgidCopied ? "0.6" : "1.0"}}>
-                                                                <FontAwesomeIcon icon={orgidCopied ? faSquareCheck : faClone}/>
+                                                            <input placeholder={userDetails.firstName} disabled={!editModes.firstName} onChange={e => setUserDetails(prev => ({ ...prev, firstName: e.target.value }))} />
+                                                            <button className="profileEditButton" onClick={() => editModes.firstName ? handleSaveUserInfo("firstName", userDetails.firstName) : setEditModes(prev => ({ ...prev, firstName: true }))}>
+                                                                <FontAwesomeIcon icon={editModes.firstName ? faBookmark : faPenToSquare} />
                                                             </button>
                                                         </span>
                                                     </div>
                                                     <div className="profileFieldInput">
-                                                        <strong>Created On</strong>
+                                                        <strong>Last Name</strong>
                                                         <span>
-                                                            <input placeholder={formatDate(userDetails.orgCreated)}/>
-                                                            <button className="profileEditButton" onClick={handleOrgCreatedCopy} style={{"opacity": orgCreatedCopied ? "0.6" : "1.0"}}>
-                                                                <FontAwesomeIcon icon={orgCreatedCopied ? faSquareCheck : faClone} />
+                                                            <input placeholder={userDetails.lastName} disabled={!editModes.lastName} onChange={e => setUserDetails(prev => ({ ...prev, lastName: e.target.value }))} />
+                                                            <button className="profileEditButton" onClick={() => editModes.lastName ? handleSaveUserInfo("lastName", userDetails.lastName) : setEditModes(prev => ({ ...prev, lastName: true }))}>
+                                                                <FontAwesomeIcon icon={editModes.lastName ? faBookmark : faPenToSquare} />
                                                             </button>
                                                         </span>
                                                     </div>
                                                 </div>
                                             </div>
                                             <div className="profileContentFlexCellBottom">
-                                                <p>Neither of these fields can be changed.</p>
+                                                <p>Your first and last name is required.</p>
                                             </div>
                                         </div>
-
                                         <div className="profileContentFlexCell">
                                             <div className="profileContentFlexCellTop">
                                                 <div className="profileLeadingCellStack">
-                                                    <h3>Team Name</h3>
-                                                    <p>This is the name of your team that other users will see when they look at your team's page.</p>
-                                                </div>
-                                                <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                    <div className="profileFieldInput">
-                                                        <strong>Team Name</strong>
-                                                        <span>
-                                                            <input placeholder={userDetails.orgName} disabled={!editModes.orgName} onChange={e => setUserDetails(prev => ({ ...prev, orgName: e.target.value }))} />
-                                                            <button 
-                                                                className="profileEditButton" 
-                                                                onClick={() => editModes.orgName ? handleSaveTeamInfo("orgName", userDetails.orgName) : setEditModes(prev => ({ ...prev, orgName: true }))}
-                                                            >
-                                                                <FontAwesomeIcon icon={editModes.orgName ? faBookmark : faPenToSquare} />
-                                                            </button>
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="profileContentFlexCellBottom">
-                                                <p>Your team name can be changed, but we advise against it.</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="profileContentFlexCell">
-                                            <div className="profileContentFlexCellTop">
-                                                <div className="profileLeadingCellStack">
-                                                    <h3>Team Contact Information</h3>
-                                                    <p>This is the email address and phone number associated with your team. It won't be shared publically.</p>
+                                                    <h3>Contact Information</h3>
+                                                    <p>This is the email address and phone number associated with your account. It won't be displayed to others.</p>
                                                 </div>
                                                 <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
                                                     <div className="profileFieldInput">
                                                         <strong>Email Address</strong>
                                                         <span>
-                                                            <input placeholder={userDetails.orgEmail} disabled={!editModes.orgEmail} onChange={e => setUserDetails(prev => ({ ...prev, orgEmail: e.target.value }))} />
-                                                            <button className="profileEditButton" onClick={() => editModes.orgEmail ? handleSaveTeamInfo("orgEmail", userDetails.orgEmail) : setEditModes(prev => ({ ...prev, orgEmail: true }))}>
-                                                                <FontAwesomeIcon icon={editModes.orgEmail ? faBookmark : faPenToSquare} />
+                                                            <input placeholder={userDetails.email} disabled={!editModes.email} onChange={e => setUserDetails(prev => ({ ...prev, email: e.target.value }))} />
+                                                            <button className="profileEditButton" onClick={() => editModes.email ? handleSaveUserInfo("email", userDetails.email) : setEditModes(prev => ({ ...prev, email: true }))}>
+                                                                <FontAwesomeIcon icon={editModes.email ? faBookmark : faPenToSquare} />
                                                             </button>
                                                         </span>
                                                     </div>
                                                     <div className="profileFieldInput">
                                                         <strong>Phone Number</strong>
                                                         <span>
-                                                            <input placeholder={formatPhoneNumber(userDetails.orgPhone)} disabled={!editModes.orgPhone} onChange={e => setUserDetails(prev => ({ ...prev, orgPhone: e.target.value }))} />
-                                                            <button className="profileEditButton" onClick={() => editModes.orgPhone ? handleSaveTeamInfo("orgPhone", userDetails.orgPhone) : setEditModes(prev => ({ ...prev, orgPhone: true }))}>
-                                                                <FontAwesomeIcon icon={editModes.orgPhone ? faBookmark : faPenToSquare} />
+                                                            <input placeholder={formatPhoneNumber(userDetails.phone)} disabled={!editModes.phone} onChange={e => setUserDetails(prev => ({ ...prev, phone: e.target.value }))} />
+                                                            <button className="profileEditButton" onClick={() => editModes.phone ? handleSaveUserInfo("phone", userDetails.phone) : setEditModes(prev => ({ ...prev, phone: true }))}>
+                                                                <FontAwesomeIcon icon={editModes.phone ? faBookmark : faPenToSquare} />
                                                             </button>
                                                         </span>
                                                     </div>
                                                 </div>
                                             </div>
                                             <div className="profileContentFlexCellBottom">
-                                                <p>Your team's email address and phone number are not rewuired, but they are highly recommended.</p>
+                                                <p>Your email address and phone number are required.</p>
+                                            </div>
+                                        </div>
+                                        <div className="profileContentFlexCell">
+                                            <div className="profileContentFlexCellTop">
+                                                <div className="profileLeadingCellStack">
+                                                    <h3>Role</h3>
+                                                    <p>This is your self-described position or role. It is not related to your team and it does not influence your permissions.</p>
+                                                </div>
+                                                <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                    <div className="profileFieldInput">
+                                                        <strong>Role</strong>
+                                                        <span>
+                                                            <input placeholder={userDetails.role} disabled={!editModes.role} onChange={e => setUserDetails(prev => ({ ...prev, role: e.target.value }))} />
+                                                            <button className="profileEditButton" onClick={() => editModes.role ? handleSaveUserInfo("role", userDetails.role) : setEditModes(prev => ({ ...prev, role: true }))}>
+                                                                <FontAwesomeIcon icon={editModes.role ? faBookmark : faPenToSquare} />
+                                                            </button>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="profileContentFlexCellBottom">
+                                                <p>Assigning yourself a role is not required, but highly recommended.</p>
                                             </div>
                                         </div>
                                     </>
-                                )
-                            )}
+                                )}
+                                {settingsState === "personal" && (
+                                    <>
+                                        <div className="profileContentFlexCell">
+                                            <div className="profileContentFlexCellTop">
+                                                <div className="profileLeadingCellStack">
+                                                    <h3>Username</h3>
+                                                    <p>
+                                                        This is the username you selected when you created your account.
+                                                        This is what other users will see when they see you.
+                                                    </p>
+                                                </div>
+                                                <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                    <div className="profileFieldInput">
+                                                        <strong>Username</strong>
+                                                        <span>
+                                                            <input placeholder={userID} disabled={true}/>
+                                                            <button className="profileEditButton" onClick={handleUsernameCopy} style={{"opacity": usernameCopied ? "0.6" : "1.0"}}>
+                                                                <FontAwesomeIcon icon={usernameCopied ? faSquareCheck : faClone}/>
+                                                            </button>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="profileContentFlexCellBottom">
+                                                <p>You cannot change this username. You can change your display name in the general settings tab.</p>
+                                            </div>
+                                        </div>
+                                        <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
+                                            <div className="profileContentFlexCellTop">
+                                                <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                    <h3>Delete Account</h3>
+                                                    <p style={{ width: "100%" }}>Permanently remove your Personal Account and all of its contents from the Vercel platform.</p>
+                                                    <button className="profileDeleteButton" onClick={handleAccountDelete}>
+                                                        Delete Personal Account
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
+                                                <p>This action is not reversible, so please continue with caution.</p>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                                {settingsState === "team" && (
+                                    !userDetails.orgid ? (
+                                        <>
+                                            <div className="profileContentFlexCell"  style={{ border: createTeamError !== "" ? "1px solid #E54B4B" : ""}}>
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack">
+                                                        <h3>Create a Team</h3>
+                                                        <p>If you are not a aprt of a team or orgnaization, you can create one here. Just enter a team name and you will be given administrative access as the founder.</p>
+                                                    </div>
+                                                    <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                        {isTeamCreateLoad ? (
+                                                            <div className="loading-circle" />
+                                                        ) : (
+                                                            <>
+                                                                <div className="profileFieldInput">
+                                                                    <strong>Enter a Team Name</strong>
+                                                                    <span>
+                                                                        <input placeholder={"New team name..."} onChange={e => setTeamName(e.target.value)}/>
+                                                                    </span>
+                                                                </div>
+                                                                <div className="profileFieldInput">
+                                                                    <span>
+                                                                        <button className="profileActionButton" onClick={handleTeamCreation}>
+                                                                            Create New Team
+                                                                        </button>
+                                                                    </span>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom" style={{ borderTop: createTeamError !== "" ? "1px solid #E54B4B" : "", backgroundColor: createTeamError !== "" ? "rgba(229, 75, 75, 0.2)" : "" }}>
+                                                    {(createTeamMessage === "" && createTeamError === "") && (
+                                                        <p>Once you successfully create your team, you will be logged out. Once you sign back in you should see your team info.</p>
+                                                    )}
+                                                    {(createTeamError !== "") && (
+                                                        <p>{createTeamError}</p>
+                                                    )}
+                                                    {(createTeamError === "" && createTeamMessage !== "") && (
+                                                        <p>{createTeamError}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="profileContentFlexCell" style={{ border: joinTeamError !== "" ? "1px solid #E54B4B" : ""}}>
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack">
+                                                        <h3>Join a Team</h3>
+                                                        <p>If you need to join a team, your team administrator should have given you an access code. Once you have it you can enter it here to request access to the team.</p>
+                                                    </div>
+                                                    <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                        {isTeamJoinLoad ? (
+                                                            <div className="loading-circle" />
+                                                        ) : (
+                                                            <>
+                                                                <div className="profileFieldInput">
+                                                                    <strong>Enter Your Access Code</strong>
+                                                                    <span>
+                                                                        <input placeholder={"Access code..."} onChange={e => setTeamCode(e.target.value)}/>
+                                                                    </span>
+                                                                </div>
+                                                                <div className="profileFieldInput">
+                                                                    <span>
+                                                                        <button className="profileActionButton" onClick={handleTeamJoin}>
+                                                                            Join Team
+                                                                        </button>
+                                                                    </span>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom" style={{ borderTop: joinTeamError !== "" ? "1px solid #E54B4B" : "", backgroundColor: joinTeamError !== "" ? "rgba(229, 75, 75, 0.2)" : "" }}>
+                                                    {(joinTeamMessage === "" && joinTeamError === "") && (
+                                                        <p>Once you enter your access code, and access request will be sent to the team admins who can approve or deny your request.</p>
+                                                    )}
+                                                    {(joinTeamError !== "") && (
+                                                        <p>{joinTeamError}</p>
+                                                    )}
+                                                    {(joinTeamError === "" && joinTeamMessage !== "") && (
+                                                        <p>{joinTeamError}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="profileContentFlexCell">
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack">
+                                                        <h3>Team Profile Picture</h3>
+                                                        <p>
+                                                            This is the image associated with your team. It is what other users will see when they look at your team. 
+                                                        </p>
+                                                    </div>
+                                                    <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                        <label className="profileUserImageWrapper" htmlFor="teamImageUpload">
+                                                            <img src={userDetails.orgImage} className="profileUserImage" alt="" />
+                                                        </label>
+                                                        <input style={{ display: "none", padding: 0 }} type="file" id="teamImageUpload" accept="image/*" onChange={handleTeamImageChange} />
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom">
+                                                    <p>A team profile picture is not required but highly recommended.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="profileContentFlexCell">
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack">
+                                                        <h3>Team Information</h3>
+                                                        <p>This your team's Organization ID and date of creation. The Organization ID is the code that you will give to new users who need to access your team.</p>
+                                                    </div>
+                                                    <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                        <div className="profileFieldInput">
+                                                            <strong>Organization ID</strong>
+                                                            <span>
+                                                                <input placeholder={userDetails.orgid} disabled={true}/>
+                                                                <button className="profileEditButton" onClick={handleOrgidCopy} style={{"opacity": orgidCopied ? "0.6" : "1.0"}}>
+                                                                    <FontAwesomeIcon icon={orgidCopied ? faSquareCheck : faClone}/>
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                        <div className="profileFieldInput">
+                                                            <strong>Created On</strong>
+                                                            <span>
+                                                                <input placeholder={formatDate(userDetails.orgCreated)}/>
+                                                                <button className="profileEditButton" onClick={handleOrgCreatedCopy} style={{"opacity": orgCreatedCopied ? "0.6" : "1.0"}}>
+                                                                    <FontAwesomeIcon icon={orgCreatedCopied ? faSquareCheck : faClone} />
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom">
+                                                    <p>Neither of these fields can be changed.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="profileContentFlexCell">
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack">
+                                                        <h3>Team Name</h3>
+                                                        <p>This is the name of your team that other users will see when they look at your team's page.</p>
+                                                    </div>
+                                                    <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                        <div className="profileFieldInput">
+                                                            <strong>Team Name</strong>
+                                                            <span>
+                                                                <input placeholder={userDetails.orgName} disabled={!editModes.orgName} onChange={e => setUserDetails(prev => ({ ...prev, orgName: e.target.value }))} />
+                                                                <button 
+                                                                    className="profileEditButton" 
+                                                                    onClick={() => editModes.orgName ? handleSaveTeamInfo("orgName", userDetails.orgName) : setEditModes(prev => ({ ...prev, orgName: true }))}
+                                                                >
+                                                                    <FontAwesomeIcon icon={editModes.orgName ? faBookmark : faPenToSquare} />
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom">
+                                                    <p>Your team name can be changed, but we advise against it.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="profileContentFlexCell">
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack">
+                                                        <h3>Team Contact Information</h3>
+                                                        <p>This is the email address and phone number associated with your team. It won't be shared publically.</p>
+                                                    </div>
+                                                    <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                        <div className="profileFieldInput">
+                                                            <strong>Email Address</strong>
+                                                            <span>
+                                                                <input placeholder={userDetails.orgEmail} disabled={!editModes.orgEmail} onChange={e => setUserDetails(prev => ({ ...prev, orgEmail: e.target.value }))} />
+                                                                <button className="profileEditButton" onClick={() => editModes.orgEmail ? handleSaveTeamInfo("orgEmail", userDetails.orgEmail) : setEditModes(prev => ({ ...prev, orgEmail: true }))}>
+                                                                    <FontAwesomeIcon icon={editModes.orgEmail ? faBookmark : faPenToSquare} />
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                        <div className="profileFieldInput">
+                                                            <strong>Phone Number</strong>
+                                                            <span>
+                                                                <input placeholder={formatPhoneNumber(userDetails.orgPhone)} disabled={!editModes.orgPhone} onChange={e => setUserDetails(prev => ({ ...prev, orgPhone: e.target.value }))} />
+                                                                <button className="profileEditButton" onClick={() => editModes.orgPhone ? handleSaveTeamInfo("orgPhone", userDetails.orgPhone) : setEditModes(prev => ({ ...prev, orgPhone: true }))}>
+                                                                    <FontAwesomeIcon icon={editModes.orgPhone ? faBookmark : faPenToSquare} />
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom">
+                                                    <p>Your team's email address and phone number are not rewuired, but they are highly recommended.</p>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
+
+            {!isLoaded && (
+                <div className="profileCellHeaderContainer" style={{"justify-content": "center"}}>
+                    <div className="loading-wrapper">
+                        <div className="loading-circle"/>
+
+                        <label className="loading-title"> 
+                            Stack Forge
+                        </label>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

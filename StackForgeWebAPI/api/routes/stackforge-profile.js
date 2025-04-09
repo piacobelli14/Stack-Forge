@@ -375,7 +375,6 @@ router.post('/edit-user-email', authenticateToken, async (req, res, next) => {
 
 router.post('/edit-team-email', authenticateToken, async (req, res, next) => {
     const { userID, organizationID, orgEmail } = req.body;
-    console.log(userID, organizationID); 
     
     req.on('close', () => {
         return;

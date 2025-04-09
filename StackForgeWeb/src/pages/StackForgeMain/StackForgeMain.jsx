@@ -1,29 +1,27 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEnvelope, faPerson, faEye, faEyeSlash, faUserCircle, faPersonCirclePlus, faEnvelopeCircleCheck } from "@fortawesome/free-solid-svg-icons";
 import "../../styles/mainStyles/StackForgeAuthenticationStyles/StackForgeAuthLogin.css";
+import "../../styles/helperStyles/LoadingSpinner.css";
 import StackForgeNav from "../../helpers/StackForgeNav";
-import useAuth from "../../UseAuth"; 
+import { showDialog } from "../../helpers/StackForgeAlert";
+import useAuth from "../../UseAuth";
+import useIsTouchDevice from "../../TouchDevice.jsx";
 
 const StackForgeMain = () => {
     const navigate = useNavigate();
-    const { setToken } = useAuth();
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [isEmail, setIsEmail] = useState(false);
-    const [passwordVisible, setPasswordVisible] = useState(false);
-    const [loginError, setLoginError] = useState("");
+    const isTouchDevice = useIsTouchDevice();
+    const { token, userID, loading, organizationID } = useAuth();
+    const [isLoaded, setIsLoaded] = useState(false);
     const [screenSize, setScreenSize] = useState(window.innerWidth);
+    const [resizeTrigger, setResizeTrigger] = useState(false);
+
 
     return (
-        <div className="loginPageWrapper" style={{"background": "linear-gradient(to left, #111111, #090011)", "display": screenSize >= 5300 ? "none" : ""}}>
+        <div className="loginPageWrapper" style={{ background: "linear-gradient(to bottom, #0E0B1B, #29282D)", display: screenSize >= 5300 ? "none" : "" }}>
             <StackForgeNav activePage="main" />
 
 
-            <button> 
-                Launch Website
-            </button> 
         </div>
     );
 };
