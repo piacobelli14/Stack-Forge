@@ -6,69 +6,15 @@
     height: 100vh; 
 }
 
-@media (min-width: 1700px) {
-    .registerCellHeaderContainer {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100vw;
-        height: calc(100vh - 8vh) !important; 
-        overflow: hidden;
-        position: relative; 
-        overflow: scroll; 
-    }
-}
-
-@media (min-width: 1300px) and (max-width: 1699px) {
-    .registerCellHeaderContainer {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100vw;
-        height: calc(100vh - 10vh) !important; 
-        overflow: hidden;
-        position: relative; 
-        overflow: scroll; 
-    }
-}
-
-@media (min-width: 700px) and (max-width: 1299px) {
-    .registerCellHeaderContainer {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100vw;
-        height: calc(100vh - 10vh) !important; 
-        overflow: hidden;
-        position: relative; 
-        overflow: scroll; 
-    }
-}
-
-@media (min-width: 500px) and (max-width: 699px) {
-    .registerCellHeaderContainer {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100vw;
-        height: calc(100vh - 8vh) !important; 
-        overflow: hidden;
-        position: relative; 
-        overflow: scroll; 
-    }
-}
-
-@media (max-width: 499px) {
-    .registerCellHeaderContainer {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100vw;
-        height: calc(100vh - 6vh) !important; 
-        overflow: hidden;
-        position: relative; 
-        overflow: scroll; 
-    }
+.registerCellHeaderContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100vw;
+    height: calc(100vh - 60px) !important; 
+    overflow: hidden;
+    position: relative; 
+    overflow: scroll; 
 }
 
 .registerBlock {

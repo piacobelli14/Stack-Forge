@@ -8,6 +8,7 @@ import {
   faIdCard,
   faRightFromBracket,
   faArrowUpRightFromSquare,
+  faDiagramProject,
 } from "@fortawesome/free-solid-svg-icons";
 import "../styles/helperStyles/NavBar.css";
 import useAuth from "../UseAuth.jsx";
@@ -90,10 +91,7 @@ const StackForgeNav = ({ activePage }) => {
           <div className="homeNavSupplement"></div>
 
           {!isTouchDevice && (
-            <button
-              className="homeHamburgerCircle"
-              onClick={() => setIsHamburger(!isHamburger)}
-            >
+            <button className="homeHamburgerCircle" onClick={() => setIsHamburger(!isHamburger)}>
               <FontAwesomeIcon
                 icon={isHamburger ? faXmark : faBars}
                 className="homeHamburgerIcon"
@@ -185,6 +183,22 @@ const StackForgeNav = ({ activePage }) => {
             className="homeHamburgerPopout"
           >
             <div className="homeHamburgerContent">
+              
+              <button className="navigationButtonWrapper" onClick={() => navigate("/stackforge")}>
+                <div className="navigationButton" style={{ color: "#ced6dd" }}>
+                  <FontAwesomeIcon
+                    icon={faDiagramProject}
+                    className="navigationButtonIcon"
+                  />
+                  My Projects
+                </div>
+
+                <FontAwesomeIcon
+                      icon={faArrowUpRightFromSquare}
+                      className="navigationButtonIconTrailer"
+                  />
+              </button>
+              
               <button className="navigationButtonWrapper" onClick={() => navigate("/profile")}>
                 <div className="navigationButton" style={{ color: "#ced6dd" }}>
                   <FontAwesomeIcon

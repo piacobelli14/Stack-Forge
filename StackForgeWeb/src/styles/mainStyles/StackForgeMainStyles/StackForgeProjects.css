@@ -1,0 +1,637 @@
+@keyframes projectsCellFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.projectsCellFadeIn {
+    animation: projectsCellFadeIn 2s ease-out;
+}
+
+.projectsPageWrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    background: linear-gradient(to bottom, #0E0B1B, #29282D);
+}
+
+.projectsCellHeaderContainer {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100vw;
+    min-height: calc(100vh - 60px) !important;
+    overflow: hidden;
+    position: relative;
+}
+
+.projectsTopBar {
+    position: sticky;
+    top: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    min-height: 80px;
+    max-height: 80px;
+    background-color: rgba(25, 25, 25, 0.7);
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-right: 0.2vh solid rgba(255, 255, 255, 0.1);
+    box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 2vw;
+}
+
+.projectsTopBarSearchContainer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 70%;
+    height: 40px;
+}
+
+@media (min-width: 1200px) {
+    .projectsTopBarSearchContainer {
+        width: 80%;
+    }
+}
+
+.searchBarWrapper {
+    display: flex;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid #A3A3A3;
+    border-radius: 6px;
+    padding: 0 0.8rem;
+    width: 100%;
+    height: 40px;
+    box-shadow: 0 0 8px black;
+}
+
+.searchIcon,
+.searchIconSupplement {
+    font-size: 0.9rem;
+}
+
+.searchIcon,
+.searchIconSupplement {
+    color: #A3A3A3;
+    margin-right: 0.5rem;
+}
+
+.searchIconSupplement {
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    margin-left: 0.5rem;
+}
+
+.searchIconSupplement:hover {
+    opacity: 0.6;
+    transform: scale(1.1);
+}
+
+.searchInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #A3A3A3;
+}
+
+.searchInput::placeholder {
+    color: #8b8b8b;
+    font-weight: 600;
+}
+
+.projectsTopBarControls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 38%;
+    min-height: 40px;
+    max-height: 40px;
+    gap: 1vw;
+}
+
+@media (min-width: 1200px) {
+    .projectsTopBarControls {
+        width: 18%;
+    }
+}
+
+.viewControlButtonWrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 40px;
+    max-height: 40px;
+    width: 80px;
+    gap: 0;
+    border: 1.5px solid #414141;
+    border-radius: 6px;
+    box-shadow: 0 0 8px black;
+}
+
+.viewControlButtonWrapper button:first-child {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-right: 1px solid #414141;
+}
+
+.viewControlButtonWrapper button:last-child {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+.viewControlButton {
+    min-height: 40px;
+    max-height: 40px;
+    width: 40px;
+    background: #111111;
+    color: #f0f0f0;
+    padding: 0 0.6rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    text-align: center;
+    border: none;
+    border-radius: 0;
+}
+
+.viewControlButton.active {
+    background-color: #A3A3A3;
+    color: #222222;
+}
+
+.viewControlButton:hover {
+    opacity: 0.6;
+    border: 1px solid #3d3d3d;
+    outline: none;
+}
+
+.viewControlButton:focus {
+    border: 1px solid #3d3d3d;
+    outline: none;
+}
+
+@media (max-width: 800px) {
+    .viewControlButtonWrapper,
+    .viewControlButton {
+        display: none;
+    }
+}
+
+.addNewWrapper {
+    box-sizing: border-box;
+    position: relative;
+    min-height: 40px;
+    max-height: 40px;
+    width: 60%;
+    display: flex;
+    justify-content: space-between;
+}
+
+@media (max-width: 800px) {
+    .addNewWrapper {
+        width: 90%;
+    }
+}
+
+.addNewButton {
+    box-sizing: border-box;
+    background: #A3A3A3;
+    border: 1.5px solid #414141;
+    border-radius: 6px;
+    padding: 0.4rem 0.8rem;
+    color: #222222;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+    min-height: 40px;
+    max-height: 40px;
+    width: 100%;
+    box-shadow: 0 0 8px black;
+}
+
+.addNewButton:hover {
+    opacity: 0.6;
+    border: 1px solid #222222;
+    outline: none;
+}
+
+.addNewButton:focus {
+    border: 1px solid #222222;
+    outline: none;
+}
+
+.addNewCaretIcon avg {
+    font-size: 1rem;
+    color: #222222;
+}
+
+.dropdownMenu {
+    position: fixed;
+    background: #222222;
+    border: 2px solid #414141;
+    border-radius: 0.3rem;
+    display: flex;
+    flex-direction: column;
+    z-index: 999;
+    min-width: 200px;
+    padding: 0.3rem 0;
+    box-shadow: 0 0 20px black; 
+}
+
+.dropdownMenu button {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0.4rem 1rem;
+    color: #A3A3A3;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-style: italic;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dropdownMenu button svg {
+    font-size: 0.7rem;
+}
+
+.dropdownMenu button:hover {
+    background: #2a2a2a;
+    border: none;
+    outline: none;
+}
+
+.dropdownMenu button:focus {
+    background: #2a2a2a;
+    border: none;
+    outline: none;
+}
+
+.deploymentsContainer {
+    box-sizing: border-box; 
+    color: #000;
+    padding: 20px;
+    margin: 0 auto;
+    overflow-y: auto;
+}
+
+.deploymentsContainer.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 20px;
+    width: 100%;
+}
+
+.deploymentsContainer.list {
+    display: block;
+    width: 90%; 
+}
+
+.deploymentsContainer.list .deploymentCell {
+    margin-bottom: 20px;
+}
+
+.deploymentsContainer.list .deploymentCell:last-child {
+    margin-bottom: 0;
+}
+
+.deploymentCell {
+    box-sizing: border-box;
+    border: 0.5px solid #A3A3A3;
+    border-radius: 6px;
+    padding: 10px;
+    min-height: 200px;
+    width: 100%;
+    background-color: rgba(0, 0, 0, 0.2); 
+    box-shadow: 0 0 10px black; 
+    position: relative; 
+}
+
+.deploymentCellHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box; 
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    height: 100%; 
+    padding: 20px 15px; 
+    color: #A3A3A3;
+    position: absolute; 
+    top: 0; 
+    right: 0; 
+    left: 0; 
+}
+
+.deploymentCellHeaderLeft {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 60%; 
+    height: 100%;
+}
+
+.deploymentCellHeaderLeftTop {
+    width: 100%; 
+    display: flex; 
+    align-items: center;
+    gap: 10px; 
+}
+
+.deploymentCellProjectImage {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    background-color: #222222;
+}
+
+.deploymentCellHeaderInfo {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.deploymentCellHeaderProjectName {
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: inline-block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.deploymentCellHeaderLink {
+    font-size: 0.7rem;
+    font-weight: 600;
+    font-style: italic;
+    text-overflow: ellipsis;
+    color: rgba(163, 163, 163, 0.8);
+    display: inline-block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.deploymentCellHeaderLeftBottom {
+    width: 100%; 
+    flex: 1; 
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-end;
+    gap: 0; 
+    margin-bottom: 2px; 
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.deploymentCellHeaderLeftBottom p span {
+    margin: 0; 
+    padding: 0; 
+    font-size: 0.6rem; 
+    font-weight: 700; 
+    color: #A7A7A7; 
+    font-style: italic;
+    white-space: nowrap;
+}
+
+.deploymentCellHeaderLeftBottom p {
+    margin: 0; 
+    padding: 0; 
+    font-size: 0.7rem; 
+    font-weight: 500; 
+    color: #A7A7A7; 
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    display: inline-block;
+}
+
+.deploymentCellHeaderRight {
+    position: relative;
+    display: flex; 
+    flex-direction: column; 
+    justify-content: space-between; 
+    align-items: flex-end;
+    width: 40%; 
+    height: 100%; 
+}
+
+.threeDotMenuContainer {
+    position: relative;
+    display: inline-block;
+}
+
+.threeDotMenuButton {
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    border: none; 
+    outline: none; 
+}
+
+.threeDotMenuButton:hover {
+    opacity: 0.6; 
+    scale: scale(1.1);
+    outline: none; 
+    border: none;  
+}
+
+.threeDotMenuButton:focus {
+    outline: none; 
+    border: none;  
+}
+
+.threeDotMenuDropdown {
+    position: absolute;
+    top: 35px;
+    right: 0;
+    display: none;
+    flex-direction: column;
+    background: #222222;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    z-index: 999;
+}
+
+.threeDotMenuDropdown button {
+    background: none;
+    border: none;
+    color: #ffffff;
+    padding: 0.5rem 0;
+    font-size: 0.8rem;
+    text-align: left;
+    cursor: pointer;
+    width: 100%;
+}
+
+.threeDotMenuDropdown button:hover {
+    background: #333333;
+}
+
+.deploymentCellHeaderUpdate {
+    font-size: 0.75rem;
+    color: #999999;
+    border-radius: 6px; 
+    width: 100%; 
+    display: flex; 
+    flex-direction: column; 
+    align-items: flex-end;
+    gap: 2px; 
+}
+
+.deploymentCellHeaderUpdate strong {
+    font-size: 0.6rem; 
+    font-weight: 900; 
+    color: #ACACAC; 
+    margin-bottom: 4px;
+}
+
+.deploymentCellHeaderUpdate span {
+    font-size: 0.7rem; 
+    font-weight: 500; 
+    color: #ACACAC; 
+    font-style: italic;
+    padding-bottom: 4px; 
+}
+
+.deploymentCellHeaderUpdate span svg {
+    margin: 0 0.6rem 0 0.6rem;
+    font-size: 0.8rem;
+}
+
+.deploymentCellHeaderUpdate a {
+    font-size: 0.7rem; 
+    font-weight: 500; 
+    color: #9B68DD; 
+    font-style: italic;
+    cursor: pointer; 
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.deploymentCellHeaderUpdate a:hover {
+    opacity: 0.8; 
+    transform: scale(1.05); 
+}
+
+.deploymentCellHeaderGithub {
+    font-size: 0.6rem;
+    font-weight: 700; 
+    font-style: italic;
+    text-overflow: ellipsis;
+    color: white;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 10px; 
+    padding: 0px 12px;
+    margin: 4px 0px;  
+    width: calc(100% - 40px);
+    box-sizing: border-box;
+    white-space: nowrap; 
+    text-overflow: ellipsis;
+    overflow: hidden;
+    display: flex; 
+    align-items: center;
+    gap: 12px; 
+    color: #f5f5f5; 
+    cursor: pointer; 
+    min-width: 100%; 
+}
+
+.deploymentCellHeaderGithub:hover {
+    opacity: 0.9; 
+    color: #f5f5f5;
+}
+
+.deploymentCellHeaderGithub p {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    cursor: pointer; 
+}
+  
+.deploymentCellHeaderGithub svg {
+    font-size: 1rem;
+}
+
+.threeDotDropdownMenu {
+    position: absolute;
+    top: 20px;
+    right: 0;
+    background: #1B191D;
+    border: 2px solid #414141;
+    border-radius: 0.3rem;
+    display: flex;
+    flex-direction: column;
+    z-index: 999;
+    min-width: 200px;
+    padding: 0.3rem 0;
+    box-shadow: 0 0 40px black;
+}
+
+.threeDotDropdownMenu button {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0.4rem 1rem;
+    color: #A3A3A3;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-style: italic;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.threeDotDropdownMenu button svg {
+    font-size: 0.7rem;
+}
+
+.threeDotDropdownMenu button:hover {
+    background: #2a2a2a;
+    border: none;
+    outline: none;
+}
+
+.threeDotDropdownMenu button:focus {
+    background: #2a2a2a;
+    border: none;
+    outline: none;
+}

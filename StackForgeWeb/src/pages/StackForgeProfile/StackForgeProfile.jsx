@@ -15,7 +15,6 @@ const StackForgeProfile = () => {
     const [isLoaded, setIsLoaded] = useState(false);
     const [screenSize, setScreenSize] = useState(window.innerWidth);
     const [resizeTrigger, setResizeTrigger] = useState(false);
-    const [settingsState, setSettingsState] = useState("general");
     const [userDetails, setUserDetails] = useState({
         email: "",
         firstName: "",
@@ -37,6 +36,16 @@ const StackForgeProfile = () => {
         orgImage: "",
         orgCreated: ""
     });
+    const [settingsState, setSettingsState] = useState("general");
+    const settingsButtons = [
+        { state: "general", label: "general", icon: faGear },
+        { state: "personal", label: "my account", icon: faUserGear },
+        { state: "team", label: "my team", icon: faUsersGear },
+        { state: "permissions", label: "permissions", icon: faPersonChalkboard },
+        { state: "security", label: "security", icon: faLock },
+        { state: "data", label: "data sharing", icon: faChartColumn },
+        { state: "billing", label: "billing", icon: faMoneyBills }
+    ];
     const [editModes, setEditModes] = useState({
         firstName: false,
         lastName: false,
@@ -47,27 +56,6 @@ const StackForgeProfile = () => {
         orgEmail: false, 
         orgPhone: false
     });
-    const settingsButtons = [
-        { state: "general", label: "general", icon: faGear },
-        { state: "personal", label: "my account", icon: faUserGear },
-        { state: "team", label: "my team", icon: faUsersGear },
-        { state: "permissions", label: "permissions", icon: faPersonChalkboard },
-        { state: "security", label: "security", icon: faLock },
-        { state: "data", label: "data sharing", icon: faChartColumn },
-        { state: "billing", label: "billing", icon: faMoneyBills }
-    ];
-    const capitalizeWords = str => str.replace(/\b\w/g, char => char.toUpperCase());
-    const formatPhoneNumber = value => value.replace(/\D/g, "").replace(/^(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3");
-    function formatDate(dateString) {
-        const date = new Date(dateString);
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const day = date.getDate().toString().padStart(2, '0');
-        const year = date.getFullYear();
-        return month + '/' + day + '/' + year;
-    }
-    const copyText = (text) => {
-        navigator.clipboard.writeText(text);
-    };
     const [usernameCopied, setUsernameCopied] = useState(false);
     const [orgidCopied, setOrgidCopied] = useState(false);
     const [orgCreatedCopied, setOrgcreatedCopied] = useState(false);
@@ -142,6 +130,19 @@ const StackForgeProfile = () => {
             setJoinTeamMessage("");
         }
     }, [joinTeamError]);
+
+    const capitalizeWords = str => str.replace(/\b\w/g, char => char.toUpperCase());
+    const formatPhoneNumber = value => value.replace(/\D/g, "").replace(/^(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3");
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        const year = date.getFullYear();
+        return month + '/' + day + '/' + year;
+    }
+    const copyText = (text) => {
+        navigator.clipboard.writeText(text);
+    };
 
     const fetchUserInfo = async id => {
         try {
@@ -442,7 +443,7 @@ const StackForgeProfile = () => {
                                                     </p>
                                                 </div>
                                                 <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                    <label className="profileUserImageWrapper" htmlFor="userImageUpload">
+                                                    <label className="profileUserImageWrapper" htmlFor="userImageUpload" style={{"background": userDetails.image && userDetails.image !== "" ? "none" : "", "box-shadow": userDetails.image && userDetails.image !== "" ? "none" : ""}}>
                                                         <img src={userDetails.image} className="profileUserImage" alt="" />
                                                     </label>
                                                     <input style={{ display: "none", padding: 0 }} type="file" id="userImageUpload" accept="image/*" onChange={handleUserImageChange} />
@@ -676,7 +677,7 @@ const StackForgeProfile = () => {
                                                         </p>
                                                     </div>
                                                     <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                        <label className="profileUserImageWrapper" htmlFor="teamImageUpload">
+                                                        <label className="profileUserImageWrapper" htmlFor="teamImageUpload" style={{"background": userDetails.orgImage && userDetails.orgImage !== "" ? "none" : "", "box-shadow": userDetails.orgImage && userDetails.orgImage !== "" ? "none" : ""}}>
                                                             <img src={userDetails.orgImage} className="profileUserImage" alt="" />
                                                         </label>
                                                         <input style={{ display: "none", padding: 0 }} type="file" id="teamImageUpload" accept="image/*" onChange={handleTeamImageChange} />
