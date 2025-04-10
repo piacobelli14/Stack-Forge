@@ -28,6 +28,7 @@ router.post('/user-authentication', rateLimiter(10, 20, authRateLimitExceededHan
                    ) THEN true ELSE false END AS isadmin
             FROM users u
             WHERE u.username = $1 OR u.email = $1
+            ;
         `;
         const info = await pool.query(loginQuery, [username]);
 
@@ -66,9 +67,10 @@ router.post('/user-authentication', rateLimiter(10, 20, authRateLimitExceededHan
         const locationData = locationResponse.data;
 
         const signinTimestamp = new Date().toISOString();
-        const insertLoginTimestampQuery = `INSERT INTO signin_logs 
-            (orgid, username, signin_timestamp, ip_address, city, region, country, zip, lat, lon, timezone) 
+        const insertLoginTimestampQuery = `
+            INSERT INTO signin_logs (orgid, username, signin_timestamp, ip_address, city, region, country, zip, lat, lon, timezone) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ;
         `;
         await pool.query(insertLoginTimestampQuery, [
             orgID, userID, signinTimestamp, ip, locationData.city, locationData.region,
@@ -106,7 +108,11 @@ router.post('/send-admin-auth-code', rateLimiter(10, 15, authRateLimitExceededHa
         const loginCode = Math.floor(100000 + Math.random() * 900000).toString();
         const expirationTimestamp = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-        const insertAuthenticationCodeQuery = 'INSERT INTO admin_tokens (username, email, token, expiration) VALUES ($1, $2, $3, $4)';
+        const insertAuthenticationCodeQuery = `
+            INSERT INTO admin_tokens (username, email, token, expiration) 
+            VALUES ($1, $2, $3, $4)
+            ;
+        `;
         await pool.query(insertAuthenticationCodeQuery, [username, email, loginCode, new Date(expirationTimestamp)]);
 
         const mailOptions = {
@@ -134,7 +140,11 @@ router.post('/verify-admin-auth-code', rateLimiter(10, 15, authRateLimitExceeded
     });
 
     try {
-        const verifyAuthenticationCodeQuery = 'SELECT email, username FROM admin_tokens WHERE email = $1 AND token = $2 AND expiration > NOW()';
+        const verifyAuthenticationCodeQuery =  `
+            SELECT email, username 
+            FROM admin_tokens WHERE email = $1 AND token = $2 AND expiration > NOW()
+            ;
+        `;
         const verifyAuthenticationCodeInfo = await pool.query(verifyAuthenticationCodeQuery, [email, code]);
 
         if (verifyAuthenticationCodeInfo.rows.length === 0) {
@@ -144,7 +154,11 @@ router.post('/verify-admin-auth-code', rateLimiter(10, 15, authRateLimitExceeded
         const { username: userID } = verifyAuthenticationCodeInfo.rows[0];
         const jwtToken = jwt.sign({ userID }, secretKey, { expiresIn: '24h' });
 
-        const deleteCodeQuery = 'DELETE FROM admin_tokens WHERE email = $1 AND token = $2';
+        const deleteCodeQuery = `
+            DELETE FROM admin_tokens 
+            WHERE email = $1 AND token = $2
+            ;
+        `;
         await pool.query(deleteCodeQuery, [email, code]);
 
         return res.status(200).json({ token: jwtToken, userid: userID });
@@ -163,7 +177,12 @@ router.post('/reset-password', rateLimiter(10, 3, authRateLimitExceededHandler),
     });
 
     try {
-        const resetVerificationQuery = 'SELECT email, username FROM users WHERE email = $1';
+        const resetVerificationQuery = `
+            SELECT email, username 
+            FROM users 
+            WHERE email = $1
+            ;
+        `;
         const resetVerificationInfo = await pool.query(resetVerificationQuery, [email]);
 
         if (resetVerificationInfo.rows.length === 0) {
@@ -207,7 +226,12 @@ router.post('/change-password', rateLimiter(10, 3, authRateLimitExceededHandler)
 
     try {
         const { salt, hashedPassword } = generateSaltedPassword(newPassword);
-        const updatePasswordQuery = 'UPDATE users SET hashed_password = $1, salt = $2 WHERE email = $3';
+        const updatePasswordQuery = `
+            UPDATE users 
+            SET hashed_password = $1, salt = $2 
+            WHERE email = $3
+            ;
+        `;
         await pool.query(updatePasswordQuery, [hashedPassword, salt, email]);
 
         return res.status(200).json({});
@@ -227,7 +251,11 @@ router.post('/validate-new-user-info', rateLimiter(10, 15, authRateLimitExceeded
     });
 
     try {
-        const infoVerificationQuery = 'SELECT username, email FROM users;';
+        const infoVerificationQuery = `
+            SELECT username, email 
+            FROM users
+            ;
+        `;
         const infoVerificationInfo = await pool.query(infoVerificationQuery);
 
         if (infoVerificationInfo.error) {
@@ -311,7 +339,8 @@ router.post('/create-user', rateLimiter(10, 15, authRateLimitExceededHandler), a
             ) 
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE
-            ); 
+            )
+            ; 
         `;
 
         const userCreationValues = [
@@ -365,7 +394,12 @@ router.get('/verify-email', rateLimiter(10, 15, authRateLimitExceededHandler), a
             return res.status(400).json({ message: 'Invalid verification token.' });
         }
 
-        const updateEmailQuery = 'UPDATE users SET verified = true, verification_token = null WHERE verification_token = $1';
+        const updateEmailQuery = `
+            UPDATE users 
+            SET verified = true, verification_token = null 
+            WHERE verification_token = $1
+            ;
+        `;
         await pool.query(updateEmailQuery, [token]);
 
         return res.status(200).json({ message: 'Email verified successfully.' });

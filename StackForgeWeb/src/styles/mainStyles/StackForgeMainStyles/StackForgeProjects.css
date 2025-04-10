@@ -319,7 +319,7 @@
 
 .deploymentCell {
     box-sizing: border-box;
-    border: 0.5px solid #A3A3A3;
+    border: 1px solid #3F3F3F;
     border-radius: 6px;
     padding: 10px;
     min-height: 200px;

@@ -320,6 +320,36 @@ const StackForgeProfile = () => {
         }
     };
 
+    const handleTeamDelete = async () => {
+        const result = await showDialog({
+          title: "Confirm Team Deletion",
+          message: "Type 'delete my team' to confirm deletion.",
+          inputs: [{ name: "confirmation", type: "text", defaultValue: "" }],
+          showCancel: true
+        });
+        if (!result || result.confirmation !== "delete my team") {
+          return;
+        }
+        try {
+          const token = localStorage.getItem("token");
+          const response = await fetch("http://localhost:3000/delete-team", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ userID, organizationID })
+          });
+          if (response.status !== 200) {
+            throw new Error("Internal Server Error");
+          } else {
+            navigate("/login");
+          }
+        } catch (error) {
+          return;
+        }
+    };
+
     const handleTeamCreation = async () => {
         setIsTeamCreateLoad(true);
         if (teamName === "" || !teamName) {
@@ -570,7 +600,7 @@ const StackForgeProfile = () => {
                                             <div className="profileContentFlexCellTop">
                                                 <div className="profileLeadingCellStack" style={{ width: "100%" }}>
                                                     <h3>Delete Account</h3>
-                                                    <p style={{ width: "100%" }}>Permanently remove your Personal Account and all of its contents from the Vercel platform.</p>
+                                                    <p style={{ width: "100%" }}>Permanently remove your Personal Account and all of its contents from the platform.</p>
                                                     <button className="profileDeleteButton" onClick={handleAccountDelete}>
                                                         Delete Personal Account
                                                     </button>
@@ -775,6 +805,23 @@ const StackForgeProfile = () => {
                                                 </div>
                                                 <div className="profileContentFlexCellBottom">
                                                     <p>Your team's email address and phone number are not rewuired, but they are highly recommended.</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                        <h3>Delete Team</h3>
+                                                        <p style={{ width: "100%" }}>
+                                                            Permanently delete your team data and all of its affiliations and deployments from the platform.
+                                                        </p>
+                                                        <button className="profileDeleteButton" onClick={handleTeamDelete}>
+                                                            Delete Team 
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
+                                                    <p>This action is not reversible, so please continue with caution.</p>
                                                 </div>
                                             </div>
                                         </>

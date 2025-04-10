@@ -426,7 +426,7 @@
 
 .profileDeleteButton {
     color: #E7E7E7; 
-    background-color: rgba(229, 75, 75, 0.4);
+    background-color: rgba(229, 75, 75, 0.1);
     box-shadow: 0 0 4px rgba(0,0,0,0.8);
     font-size: 0.6rem; 
     font-weight: 800; 
@@ -434,9 +434,11 @@
     border: 0.2vh solid #E54B4B; 
     border-radius: 4px; 
     width: 80%; 
+    max-width: 300px;
     padding: 0.5rem 0; 
     text-overflow: ellipsis;
     color: #c1c1c1;
+    transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 @media (min-width: 1000px) {    

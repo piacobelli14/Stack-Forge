@@ -16,6 +16,7 @@ class DeployManager {
                 INSERT INTO deployments 
                 (deployment_id, orgid, username, project_name, domain, status, url, created_at) 
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ;
             `,
             [deploymentId, organizationID, userID, projectName, domainName, 'active', url, timestamp]
         );
@@ -24,6 +25,7 @@ class DeployManager {
                 INSERT INTO deployment_logs 
                 (orgid, username, action, deployment_id, timestamp, ip_address) 
                 VALUES ($1, $2, $3, $4, $5, $6)
+                ;
             `,
             [organizationID, userID, 'launch', deploymentId, timestamp, '127.0.0.1']
         );
@@ -37,6 +39,7 @@ class DeployManager {
                 FROM deployments d
                 JOIN organizations o ON d.orgid = o.orgid
                 WHERE d.deployment_id = $1 AND d.orgid = $2 AND d.username = $3
+                ;
             `,
             [deploymentId, organizationID, userID]
         );
@@ -54,6 +57,7 @@ class DeployManager {
                 JOIN organizations o ON d.orgid = o.orgid
                 WHERE d.orgid = $1
                 ORDER BY d.created_at DESC
+                ;
             `,
             [organizationID]
         );
@@ -76,7 +80,12 @@ router.post('/launch', authenticateToken, async (req, res) => {
         }
 
         const orgCheck = await pool.query(
-            'SELECT orgid FROM organizations WHERE orgid = $1',
+            `
+                SELECT orgid 
+                FROM organizations 
+                WHERE orgid = $1
+                ;
+            `,
             [organizationID]
         );
 
