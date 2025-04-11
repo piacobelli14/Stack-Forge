@@ -3,19 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faSearch,
-    faThLarge,
     faList,
     faCaretDown,
-    faCheck,
-    faInfo,
-    faKeyboard,
-    faInfoCircle,
     faCircleInfo,
     faGrip,
-    faSquare,
-    faSquareArrowUpRight,
     faArrowUpRightFromSquare,
-    faEllipsisV,
     faEllipsisH,
     faCodeBranch
 } from "@fortawesome/free-solid-svg-icons";
@@ -34,16 +26,14 @@ const StackForgeMain = () => {
     const [isLoaded, setIsLoaded] = useState(false);
     const [screenSize, setScreenSize] = useState(window.innerWidth);
     const [resizeTrigger, setResizeTrigger] = useState(false);
-    const [projectsPage, setProjectsPage] = useState("projects"); 
+    const [projectsPage, setProjectsPage] = useState("projects");
     const [searchText, setSearchText] = useState("");
     const [displayMode, setDisplayMode] = useState("grid");
     const addNewRef = useRef(null);
     const [addNewOpen, setAddNewOpen] = useState(false);
     const dropdownRef = useRef(null);
     const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-    const [deployments, setDeployments] = useState([]);
-   
-
+    const [projects, setProjects] = useState([]);
     const [openMenuId, setOpenMenuId] = useState(null);
 
     useEffect(() => {
@@ -65,6 +55,7 @@ const StackForgeMain = () => {
     useEffect(() => {
         const handleResize = () => {
             setIsLoaded(false);
+            setAddNewOpen(false);
             setScreenSize(window.innerWidth);
             setResizeTrigger((prev) => !prev);
             setTimeout(() => setIsLoaded(true), 300);
@@ -75,7 +66,12 @@ const StackForgeMain = () => {
 
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (addNewRef.current && !addNewRef.current.contains(event.target) && dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+            if (
+                addNewRef.current &&
+                !addNewRef.current.contains(event.target) &&
+                dropdownRef.current &&
+                !dropdownRef.current.contains(event.target)
+            ) {
                 setAddNewOpen(false);
             }
         };
@@ -83,10 +79,26 @@ const StackForgeMain = () => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [addNewRef, dropdownRef]);
 
+    useEffect(() => {
+        if (addNewOpen && addNewRef.current && dropdownRef.current) {
+            const buttonRect = addNewRef.current.getBoundingClientRect();
+            const dropdownRect = dropdownRef.current.getBoundingClientRect();
+            let newTop = buttonRect.bottom + 5;
+            let newLeft = buttonRect.right - dropdownRect.width;
+            if (newTop + dropdownRect.height > window.innerHeight) {
+                newTop = window.innerHeight - dropdownRect.height;
+            }
+            if (newLeft < 0) {
+                newLeft = 0;
+            }
+            setDropdownPosition({ top: newTop, left: newLeft });
+        }
+    }, [addNewOpen]);
+
     const getProjects = async () => {
         const token = localStorage.getItem("token");
         try {
-            const response = await fetch("http://localhost:3000/list", {
+            const response = await fetch("http://localhost:3000/list-projects", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -94,10 +106,17 @@ const StackForgeMain = () => {
                 },
                 body: JSON.stringify({ organizationID })
             });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const data = await response.json();
-            setDeployments(data);
+            console.log("Received projects:", data);
+            setProjects(Array.isArray(data) ? data : []);
         } catch (error) {
-            console.error(error);
+            console.error("Error fetching projects:", error);
+            setProjects([]);
         }
     };
 
@@ -106,29 +125,24 @@ const StackForgeMain = () => {
     };
 
     const toggleAddNewDropdown = () => {
-        if (!addNewOpen && addNewRef.current) {
-            const rect = addNewRef.current.getBoundingClientRect();
-            setDropdownPosition({ top: rect.bottom, left: rect.left });
-        }
         setAddNewOpen((prev) => !prev);
     };
 
     const handleAddNewItem = (type) => {
-        console.log("Add new:", type);
+        c
         setAddNewOpen(false);
     };
 
-    const handleThreeDotClick = (deploymentId) => {
-        setOpenMenuId((prev) => (prev === deploymentId ? null : deploymentId));
+    const handleThreeDotClick = (projectId) => {
+        setOpenMenuId((prev) => (prev === projectId ? null : projectId));
     };
 
-    const filteredDeployments = deployments.filter((deployment) => {
+    const filteredProjects = projects.filter((project) => {
+        if (!project) return false;
         const search = searchText.toLowerCase();
         return (
-            deployment.project_name.toLowerCase().includes(search) ||
-            deployment.domain.toLowerCase().includes(search) ||
-            deployment.orgname.toLowerCase().includes(search) ||
-            deployment.deployment_id.toLowerCase().includes(search)
+            (project.name && project.name.toLowerCase().includes(search)) ||
+            (project.project_id && project.project_id.toLowerCase().includes(search))
         );
     });
 
@@ -143,45 +157,63 @@ const StackForgeMain = () => {
             <StackForgeNav activePage="main" />
             {isLoaded && (
                 <div className="projectsCellHeaderContainer">
-                    <div className="projectsNavBar"> 
-                        <button 
-                            style={{"border-bottom": projectsPage === "projects" ? "2px solid #f5f5f5" : "none", "color": projectsPage === "projects" ? "#f5f5f5" : ""}}
-                            onClick={()=>{setProjectsPage("projects")}}
+                    <div className="projectsNavBar">
+                        <button
+                            style={{
+                                borderBottom: projectsPage === "projects" ? "2px solid #f5f5f5" : "none",
+                                color: projectsPage === "projects" ? "#f5f5f5" : ""
+                            }}
+                            onClick={() => {
+                                setProjectsPage("projects");
+                            }}
                         >
                             Projects
                         </button>
-
-                        <button 
-                            style={{"border-bottom": projectsPage === "activity" ? "2px solid #f5f5f5" : "none", "color": projectsPage === "activity" ? "#f5f5f5" : ""}}
-                            onClick={()=>{setProjectsPage("activity")}}
+                        <button
+                            style={{
+                                borderBottom: projectsPage === "activity" ? "2px solid #f5f5f5" : "none",
+                                color: projectsPage === "activity" ? "#f5f5f5" : ""
+                            }}
+                            onClick={() => {
+                                setProjectsPage("activity");
+                            }}
                         >
                             Activity
                         </button>
-
-                        <button 
-                            style={{"border-bottom": projectsPage === "domains" ? "2px solid #f5f5f5" : "none", "color": projectsPage === "domains" ? "#f5f5f5" : ""}}
-                            onClick={()=>{setProjectsPage("domains")}}
+                        <button
+                            style={{
+                                borderBottom: projectsPage === "domains" ? "2px solid #f5f5f5" : "none",
+                                color: projectsPage === "domains" ? "#f5f5f5" : ""
+                            }}
+                            onClick={() => {
+                                setProjectsPage("domains");
+                            }}
                         >
                             Domains
                         </button>
-
-                        <button 
-                            style={{"border-bottom": projectsPage === "usage" ? "2px solid #f5f5f5" : "none", "color": projectsPage === "usage" ? "#f5f5f5" : ""}}
-                            onClick={()=>{setProjectsPage("usage")}}
+                        <button
+                            style={{
+                                borderBottom: projectsPage === "usage" ? "2px solid #f5f5f5" : "none",
+                                color: projectsPage === "usage" ? "#f5f5f5" : ""
+                            }}
+                            onClick={() => {
+                                setProjectsPage("usage");
+                            }}
                         >
                             Usage
                         </button>
-
-                        <button 
-                            style={{"border-bottom": projectsPage === "monitoring" ? "2px solid #f5f5f5" : "none", "color": projectsPage === "monitoring" ? "#f5f5f5" : ""}}
-                            onClick={()=>{setProjectsPage("monitoring")}}
+                        <button
+                            style={{
+                                borderBottom: projectsPage === "monitoring" ? "2px solid #f5f5f5" : "none",
+                                color: projectsPage === "monitoring" ? "#f5f5f5" : ""
+                            }}
+                            onClick={() => {
+                                setProjectsPage("monitoring");
+                            }}
                         >
                             Monitoring
                         </button>
-
-
-                    
-                    </div> 
+                    </div>
                     {projectsPage === "projects" && (
                         <div className="projectsTopBar">
                             <div className="projectsTopBarSearchContainer">
@@ -192,7 +224,7 @@ const StackForgeMain = () => {
                                         className="searchInput"
                                         value={searchText}
                                         onChange={handleSearchChange}
-                                        placeholder="Search Repositories and Projects..."
+                                        placeholder="Search Projects..."
                                     />
                                     <FontAwesomeIcon icon={faCircleInfo} className="searchIconSupplement" />
                                 </div>
@@ -217,10 +249,7 @@ const StackForgeMain = () => {
                                     </button>
                                 </div>
                                 <div className="addNewWrapper" ref={addNewRef}>
-                                    <button
-                                        className="addNewButton"
-                                        onClick={toggleAddNewDropdown}
-                                    >
+                                    <button className="addNewButton" onClick={toggleAddNewDropdown}>
                                         Add New...
                                         <FontAwesomeIcon
                                             icon={faCaretDown}
@@ -236,58 +265,71 @@ const StackForgeMain = () => {
                         </div>
                     )}
                     {projectsPage === "projects" && (
-                        <div className={`deploymentsContainer ${displayMode}`} style={{"opacity": addNewOpen ? "0.6" : "1.0"}}>
-                            {filteredDeployments.map((deployment) => (
-                                <div key={deployment.deployment_id} className="deploymentCell">
-                                    <div className="deploymentCellHeader">
+                        <div className={`deploymentsContainer ${displayMode}`} style={{ opacity: addNewOpen ? "0.6" : "1.0" }}>
+                            {filteredProjects.map((project) => (
+                                <div key={project.project_id} className="deploymentCell">
+                                    <div className="deploymentCellHeaderTop">
                                         <div className="deploymentCellHeaderLeft">
                                             <div className="deploymentCellHeaderLeftTop">
-                                                <img
-                                                    src="StackForgeLogo.png"
-                                                    className="deploymentCellProjectImage"
-                                                />
+                                                <img src={project.image || "StackForgeLogo.png"} className="deploymentCellProjectImage" />
                                                 <div className="deploymentCellHeaderInfo">
-                                                    <div className="deploymentCellHeaderProjectName">Placeholder Project Name</div>
-                                                    <a className="deploymentCellHeaderLink" href={deployment.url} target="_blank" rel="noopener noreferrer">
-                                                        {deployment.url}
+                                                    <div className="deploymentCellHeaderProjectName">
+                                                        {project.name || 'Unnamed Project'}
+                                                    </div>
+                                                    <a
+                                                        className="deploymentCellHeaderLink"
+                                                        href={project.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        {project.url}
                                                     </a>
                                                 </div>
                                             </div>
-                                            <a className="deploymentCellHeaderGithub">
-                                                <FontAwesomeIcon icon={faGithub}/>
-                                                <p>https://github.com/piacobelli14/Dino-Labs-Playground.git</p>
-                                            </a>
-                                            <div className="deploymentCellHeaderLeftBottom">
-                                                <p><span>Current Deployment:</span><br/>{deployment.deployment_id}</p>
-                                            </div>
+                                            {project.repository ? (
+                                                <a className="deploymentCellHeaderGithub" href={project.repository}>
+                                                    <FontAwesomeIcon icon={faGithub} />
+                                                    <p>{project.repository}</p>
+                                                </a>
+                                            ) : (
+                                                <a className="deploymentCellHeaderGithub" href={project.repository}>
+                                                    <FontAwesomeIcon icon={faGithub} />
+                                                    <p>No repository connected.</p>
+                                                </a>
+                                            )}
                                         </div>
                                         <div className="deploymentCellHeaderRight">
                                             <div className="threeDotMenuContainer">
-                                                <button className="threeDotMenuButton" onClick={() => handleThreeDotClick(deployment.deployment_id)}>
+                                                <button className="threeDotMenuButton" onClick={() => handleThreeDotClick(project.project_id)}>
                                                     <FontAwesomeIcon icon={faEllipsisH} />
                                                 </button>
-                                                <div
-                                                    className="threeDotDropdownMenu"
-                                                    style={{
-                                                        display:
-                                                            openMenuId === deployment.deployment_id
-                                                                ? "flex"
-                                                                : "none"
-                                                    }}
-                                                >
-                                                    <button>Add Favorite</button>
-                                                    <button>Visit with Toolbar</button>
-                                                    <button>View Logs</button>
-                                                    <button>Manage Domains</button>
-                                                    <button>Transfer Project</button>
-                                                    <button>Settings</button>
-                                                </div>
+                                                {openMenuId === project.project_id && (
+                                                    <div className="threeDotDropdownMenu">
+                                                        <button>Add Favorite</button>
+                                                        <button>Visit Project</button>
+                                                        <button>View Project Details</button>
+                                                        <button>Manage Repository</button>
+                                                        <button>Transfer Project</button>
+                                                        <button>Settings</button>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="deploymentCellHeaderUpdate"> 
-                                                <strong>update</strong> 
-                                                <span>on Jan 28</span>
-                                                <a><FontAwesomeIcon icon={faCodeBranch}/> main</a>
-                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="deploymentCellHeaderBottom">
+                                        <div className="deploymentCellHeaderLeftBottom">
+                                            <p>
+                                                <span>Project ID:</span>
+                                                <br />
+                                                {project.project_id}
+                                            </p>
+                                        </div>
+                                        <div className="deploymentCellHeaderUpdate">
+                                            <strong>Last updated:</strong>
+                                            <span>{new Date(project.updated_at).toLocaleDateString()}</span>
+                                            <a>
+                                                <FontAwesomeIcon icon={faCodeBranch} /> main
+                                            </a>
                                         </div>
                                     </div>
                                 </div>
@@ -297,10 +339,7 @@ const StackForgeMain = () => {
                 </div>
             )}
             {!isLoaded && (
-                <div
-                    className="profileCellHeaderContainer"
-                    style={{ justifyContent: "center" }}
-                >
+                <div className="profileCellHeaderContainer" style={{ justifyContent: "center" }}>
                     <div className="loading-wrapper">
                         <div className="loading-circle" />
                         <label className="loading-title">Stack Forge</label>
@@ -308,12 +347,12 @@ const StackForgeMain = () => {
                 </div>
             )}
             {addNewOpen && (
-                <div className="dropdownMenu" ref={dropdownRef} style={{ top: dropdownPosition.top * 1.05, left: dropdownPosition.left * 0.95 }}>
-                    <button onClick={() => handleAddNewItem("Project")}>
+                <div className="dropdownMenu" ref={dropdownRef} style={{ top: dropdownPosition.top * 1.05, left: dropdownPosition.left }}>
+                    <button onClick={() => navigate("/add-new-project")}>
                         Project
                         <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
                     </button>
-                    <button onClick={() => handleAddNewItem("Domain")}>
+                    <button onClick={() => navigate("/add-new-domain")}>
                         Domain
                         <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
                     </button>

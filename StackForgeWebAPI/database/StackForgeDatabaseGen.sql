@@ -178,23 +178,55 @@ VALUES (
     'Cofounder,CEO,CTO,COO'   
 );
 
+DROP TABLE IF EXISTS projects;
+CREATE TABLE projects 
+(
+    orgid TEXT,
+    username TEXT,
+    project_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL, 
+    url TEXT, 
+    repository TEXT,
+    current_deployment TEXT, 
+    image TEXT
+);
+CREATE INDEX idx_projects_orgid ON projects (orgid, username);
+
+DROP TABLE IF EXISTS domains;
+CREATE TABLE domains 
+(
+    orgid TEXT,
+    username TEXT,
+    domain_id TEXT PRIMARY KEY,
+    domain_name TEXT NOT NULL,
+    project_id TEXT,  
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL
+);
+CREATE INDEX idx_domains_orgid ON domains (orgid, username);
+
 DROP TABLE IF EXISTS deployments;
 CREATE TABLE deployments 
 (
-    deployment_id TEXT,
     orgid TEXT,
     username TEXT,
-    project_name TEXT,
-    domain TEXT,
-    status TEXT,
-    url TEXT,
-    template TEXT,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP,
+    deployment_id TEXT PRIMARY KEY,
+    project_id TEXT,  
+    domain_id TEXT, 
+    status TEXT NOT NULL,
+    url TEXT NOT NULL,
+    template TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
     last_deployed_at TIMESTAMP
 );
 DROP INDEX IF EXISTS idx_deployments;
-CREATE INDEX idx_deployments ON deployments (orgid, username, deployment_id, created_at);
+CREATE INDEX idx_deployments ON deployments (orgid, username);
 
 DROP TABLE IF EXISTS deployment_logs;
 CREATE TABLE deployment_logs
@@ -207,4 +239,4 @@ CREATE TABLE deployment_logs
     ip_address TEXT
 );
 DROP INDEX IF EXISTS idx_deployment_logs;
-CREATE INDEX idx_deployment_logs ON deployment_logs (orgid, deployment_id, timestamp);
+CREATE INDEX idx_deployment_logs ON deployment_logs (orgid, username);
