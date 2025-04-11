@@ -17,7 +17,8 @@ import {
     faArrowUpRightFromSquare,
     faEllipsisV,
     faEllipsisH,
-    faCodeBranch
+    faCodeBranch,
+    faGlobe
 } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeAddDomains.css";
@@ -66,7 +67,7 @@ const StackForgeAddDomains = () => {
 
     return (
         <div
-            className="loginPageWrapper"
+            className="addDomainsPageWrapper"
             style={{
                 background: "linear-gradient(to bottom, #322A54, #29282D)",
                 display: screenSize >= 5300 ? "none" : ""
@@ -74,13 +75,29 @@ const StackForgeAddDomains = () => {
         >
             <StackForgeNav activePage="main" />
             {isLoaded && (
-                <div className="projectsCellHeaderContainer">
+                <div className="addDomainsCellHeaderContainer">
+
+                    <div className="addDomainsFlexCell">
+                        <div className="addDomainsStack">
+                        <div className="addDomainsIcon"> 
+                            <FontAwesomeIcon icon={faGlobe}/>
+                        </div>
+
+                        <strong>Add a domain.</strong>
+
+                        <p>Add a domain that you can connect to your team's projects.</p>
+                        </div>
+                        <button className="addDomainButton">
+                             Add existing domain.
+
+                        </button>
+                    </div>
                     
                 </div>
             )}
 
             {!isLoaded && (
-                <div className="profileCellHeaderContainer" style={{ justifyContent: "center" }}>
+                <div className="addDomainsCellHeaderContainer" style={{ justifyContent: "center" }}>
                     <div className="loading-wrapper">
                         <div className="loading-circle" />
                         <label className="loading-title">Stack Forge</label>

@@ -79,7 +79,6 @@ const StackForgeMain = () => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [addNewRef, dropdownRef]);
 
-    // New useEffect to close open cell menus when clicking outside
     useEffect(() => {
         const handleClickOutsideCellMenu = (event) => {
             if (openMenuId !== null && !event.target.closest('.threeDotMenuContainer')) {
@@ -140,7 +139,6 @@ const StackForgeMain = () => {
     };
 
     const handleAddNewItem = (type) => {
-        c
         setAddNewOpen(false);
     };
 
@@ -159,7 +157,7 @@ const StackForgeMain = () => {
 
     return (
         <div
-            className="loginPageWrapper"
+            className="projectsPageWrapper"
             style={{
                 background: "linear-gradient(to bottom, #322A54, #29282D)",
                 display: screenSize >= 5300 ? "none" : ""
@@ -350,7 +348,7 @@ const StackForgeMain = () => {
                 </div>
             )}
             {!isLoaded && (
-                <div className="profileCellHeaderContainer" style={{ justifyContent: "center" }}>
+                <div className="projevctsCellHeaderContainer" style={{ justifyContent: "center",  alignItems: "center", height: "100%" }}>
                     <div className="loading-wrapper">
                         <div className="loading-circle" />
                         <label className="loading-title">Stack Forge</label>

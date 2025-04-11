@@ -1,0 +1,130 @@
+@keyframes addDomainsCellFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.addDomainsCellFadeIn {
+    animation: projectsCellFadeIn 2s ease-out;
+}
+
+.addDomainsPageWrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    background: linear-gradient(to bottom, #0E0B1B, #29282D);
+}
+
+.addDomainsCellHeaderContainer {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100vw;
+    min-height: calc(100vh - 60px) !important;
+    overflow: hidden;
+    position: relative;
+    padding: 4vw 4vw 4vw 4vw;
+    box-sizing: border-box;
+    overflow: scroll; 
+}
+
+.addDomainsFlexCellWrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-height: 100%;
+    box-sizing: border-box;
+}
+
+.addDomainsFlexCell {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    border: none;
+    border-radius: 6px;
+    background-color: rgba(0, 0, 0, 0.2);
+    box-shadow: 0 0 10px black;
+    position: relative;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.addDomainsStack {
+    display: flex; 
+    flex-direction: column;
+    justify-content: center; 
+    align-items: center;
+    width: 30%; 
+    margin-bottom: 40px; 
+}
+
+.addDomainsIcon {
+    padding: 20px 30px; 
+    background-color: rgba(0, 0, 0, 0.2); 
+    border: 1px solid rgba(0, 0, 0, 0.6); 
+    border-radius: 6px; 
+    box-shadow: 0 0 8px black;
+    font-size: 2rem; 
+    color: #c1c1c1; 
+    margin-bottom: 20px; 
+}
+
+.addDomainsFlexCell strong {
+    font-size: 1.2rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    font-style: italic; 
+    padding: 0; 
+    margin: 0; 
+}
+
+.addDomainsFlexCell p {
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    width: 100%;
+    text-align: center; 
+    padding: 0; 
+    margin: 0; 
+}
+
+.addDomainButton {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid #A3A3A3;
+    border-radius: 6px;
+    padding: 0rem 0.8rem;
+    width: 40%;
+    height: 40px;
+    box-shadow: 0 0 8px black;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #c1c1c1;
+}
+
+.addDomainButton:hover {
+    opacity: 0.6;
+    border: 1px solid #3d3d3d;
+    outline: none;
+}
+
+.addDomainButton:focus {
+    border: 1px solid #3d3d3d;
+    outline: none;
+}
