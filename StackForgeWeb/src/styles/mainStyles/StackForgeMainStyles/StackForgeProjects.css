@@ -390,7 +390,7 @@
     box-sizing: border-box;
     border: none;
     border-radius: 6px;
-    min-height: 80px;
+    min-height: 100px;
     width: 100%;
     background-color: rgba(0, 0, 0, 0.2);
     box-shadow: 0 0 10px black;
@@ -674,7 +674,7 @@
 }
 
 .deploymentsContainer.list .deploymentCellHeaderGithub {
-    margin-bottom: 0; 
+   display: none; 
 }
 
 .deploymentCellHeaderGithub {

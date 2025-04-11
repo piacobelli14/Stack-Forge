@@ -79,6 +79,17 @@ const StackForgeMain = () => {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [addNewRef, dropdownRef]);
 
+    // New useEffect to close open cell menus when clicking outside
+    useEffect(() => {
+        const handleClickOutsideCellMenu = (event) => {
+            if (openMenuId !== null && !event.target.closest('.threeDotMenuContainer')) {
+                setOpenMenuId(null);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutsideCellMenu);
+        return () => document.removeEventListener("mousedown", handleClickOutsideCellMenu);
+    }, [openMenuId]);
+
     useEffect(() => {
         if (addNewOpen && addNewRef.current && dropdownRef.current) {
             const buttonRect = addNewRef.current.getBoundingClientRect();
@@ -171,17 +182,6 @@ const StackForgeMain = () => {
                         </button>
                         <button
                             style={{
-                                borderBottom: projectsPage === "activity" ? "2px solid #f5f5f5" : "none",
-                                color: projectsPage === "activity" ? "#f5f5f5" : ""
-                            }}
-                            onClick={() => {
-                                setProjectsPage("activity");
-                            }}
-                        >
-                            Activity
-                        </button>
-                        <button
-                            style={{
                                 borderBottom: projectsPage === "domains" ? "2px solid #f5f5f5" : "none",
                                 color: projectsPage === "domains" ? "#f5f5f5" : ""
                             }}
@@ -190,6 +190,17 @@ const StackForgeMain = () => {
                             }}
                         >
                             Domains
+                        </button>
+                        <button
+                            style={{
+                                borderBottom: projectsPage === "activity" ? "2px solid #f5f5f5" : "none",
+                                color: projectsPage === "activity" ? "#f5f5f5" : ""
+                            }}
+                            onClick={() => {
+                                setProjectsPage("activity");
+                            }}
+                        >
+                            Activity
                         </button>
                         <button
                             style={{
@@ -347,7 +358,7 @@ const StackForgeMain = () => {
                 </div>
             )}
             {addNewOpen && (
-                <div className="dropdownMenu" ref={dropdownRef} style={{ top: dropdownPosition.top * 1.05, left: dropdownPosition.left }}>
+                <div className="dropdownMenu" ref={dropdownRef} style={{ top: dropdownPosition.top * 1.02, left: dropdownPosition.left }}>
                     <button onClick={() => navigate("/add-new-project")}>
                         Project
                         <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
