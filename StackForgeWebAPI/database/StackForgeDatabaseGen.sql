@@ -152,7 +152,11 @@ CREATE TABLE users
         showteamrole BOOL, 
         idekeybinds JSONB, 
         idezoomlevel FLOAT, 
-        idecolortheme TEXT 
+        idecolortheme TEXT, 
+        github_id TEXT, 
+        github_username TEXT, 
+        github_access_token TEXT,
+        github_avatar_url TEXT 
   	); 
 DROP INDEX IF EXISTS idx_users; 
 CREATE INDEX idx_users ON users (orgid, username, created_at);

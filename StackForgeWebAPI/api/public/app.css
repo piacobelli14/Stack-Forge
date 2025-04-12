@@ -9,7 +9,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(to bottom, #0C042F, #2D2C33);
+    background: linear-gradient(to bottom, #322A54, #29282D);
 } 
 
 .mainContainer {
@@ -20,49 +20,70 @@ body {
 }
 
 .mainCell {
-    padding: 6vh 4vw; 
-    background: rgba(255,255,255,0.2);
+    padding: 30px 30px; 
+    background: rgba(0,0,0,0.2);
     border: none; 
     border-radius: 0.6rem;
     display: flex; 
     flex-direction: column; 
     align-items: center;
     justify-content: center; 
-    box-shadow: 0 0 8px grey; 
+    box-shadow: 0 0 20px black; 
+    min-width: 400px; 
 }
 
 .mainLogo {
-    width: 12vw; 
-    height: 12vw; 
+    width: 160px; 
+    height: 160px; 
     margin-bottom: 20px;
 }
 
 .mainTitle {
     color: #f5f5f5; 
-    font-size: 2.6vw; 
-    font-weight: 700; 
-    text-shadow: 0 0 2.5px grey; 
-    margin-bottom: 2vw; 
-}
-
-.mainSubtitle, 
-.mainLink, 
-.supportLink {
-    color: #f5f5f5; 
-    font-weight: 700; 
-    text-shadow: 0 0 0.5px grey; 
+    font-size: 1.8rem; 
+    font-weight: 600; 
+    margin-bottom: 1rem; 
+    width: 70%; 
+    text-align: center; 
     font-style: italic; 
 }
 
 .mainSubtitle {
-    font-size: 1.25vw; 
-    opacity: 0.7; 
+    color: #f5f5f5; 
+    font-size: 0.9rem; 
+    font-weight: 600; 
+    margin-bottom: 1rem; 
+    width: 70%; 
+    text-align: center; 
+    font-style: italic; 
+}
+
+.mainText {
+    width: 70%; 
+    color: #c1c1c1; 
+    font-size: 0.7rem; 
+    font-weight: 500; 
+    margin-bottom: 2px; 
+    font-style: italic; 
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.mainText span a {
+    color: #9E60E9;
+}
+
+.mainText span a:hover {
+    opacity: 0.6; 
+    transform: scale(1.05);
 }
 
 .mainLink, 
 .supportLink {
-    font-size: 1.25vw;
-    opacity: 0.7; 
+    color: #c1c1c1; 
+    font-size: 0.9rem; 
+    font-weight: 500; 
+    margin-bottom: 2px; 
+    font-style: italic; 
     text-decoration: none; 
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
@@ -78,4 +99,39 @@ body {
     justify-content: center;
     align-items: center;
     gap: 2vw; 
+}
+
+.gitFlex {
+    width: 100%; 
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 40px; 
+    gap: 0; 
+}
+
+.gitFlexWrapper {
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    padding: 0 20px; 
+    gap: 10px; 
+}
+
+.gitLogo {
+    width: 70px; 
+    height: 70px; 
+    background-color: rgba(0,0,0,0.5); 
+    border-radius: 6px;
+    padding: 10px;
+    box-shadow: 0 0 10px black; 
+    margin: 0; 
+}
+
+.gitConnector {
+    border-radius: 50%; 
+    height: 5px; 
+    width: 5px; 
+    background-color: rgba(255,255,255,0.5); 
+    opacity: 0.8;
 }

@@ -34,34 +34,46 @@ const StackForgeAddProject = () => {
     const { token, userID, loading, organizationID } = useAuth();
     const [isLoaded, setIsLoaded] = useState(false);
     const [screenSize, setScreenSize] = useState(window.innerWidth);
-    const [resizeTrigger, setResizeTrigger] = useState(false);
-    const importNewRef = useRef(null);
-    const [importNewOpen, setImportNewOpen] = useState(false);
-    const dropdownRef = useRef(null);
-    const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
     const [searchTerm, setSearchTerm] = useState('');
-    const repositoryData = [
-        { name: "Vektor-Web-API", date: "Apr 7" },
-        { name: "Vektor-API", date: "Apr 7" },
-        { name: "VektorODS", date: "Apr 7" },
-        { name: "Nightingale-Web", date: "Jan 28" },
-        { name: "Nightingale-Bookkeeper", date: "Jan 28" },
-    ];
-    const filteredRepositories = repositoryData.filter(repo =>
+    const [repositories, setRepositories] = useState([]);
+    const [userDetails, setUserDetails] = useState({
+        email: "",
+        firstName: "",
+        lastName: "",
+        image: "",
+        phone: "",
+        role: "",
+        isAdmin: "",
+        twofaEnabled: false,
+        multifaEnabled: false,
+        loginNotis: false,
+        exportNotis: false,
+        dataSharing: false,
+        gitID: "", 
+        gitUsername: "", 
+        gitImage: "",
+        orgID: "",
+        orgName: "",
+        orgEmail: "",
+        orgPhone: "",
+        orgDesc: "",
+        orgImage: "",
+        orgCreated: ""
+    });
+
+    const filteredRepositories = repositories.filter(repo =>
         repo.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    
+
     useEffect(() => {
         if (!loading && !token) navigate("/login");
     }, [token, loading, navigate]);
 
     useEffect(() => {
         const fetchData = async () => {
-            try {
-                setIsLoaded(true);
-            } catch (error) {
-                console.error(error);
-            }
+            await fetchUserInfo();
+            await fetchRepos();
+            setIsLoaded(true);
         };
         if (!loading && token) fetchData();
     }, [userID, loading, token]);
@@ -69,48 +81,67 @@ const StackForgeAddProject = () => {
     useEffect(() => {
         const handleResize = () => {
             setIsLoaded(false);
-            setImportNewOpen(false);
             setScreenSize(window.innerWidth);
-            setResizeTrigger((prev) => !prev);
             setTimeout(() => setIsLoaded(true), 300);
         };
         window.addEventListener("resize", handleResize);
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
-    useEffect(() => {
-        if (importNewOpen && importNewRef.current && dropdownRef.current) {
-            const buttonRect = importNewRef.current.getBoundingClientRect();
-            const dropdownRect = dropdownRef.current.getBoundingClientRect();
-            let newTop = buttonRect.bottom + 5;
-            let newLeft = buttonRect.right - dropdownRect.width;
-            if (newTop + dropdownRect.height > window.innerHeight) {
-                newTop = window.innerHeight - dropdownRect.height;
-            }
-            if (newLeft < 0) {
-                newLeft = 0;
-            }
-            setDropdownPosition({ top: newTop, left: newLeft });
+    const fetchUserInfo = async id => {
+        try {
+            const t = localStorage.getItem("token");
+            const res = await fetch("http://localhost:3000/user-info", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` },
+                body: JSON.stringify({ userID, organizationID })
+            });
+            if (res.status !== 200) throw new Error("Internal Server Error");
+            const data = await res.json();
+            const d = data[0];
+            setUserDetails({
+                email: d.email,
+                firstName: d.firstname,
+                lastName: d.lastname,
+                image: d.image,
+                phone: d.phone,
+                role: d.role,
+                isAdmin: d.isadmin,
+                twofaEnabled: d.twofa,
+                multifaEnabled: d.multifa,
+                loginNotis: d.loginnotis,
+                exportNotis: d.exportnotis,
+                dataSharing: d.datashare,
+                gitID: d.gitid, 
+                gitUsername: d.gitusername,
+                gitImage: d.gitimage, 
+                orgID: d.orgid,
+                orgName: d.organizationname,
+                orgEmail: d.organizationemail,
+                orgPhone: d.organizationphone,
+                orgDesc: d.organizationdescription,
+                orgImage: d.organizationimage,
+                orgCreated: d.organizationcreated
+            });
+        } catch (e) {}
+    };
+
+    const fetchRepos = async () => {
+        try {
+            const t = localStorage.getItem("token");
+            const res = await fetch("http://localhost:3000/git-repos", {
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` }
+            });
+            if (res.status !== 200) throw new Error("Error fetching git repos");
+            const data = await res.json();
+            const formattedRepos = data.map(repo => ({
+                name: repo.name,
+                date: new Date(repo.updated_at).toLocaleDateString()
+            }));
+            setRepositories(formattedRepos);
+        } catch (error) {
+            console.error(error);
         }
-    }, [importNewOpen]);
-
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (
-                importNewRef.current &&
-                !importNewRef.current.contains(event.target) &&
-                dropdownRef.current &&
-                !dropdownRef.current.contains(event.target)
-            ) {
-                setImportNewOpen(false);
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [dropdownRef]);
-
-    const toggleAddNewDropdown = () => {
-        setImportNewOpen((prev) => !prev);
     };
 
     return (
@@ -129,19 +160,17 @@ const StackForgeAddProject = () => {
                             <div className="addProjectsCellHeader">
                                 <div className="addprojectsCellTitleSupplement">
                                     <div className="importNewWrapper">
-                                        <button className="importNewButton" ref={importNewRef} onClick={toggleAddNewDropdown}>
-                                            <FontAwesomeIcon icon={faGithub} />
+                                        <button className="importNewButton">
+                                            <FontAwesomeIcon icon={faGithub}/>
+                                            {userDetails.gitUsername ? (
                                             <p>
-                                                Nightingale-Health
+                                               @{userDetails.gitUsername || "Github"}
                                             </p>
-                                            <FontAwesomeIcon
-                                                icon={faCaretDown}
-                                                className="importNewCaretIcon"
-                                                style={{
-                                                    transform: importNewOpen ? "rotate(180deg)" : "rotate(0deg)",
-                                                    transition: "transform 0.3s ease"
-                                                }}
-                                            />
+                                            ) : (
+                                                <p>
+                                               No GitHub profile associated with this account.
+                                            </p>
+                                            )}
                                         </button>
                                         <div className="importSearchBarWrapper">
                                             <FontAwesomeIcon icon={faSearch} className="importSearchIcon" />
@@ -158,7 +187,7 @@ const StackForgeAddProject = () => {
                                     </div>
                                 </div>
                             </div>
-                            <div className="addProjectsCellContent" style={{"opacity": importNewOpen ? "0.6" : "1.0"}}>
+                            <div className="addProjectsCellContent">
                                 <div className="addProjectsContentListCellWrapper">
                                     {filteredRepositories.map((repo, index) => (
                                         <div className="repoItem" key={index}>
@@ -181,28 +210,27 @@ const StackForgeAddProject = () => {
                             <div className="addProjectsCellContent">
                                 <div className="templateList">
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"}/>
+                                        <img src={"TestImage.png"} alt="Template" />
                                         <p>Next.js Boilerplate</p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"}/>
-                                        <p >AI Chatbot</p>
+                                        <img src={"TestImage.png"} alt="Template" />
+                                        <p>AI Chatbot</p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"}/>
+                                        <img src={"TestImage.png"} alt="Template" />
                                         <p>Commerce</p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"}/>
+                                        <img src={"TestImage.png"} alt="Template" />
                                         <p>Vite + React Starter</p>
                                     </div>
-
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"}/>
+                                        <img src={"TestImage.png"} alt="Template" />
                                         <p>Commerce</p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"}/>
+                                        <img src={"TestImage.png"} alt="Template" />
                                         <p>Vite + React Starter</p>
                                     </div>
                                 </div>
@@ -217,18 +245,6 @@ const StackForgeAddProject = () => {
                         <div className="loading-circle" />
                         <label className="loading-title">Stack Forge</label>
                     </div>
-                </div>
-            )}
-            {importNewOpen && (
-                <div className="dropdownMenu" ref={dropdownRef} style={{ top: dropdownPosition.top * 1.02, left: dropdownPosition.left }}>
-                    <button onClick={() => navigate("/add-new-project")}>
-                        Connect New Github
-                        <FontAwesomeIcon icon={faGithub} />
-                    </button>
-                    <button onClick={() => navigate("/add-new-domain")}>
-                        Switch Git Provider
-                        <FontAwesomeIcon icon={faArrowRightArrowLeft} />
-                    </button>
                 </div>
             )}
         </div>

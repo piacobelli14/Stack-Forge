@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios');
 const crypto = require('crypto');
 const { pool } = require('../config/db');
 const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require('../config/smtp');
@@ -55,6 +56,9 @@ router.post('/user-info', authenticateToken, async (req, res, next) => {
             exportnotis: row.exportnotisenabled,
             datashare: row.datashareenabled,
             organizationid: row.orgid || userID,
+            gitid: row.github_id, 
+            gitusername: row.github_username,
+            gitimage: row.github_avatar_url, 
             organizationname: row.orgname,
             organizationemail: row.orgemail,
             organizationphone: row.orgphone,
@@ -838,6 +842,51 @@ router.post('/create-team', authenticateToken, async (req, res, next) => {
         if (!res.headersSent) {
             res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
+        next(error);
+    }
+});
+
+router.get('/git-repos', authenticateToken, async (req, res, next) => {
+    try {
+        const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [req.user.userid]);
+        if (result.rows.length === 0 || !result.rows[0].github_access_token) {
+            return res.status(400).json({ message: 'GitHub account not connected' });
+        }
+        const githubAccessToken = result.rows[0].github_access_token;
+        const gitResponse = await axios.get('https://api.github.com/user/repos', {
+            headers: {
+                Authorization: `token ${githubAccessToken}`,
+                Accept: 'application/json'
+            }
+        });
+        return res.status(200).json(gitResponse.data);
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post('/delete-github', authenticateToken, async (req, res, next) => {
+    try {
+        const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [req.user.userid]);
+        if (result.rows.length === 0 || !result.rows[0].github_access_token) {
+            return res.status(400).json({ message: 'GitHub account not connected' });
+        }
+        const githubAccessToken = result.rows[0].github_access_token;
+        const clientID = process.env.GITHUB_CLIENT_ID;
+        const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+        const revokeUrl = `https://api.github.com/applications/${clientID}/token`;
+        const authString = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
+        await axios.delete(revokeUrl, {
+            headers: {
+                Authorization: `Basic ${authString}`,
+                Accept: 'application/vnd.github+json'
+            },
+            data: { access_token: githubAccessToken }
+        });
+        const updateQuery = 'UPDATE users SET github_id = null, github_username = null, github_access_token = null, github_avatar_url = null WHERE username = $1';
+        await pool.query(updateQuery, [req.user.userid]);
+        res.status(200).json({ message: 'GitHub access revoked successfully.' });
+    } catch (error) {
         next(error);
     }
 });

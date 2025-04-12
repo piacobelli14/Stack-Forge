@@ -494,7 +494,7 @@
 }
 
 .deploymentCellHeaderProjectName {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     font-weight: 700;
     display: inline-block;
     max-width: 100%;
@@ -538,7 +538,7 @@
 .deploymentCellHeaderLeftBottom p span {
     margin: 0;
     padding: 0;
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 900;
     color: #A7A7A7;
     font-style: italic;
@@ -640,14 +640,14 @@
 }
 
 .deploymentCellHeaderUpdate strong {
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 900;
     color: #ACACAC;
     margin-bottom: 4px;
 }
 
 .deploymentCellHeaderUpdate span {
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 500;
     color: #ACACAC;
     font-style: italic;
@@ -678,7 +678,7 @@
 }
 
 .deploymentCellHeaderGithub {
-    font-size: 0.6rem;
+    font-size: 0.7rem;
     font-weight: 700;
     font-style: italic;
     text-overflow: ellipsis;

@@ -8,6 +8,7 @@ import StackForgeNav from "../../helpers/StackForgeNav";
 import { showDialog } from "../../helpers/StackForgeAlert";
 import useAuth from "../../UseAuth";
 import useIsTouchDevice from "../../TouchDevice.jsx";
+import { faGithub } from "@fortawesome/free-brands-svg-icons";
 
 const StackForgeProfile = () => {
     const navigate = useNavigate(), isTouchDevice = useIsTouchDevice();
@@ -28,7 +29,10 @@ const StackForgeProfile = () => {
         loginNotis: false,
         exportNotis: false,
         dataSharing: false,
-        orgid: "",
+        gitID: "",
+        gitUsername: "",
+        gitImage: "",
+        orgID: "",
         orgName: "",
         orgEmail: "",
         orgPhone: "",
@@ -44,6 +48,7 @@ const StackForgeProfile = () => {
         { state: "permissions", label: "permissions", icon: faPersonChalkboard },
         { state: "security", label: "security", icon: faLock },
         { state: "data", label: "data sharing", icon: faChartColumn },
+        { state: "github", label: "github account", icon: faGithub },
         { state: "billing", label: "billing", icon: faMoneyBills }
     ];
     const [editModes, setEditModes] = useState({
@@ -51,14 +56,16 @@ const StackForgeProfile = () => {
         lastName: false,
         email: false,
         phone: false,
-        role: false, 
-        orgName: false, 
-        orgEmail: false, 
+        role: false,
+        orgName: false,
+        orgEmail: false,
         orgPhone: false
     });
     const [usernameCopied, setUsernameCopied] = useState(false);
-    const [orgidCopied, setOrgidCopied] = useState(false);
-    const [orgCreatedCopied, setOrgcreatedCopied] = useState(false);
+    const [orgIDCopied, setOrgIDCopied] = useState(false);
+    const [orgCreatedCopied, setOrgCreatedCopied] = useState(false);
+    const [gitUsernameCopied, setGitUsernameCopied] = useState(false);
+    const [gitIDCopied, setGitIDCopied] = useState(false);
     const [createTeamMessage, setCreateTeamMessage] = useState("");
     const [joinTeamMessage, setJoinTeamMessage] = useState("");
     const [createTeamError, setCreateTeamError] = useState("");
@@ -79,7 +86,7 @@ const StackForgeProfile = () => {
             try {
                 await fetchUserInfo(userID);
                 setIsLoaded(true);
-            } catch (error) {}
+            } catch (error) { }
         };
         if (!loading && token) fetchData();
     }, [userID, loading, token]);
@@ -135,12 +142,12 @@ const StackForgeProfile = () => {
     const formatPhoneNumber = value => value.replace(/\D/g, "").replace(/^(\d{3})(\d{3})(\d{4})$/, "($1) $2-$3");
     function formatDate(dateString) {
         const date = new Date(dateString);
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, "0");
+        const day = date.getDate().toString().padStart(2, "0");
         const year = date.getFullYear();
-        return month + '/' + day + '/' + year;
+        return month + "/" + day + "/" + year;
     }
-    const copyText = (text) => {
+    const copyText = text => {
         navigator.clipboard.writeText(text);
     };
 
@@ -149,7 +156,7 @@ const StackForgeProfile = () => {
             const t = localStorage.getItem("token");
             const res = await fetch("http://localhost:3000/user-info", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` },
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
                 body: JSON.stringify({ userID: id, organizationID })
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
@@ -168,7 +175,10 @@ const StackForgeProfile = () => {
                 loginNotis: d.loginnotis,
                 exportNotis: d.exportnotis,
                 dataSharing: d.datashare,
-                orgid: d.orgid,
+                gitID: d.gitid,
+                gitUsername: d.gitusername,
+                gitImage: d.gitimage,
+                orgID: d.orgid,
                 orgName: d.organizationname,
                 orgEmail: d.organizationemail,
                 orgPhone: d.organizationphone,
@@ -176,12 +186,12 @@ const StackForgeProfile = () => {
                 orgImage: d.organizationimage,
                 orgCreated: d.organizationcreated
             });
-        } catch (e) {}
+        } catch (e) { }
     };
 
     const handleUserImageChange = async e => {
         const file = e.target.files[0];
-        if (!file) return alert("No file selected!");
+        if (!file) return await showDialog({ title: "Alert", message: "No file selected!" });
         try {
             const reader = new FileReader();
             reader.onloadend = async () => {
@@ -192,24 +202,24 @@ const StackForgeProfile = () => {
                     if (!t) return;
                     const res = await fetch("http://localhost:3000/edit-user-image", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` },
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
                         body: JSON.stringify({ userID, image: base64Data })
                     });
-                    if (!res.ok) return alert(`Error uploading image: ${res.status} - ${await res.text()}`);
+                    if (!res.ok) return await showDialog({ title: "Alert", message: `Error uploading image: ${res.status} - ${await res.text()}` });
                     e.target.value = "";
                 } catch (uploadError) {
-                    alert(`Image upload failed: ${uploadError.message}`);
+                    await showDialog({ title: "Alert", message: `Image upload failed: ${uploadError.message}` });
                 }
             };
             reader.readAsDataURL(file);
         } catch (error) {
-            alert(`An error occurred: ${error.message}`);
+            await showDialog({ title: "Alert", message: `An error occurred: ${error.message}` });
         }
     };
 
     const handleTeamImageChange = async e => {
         const file = e.target.files[0];
-        if (!file) return alert("No file selected!");
+        if (!file) return await showDialog({ title: "Alert", message: "No file selected!" });
         try {
             const reader = new FileReader();
             reader.onloadend = async () => {
@@ -220,18 +230,18 @@ const StackForgeProfile = () => {
                     if (!t) return;
                     const res = await fetch("http://localhost:3000/edit-team-image", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` },
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
                         body: JSON.stringify({ userID, organizationID, image: base64Data })
                     });
-                    if (!res.ok) return alert(`Error uploading image: ${res.status} - ${await res.text()}`);
+                    if (!res.ok) return await showDialog({ title: "Alert", message: `Error uploading image: ${res.status} - ${await res.text()}` });
                     e.target.value = "";
                 } catch (uploadError) {
-                    alert(`Image upload failed: ${uploadError.message}`);
+                    await showDialog({ title: "Alert", message: `Image upload failed: ${uploadError.message}` });
                 }
             };
             reader.readAsDataURL(file);
         } catch (error) {
-            alert(`An error occurred: ${error.message}`);
+            await showDialog({ title: "Alert", message: `An error occurred: ${error.message}` });
         }
     };
 
@@ -243,44 +253,36 @@ const StackForgeProfile = () => {
             phone: "edit-user-phone",
             role: "edit-user-role"
         };
-
         if (value === "" || !value) {
             return;
         }
-
         try {
             const t = localStorage.getItem("token");
             const res = await fetch("http://localhost:3000/" + endpoints[fieldKey], {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` },
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
                 body: JSON.stringify({ userID, [fieldKey]: value })
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
             setEditModes(prev => ({ ...prev, [fieldKey]: false }));
-        } catch (e) {}
+        } catch (e) { }
     };
 
     const handleSaveTeamInfo = async (fieldKey, value) => {
         const endpoints = {
-            orgName: "edit-team-name", 
-            orgEmail: "edit-team-email", 
+            orgName: "edit-team-name",
+            orgEmail: "edit-team-email",
             orgPhone: "edit-team-phone"
         };
-
         if (value === "" || !value) {
             return;
         }
-
         try {
             const t = localStorage.getItem("token");
             const res = await fetch("http://localhost:3000/" + endpoints[fieldKey], {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` },
-                body: JSON.stringify({ 
-                    userID, 
-                    organizationID, 
-                    [fieldKey]: value
-                })
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+                body: JSON.stringify({ userID, organizationID, [fieldKey]: value })
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
             setEditModes(prev => ({ ...prev, [fieldKey]: false }));
@@ -292,61 +294,61 @@ const StackForgeProfile = () => {
 
     const handleAccountDelete = async () => {
         const result = await showDialog({
-          title: "Confirm Account Deletion",
-          message: "Type 'delete my account' to confirm deletion.",
-          inputs: [{ name: "confirmation", type: "text", defaultValue: "" }],
-          showCancel: true
+            title: "Confirm Account Deletion",
+            message: "Type 'delete my account' to confirm deletion.",
+            inputs: [{ name: "confirmation", type: "text", defaultValue: "" }],
+            showCancel: true
         });
         if (!result || result.confirmation !== "delete my account") {
-          return;
+            return;
         }
         try {
-          const token = localStorage.getItem("token");
-          const response = await fetch("http://localhost:3000/delete-account", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({ userID })
-          });
-          if (response.status !== 200) {
-            throw new Error("Internal Server Error");
-          } else {
-            navigate("/login");
-          }
+            const t = localStorage.getItem("token");
+            const response = await fetch("http://localhost:3000/delete-account", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${t}`
+                },
+                body: JSON.stringify({ userID })
+            });
+            if (response.status !== 200) {
+                throw new Error("Internal Server Error");
+            } else {
+                navigate("/login");
+            }
         } catch (error) {
-          return;
+            return;
         }
     };
 
     const handleTeamDelete = async () => {
         const result = await showDialog({
-          title: "Confirm Team Deletion",
-          message: "Type 'delete my team' to confirm deletion.",
-          inputs: [{ name: "confirmation", type: "text", defaultValue: "" }],
-          showCancel: true
+            title: "Confirm Team Deletion",
+            message: "Type 'delete my team' to confirm deletion.",
+            inputs: [{ name: "confirmation", type: "text", defaultValue: "" }],
+            showCancel: true
         });
         if (!result || result.confirmation !== "delete my team") {
-          return;
+            return;
         }
         try {
-          const token = localStorage.getItem("token");
-          const response = await fetch("http://localhost:3000/delete-team", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({ userID, organizationID })
-          });
-          if (response.status !== 200) {
-            throw new Error("Internal Server Error");
-          } else {
-            navigate("/login");
-          }
+            const t = localStorage.getItem("token");
+            const response = await fetch("http://localhost:3000/delete-team", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${t}`
+                },
+                body: JSON.stringify({ userID, organizationID })
+            });
+            if (response.status !== 200) {
+                throw new Error("Internal Server Error");
+            } else {
+                navigate("/login");
+            }
         } catch (error) {
-          return;
+            return;
         }
     };
 
@@ -358,12 +360,12 @@ const StackForgeProfile = () => {
             return;
         }
         try {
-            const token = localStorage.getItem("token");
+            const t = localStorage.getItem("token");
             const response = await fetch("http://localhost:3000/create-team", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
+                    Authorization: `Bearer ${t}`
                 },
                 body: JSON.stringify({ userID, teamName })
             });
@@ -391,20 +393,19 @@ const StackForgeProfile = () => {
             setIsTeamJoinLoad(false);
             return;
         }
-
         try {
-            const token = localStorage.getItem("token");
+            const t = localStorage.getItem("token");
             const response = await fetch("http://localhost:3000/join-team", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
+                    Authorization: `Bearer ${t}`
                 },
-                body: JSON.stringify({ 
-                    userID, 
-                    firstName: userDetails.firstName,  
-                    lastName: userDetails.lastName, 
-                    teamCode 
+                body: JSON.stringify({
+                    userID,
+                    firstName: userDetails.firstName,
+                    lastName: userDetails.lastName,
+                    teamCode
                 })
             });
             if (response.status !== 200) {
@@ -422,22 +423,65 @@ const StackForgeProfile = () => {
         }
     };
 
+    const handleGithubConnect = async () => {
+        try {
+            const t = localStorage.getItem("token");
+            if (!t) {
+                return;
+            }
+            window.open(`http://localhost:3000/connect-github?token=${t}&userID=${userID}`, "_self");
+        } catch (error) {
+            await showDialog({ title: "Alert", message: "Error connecting GitHub: " + error.message });
+        }
+    };    
+
+    const handleGithubDisconnect = async () => {
+        try {
+            const t = localStorage.getItem("token");
+            if (!t) return;
+            const res = await fetch("http://localhost:3000/delete-github", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }
+            });
+            if (res.ok) {
+                await fetchUserInfo(userID);
+                window.location.reload()
+            } else {
+                const errorData = await res.json();
+            }
+        } catch (error) {
+            await showDialog({ title: "Alert", message: "Error disconnecting GitHub: " + error.message });
+        }
+    };
+
     const handleUsernameCopy = () => {
         copyText(formatDate(userID));
         setUsernameCopied(true);
         setTimeout(() => setUsernameCopied(false), 2000);
     };
 
-    const handleOrgidCopy = () => {
-        copyText(userDetails.orgid);
-        setOrgidCopied(true);
-        setTimeout(() => setOrgidCopied(false), 2000);
+    const handleOrgIDCopy = () => {
+        copyText(userDetails.orgID);
+        setOrgIDCopied(true);
+        setTimeout(() => setOrgIDCopied(false), 2000);
     };
 
     const handleOrgCreatedCopy = () => {
         copyText(formatDate(userDetails.orgCreated));
-        setOrgcreatedCopied(true);
-        setTimeout(() => setOrgcreatedCopied(false), 2000);
+        setOrgCreatedCopied(true);
+        setTimeout(() => setOrgCreatedCopied(false), 2000);
+    };
+
+    const handleGitUsernameCopy = () => {
+        copyText(userDetails.gitUsername);
+        setGitUsernameCopied(true);
+        setTimeout(() => setGitUsernameCopied(false), 2000);
+    };
+
+    const handleGitIDCopy = () => {
+        copyText(userDetails.gitID);
+        setGitIDCopied(true);
+        setTimeout(() => setGitIDCopied(false), 2000);
     };
 
     return (
@@ -469,11 +513,10 @@ const StackForgeProfile = () => {
                                                     <p>
                                                         Your user profile image serves as your avatar. It is what other users will see you as.
                                                         Click on it to upload a custom one.
-                                                    
                                                     </p>
                                                 </div>
                                                 <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                    <label className="profileUserImageWrapper" htmlFor="userImageUpload" style={{"background": userDetails.image && userDetails.image !== "" ? "none" : "", "box-shadow": userDetails.image && userDetails.image !== "" ? "none" : ""}}>
+                                                    <label className="profileUserImageWrapper" htmlFor="userImageUpload" style={{ background: userDetails.image && userDetails.image !== "" ? "none" : "", "box-shadow": userDetails.image && userDetails.image !== "" ? "none" : "" }}>
                                                         <img src={userDetails.image} className="profileUserImage" alt="" />
                                                     </label>
                                                     <input style={{ display: "none", padding: 0 }} type="file" id="userImageUpload" accept="image/*" onChange={handleUserImageChange} />
@@ -584,9 +627,9 @@ const StackForgeProfile = () => {
                                                     <div className="profileFieldInput">
                                                         <strong>Username</strong>
                                                         <span>
-                                                            <input placeholder={userID} disabled={true}/>
-                                                            <button className="profileEditButton" onClick={handleUsernameCopy} style={{"opacity": usernameCopied ? "0.6" : "1.0"}}>
-                                                                <FontAwesomeIcon icon={usernameCopied ? faSquareCheck : faClone}/>
+                                                            <input placeholder={userID} disabled={true} />
+                                                            <button className="profileEditButton" onClick={handleUsernameCopy} style={{ opacity: usernameCopied ? "0.6" : "1.0" }}>
+                                                                <FontAwesomeIcon icon={usernameCopied ? faSquareCheck : faClone} />
                                                             </button>
                                                         </span>
                                                     </div>
@@ -600,7 +643,7 @@ const StackForgeProfile = () => {
                                             <div className="profileContentFlexCellTop">
                                                 <div className="profileLeadingCellStack" style={{ width: "100%" }}>
                                                     <h3>Delete Account</h3>
-                                                    <p style={{ width: "100%" }}>Permanently remove your Personal Account and all of its contents from the platform.</p>
+                                                    <p style={{ width: "100%" }}>Permanently delete your Personal Account and all of its contents from the platform. This is irreversible.</p>
                                                     <button className="profileDeleteButton" onClick={handleAccountDelete}>
                                                         Delete Personal Account
                                                     </button>
@@ -613,9 +656,9 @@ const StackForgeProfile = () => {
                                     </>
                                 )}
                                 {settingsState === "team" && (
-                                    !userDetails.orgid ? (
+                                    !userDetails.orgID ? (
                                         <>
-                                            <div className="profileContentFlexCell"  style={{ border: createTeamError !== "" ? "1px solid #E54B4B" : ""}}>
+                                            <div className="profileContentFlexCell" style={{ border: createTeamError !== "" ? "1px solid #E54B4B" : "" }}>
                                                 <div className="profileContentFlexCellTop">
                                                     <div className="profileLeadingCellStack">
                                                         <h3>Create a Team</h3>
@@ -629,7 +672,7 @@ const StackForgeProfile = () => {
                                                                 <div className="profileFieldInput">
                                                                     <strong>Enter a Team Name</strong>
                                                                     <span>
-                                                                        <input placeholder={"New team name..."} onChange={e => setTeamName(e.target.value)}/>
+                                                                        <input placeholder={"New team name..."} onChange={e => setTeamName(e.target.value)} />
                                                                     </span>
                                                                 </div>
                                                                 <div className="profileFieldInput">
@@ -655,7 +698,7 @@ const StackForgeProfile = () => {
                                                     )}
                                                 </div>
                                             </div>
-                                            <div className="profileContentFlexCell" style={{ border: joinTeamError !== "" ? "1px solid #E54B4B" : ""}}>
+                                            <div className="profileContentFlexCell" style={{ border: joinTeamError !== "" ? "1px solid #E54B4B" : "" }}>
                                                 <div className="profileContentFlexCellTop">
                                                     <div className="profileLeadingCellStack">
                                                         <h3>Join a Team</h3>
@@ -669,7 +712,7 @@ const StackForgeProfile = () => {
                                                                 <div className="profileFieldInput">
                                                                     <strong>Enter Your Access Code</strong>
                                                                     <span>
-                                                                        <input placeholder={"Access code..."} onChange={e => setTeamCode(e.target.value)}/>
+                                                                        <input placeholder={"Access code..."} onChange={e => setTeamCode(e.target.value)} />
                                                                     </span>
                                                                 </div>
                                                                 <div className="profileFieldInput">
@@ -703,11 +746,11 @@ const StackForgeProfile = () => {
                                                     <div className="profileLeadingCellStack">
                                                         <h3>Team Profile Picture</h3>
                                                         <p>
-                                                            This is the image associated with your team. It is what other users will see when they look at your team. 
+                                                            This is the image associated with your team. It is what other users will see when they look at your team.
                                                         </p>
                                                     </div>
                                                     <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                        <label className="profileUserImageWrapper" htmlFor="teamImageUpload" style={{"background": userDetails.orgImage && userDetails.orgImage !== "" ? "none" : "", "box-shadow": userDetails.orgImage && userDetails.orgImage !== "" ? "none" : ""}}>
+                                                        <label className="profileUserImageWrapper" htmlFor="teamImageUpload" style={{ background: userDetails.orgImage && userDetails.orgImage !== "" ? "none" : "", "box-shadow": userDetails.orgImage && userDetails.orgImage !== "" ? "none" : "" }}>
                                                             <img src={userDetails.orgImage} className="profileUserImage" alt="" />
                                                         </label>
                                                         <input style={{ display: "none", padding: 0 }} type="file" id="teamImageUpload" accept="image/*" onChange={handleTeamImageChange} />
@@ -717,7 +760,6 @@ const StackForgeProfile = () => {
                                                     <p>A team profile picture is not required but highly recommended.</p>
                                                 </div>
                                             </div>
-
                                             <div className="profileContentFlexCell">
                                                 <div className="profileContentFlexCellTop">
                                                     <div className="profileLeadingCellStack">
@@ -728,17 +770,17 @@ const StackForgeProfile = () => {
                                                         <div className="profileFieldInput">
                                                             <strong>Organization ID</strong>
                                                             <span>
-                                                                <input placeholder={userDetails.orgid} disabled={true}/>
-                                                                <button className="profileEditButton" onClick={handleOrgidCopy} style={{"opacity": orgidCopied ? "0.6" : "1.0"}}>
-                                                                    <FontAwesomeIcon icon={orgidCopied ? faSquareCheck : faClone}/>
+                                                                <input placeholder={userDetails.orgID} disabled={true} />
+                                                                <button className="profileEditButton" onClick={handleOrgIDCopy} style={{ opacity: orgIDCopied ? "0.6" : "1.0" }}>
+                                                                    <FontAwesomeIcon icon={orgIDCopied ? faSquareCheck : faClone} />
                                                                 </button>
                                                             </span>
                                                         </div>
                                                         <div className="profileFieldInput">
                                                             <strong>Created On</strong>
                                                             <span>
-                                                                <input placeholder={formatDate(userDetails.orgCreated)}/>
-                                                                <button className="profileEditButton" onClick={handleOrgCreatedCopy} style={{"opacity": orgCreatedCopied ? "0.6" : "1.0"}}>
+                                                                <input placeholder={formatDate(userDetails.orgCreated)} />
+                                                                <button className="profileEditButton" onClick={handleOrgCreatedCopy} style={{ opacity: orgCreatedCopied ? "0.6" : "1.0" }}>
                                                                     <FontAwesomeIcon icon={orgCreatedCopied ? faSquareCheck : faClone} />
                                                                 </button>
                                                             </span>
@@ -749,7 +791,6 @@ const StackForgeProfile = () => {
                                                     <p>Neither of these fields can be changed.</p>
                                                 </div>
                                             </div>
-
                                             <div className="profileContentFlexCell">
                                                 <div className="profileContentFlexCellTop">
                                                     <div className="profileLeadingCellStack">
@@ -761,10 +802,7 @@ const StackForgeProfile = () => {
                                                             <strong>Team Name</strong>
                                                             <span>
                                                                 <input placeholder={userDetails.orgName} disabled={!editModes.orgName} onChange={e => setUserDetails(prev => ({ ...prev, orgName: e.target.value }))} />
-                                                                <button 
-                                                                    className="profileEditButton" 
-                                                                    onClick={() => editModes.orgName ? handleSaveTeamInfo("orgName", userDetails.orgName) : setEditModes(prev => ({ ...prev, orgName: true }))}
-                                                                >
+                                                                <button className="profileEditButton" onClick={() => editModes.orgName ? handleSaveTeamInfo("orgName", userDetails.orgName) : setEditModes(prev => ({ ...prev, orgName: true }))}>
                                                                     <FontAwesomeIcon icon={editModes.orgName ? faBookmark : faPenToSquare} />
                                                                 </button>
                                                             </span>
@@ -775,7 +813,6 @@ const StackForgeProfile = () => {
                                                     <p>Your team name can be changed, but we advise against it.</p>
                                                 </div>
                                             </div>
-
                                             <div className="profileContentFlexCell">
                                                 <div className="profileContentFlexCellTop">
                                                     <div className="profileLeadingCellStack">
@@ -804,16 +841,15 @@ const StackForgeProfile = () => {
                                                     </div>
                                                 </div>
                                                 <div className="profileContentFlexCellBottom">
-                                                    <p>Your team's email address and phone number are not rewuired, but they are highly recommended.</p>
+                                                    <p>Your team's email address and phone number are not required, but they are highly recommended.</p>
                                                 </div>
                                             </div>
-
                                             <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
                                                 <div className="profileContentFlexCellTop">
                                                     <div className="profileLeadingCellStack" style={{ width: "100%" }}>
                                                         <h3>Delete Team</h3>
                                                         <p style={{ width: "100%" }}>
-                                                            Permanently delete your team data and all of its affiliations and deployments from the platform.
+                                                            Permanently delete your team data and all of its affiliations and deployments from the platform. This is irreversible.
                                                         </p>
                                                         <button className="profileDeleteButton" onClick={handleTeamDelete}>
                                                             Delete Team 
@@ -827,18 +863,105 @@ const StackForgeProfile = () => {
                                         </>
                                     )
                                 )}
+                                {settingsState === "github" && (
+                                    userDetails.gitUsername === "" || !userDetails.gitUsername ? (
+                                        <div className="profileContentFlexCell">
+                                            <div className="profileContentFlexCellTop">
+                                                <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                    <h3>Connect Github Account</h3>
+                                                    <p style={{ width: "100%" }}>
+                                                        Connect your GitHub account to enable GitHub integration features such as auto deployments and repository management.
+                                                    </p>
+                                                    <button className="profileDeleteButton" onClick={handleGithubConnect} style={{ "background-color": "rgba(255,255,255,0.1)", "border": "0.2vh solid #c1c1c1" }}>
+                                                        Connect Github Account
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="profileContentFlexCellBottom">
+                                                <p>Click the button above to start the connection process with GitHub.</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="profileContentFlexCell">
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack">
+                                                        <h3>GitHub Avatar</h3>
+                                                        <p>
+                                                            This is the image associated with your GitHub account. To change it, you will need to login to your GitHub account and change it there.
+                                                        </p>
+                                                    </div>
+                                                    <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                        <label className="profileUserImageWrapper" htmlFor="teamImageUpload" style={{ background: userDetails.gitImage && userDetails.gitImage !== "" ? "none" : "", "box-shadow": userDetails.gitImage && userDetails.gitImage !== "" ? "none" : "" }}>
+                                                            <img src={userDetails.gitImage} className="profileUserImage" alt="" />
+                                                        </label>
+                                                        <input style={{ display: "none", padding: 0 }} type="file" id="teamImageUpload" accept="image/*" onChange={handleTeamImageChange} />
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom">
+                                                    <p>This avatar can only be changed from your GitHub account.</p>
+                                                </div>
+                                            </div>
+                                            <div className="profileContentFlexCell">
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack">
+                                                        <h3>GitHub Account Information</h3>
+                                                        <p>This is your GitHub username and the unique ID associated with your account. To change it, you will need to login to your GitHub account and change it there.</p>
+                                                    </div>
+                                                    <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                        <div className="profileFieldInput">
+                                                            <strong>GitHu Username</strong>
+                                                            <span>
+                                                                <input placeholder={userDetails.gitUsername} disabled={true} />
+                                                                <button className="profileEditButton" onClick={handleGitUsernameCopy} style={{ opacity: gitUsernameCopied ? "0.6" : "1.0" }}>
+                                                                    <FontAwesomeIcon icon={gitUsernameCopied ? faSquareCheck : faClone} />
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                        <div className="profileFieldInput">
+                                                            <strong>GitHub ID</strong>
+                                                            <span>
+                                                                <input placeholder={userDetails.gitID} />
+                                                                <button className="profileEditButton" onClick={handleGitIDCopy} style={{ opacity: gitIDCopied ? "0.6" : "1.0" }}>
+                                                                    <FontAwesomeIcon icon={gitIDCopied ? faSquareCheck : faClone} />
+                                                                </button>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom">
+                                                    <p>This information can only be changed from your GitHub account.</p>
+                                                </div>
+                                            </div>
+                                            <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                        <h3>Disconnect GitHub Account</h3>
+                                                        <p style={{ width: "100%" }}>
+                                                            Disconnect your personal or team GitHub account from the Stack forge web platform. This may interrupt or break your current deployments.
+                                                        </p>
+                                                        <button className="profileDeleteButton" onClick={handleGithubDisconnect}>
+                                                            Disconnect GitHub Account
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
+                                                    <p>Doingg this may cause interruptions to your live projects. Please proceed with caution.</p>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )
+                                )}
                             </div>
                         </div>
                     </div>
                 </div>
             )}
-
             {!isLoaded && (
-                <div className="profileCellHeaderContainer" style={{"justify-content": "center"}}>
+                <div className="profileCellHeaderContainer" style={{ "justify-content": "center" }}>
                     <div className="loading-wrapper">
-                        <div className="loading-circle"/>
-
-                        <label className="loading-title"> 
+                        <div className="loading-circle" />
+                        <label className="loading-title">
                             Stack Forge
                         </label>
                     </div>

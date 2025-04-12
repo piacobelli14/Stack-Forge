@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const path = require('path');
 const { pool } = require('../config/db');
 const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require('../config/smtp');
 const { s3Client, storage, upload, PutObjectCommand } = require('../config/s3');
@@ -352,19 +353,6 @@ router.post('/create-user', rateLimiter(10, 15, authRateLimitExceededHandler), a
         if (userCreationInfo.error) {
             return res.status(500).json({ message: 'Unable to create new user. Please try again later.' });
         } else {
-            /*
-            const verificationUrl = `https://nightingale-web.vercel.app/verify-email?token=${verificationToken}`;
-            const mailOptions = {
-                from: process.env.SMTP_USER,
-                to: email,
-                subject: 'Verify Your Email',
-                html: `<p>Welcome to Stack Forge! Please verify your email by clicking the button below:</p>
-                        <a href='${verificationUrl}' style='display: inline-block; color: inherit; background-color: inherit; text-decoration: underline; font-weight: bold;'> Click here to verify your email.</a>\n\n -The Stack Forge Team`
-            };
-
-            await emailTransporter.sendMail(mailOptions);
-            */
-
             return res.status(200).json({ message: 'User created successfully. Verification email sent.' });
         }
     } catch (error) {
@@ -411,6 +399,93 @@ router.get('/verify-email', rateLimiter(10, 15, authRateLimitExceededHandler), a
     }
 });
 
+router.get('/connect-github', async (req, res, next) => {
+    const { token, userID } = req.query;
+    if (!token || !userID) {
+        return res.status(400).send('Missing token or userID');
+    }
+    try {
+        const payload = jwt.verify(token, secretKey);
+        if (payload.userid !== userID) {
+            return res.status(401).send('Invalid token for this user');
+        }
+    } catch (err) {
+        return res.status(401).send('Invalid token');
+    }
+    const clientID = process.env.GITHUB_CLIENT_ID;
+    const redirectUri = process.env.GITHUB_REDIRECT_URI;
+    const state = Buffer.from(JSON.stringify({ token, userID })).toString('base64');
+    const scope = 'repo,user';
+    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scope)}`;
+    res.redirect(githubAuthUrl);
+});
+
+router.get('/github-success', async (req, res, next) => {
+    const { code, state } = req.query;
+    if (!code || !state) {
+        return res.status(400).send("Missing code or state");
+    }
+    let decoded;
+    try {
+        decoded = JSON.parse(Buffer.from(state, 'base64').toString('ascii'));
+    } catch (error) {
+        return res.status(400).send("Invalid state parameter");
+    }
+    const { token, userID } = decoded;
+    try {
+        const payload = jwt.verify(token, secretKey);
+        if (payload.userid !== userID) {
+            return res.status(401).send("Invalid token");
+        }
+    } catch (error) {
+        return res.status(401).send("Invalid token");
+    }
+    const clientID = process.env.GITHUB_CLIENT_ID;
+    const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+    const redirectUri = process.env.GITHUB_REDIRECT_URI;
+    try {
+        const tokenResponse = await axios.post('https://github.com/login/oauth/access_token', {
+            client_id: clientID,
+            client_secret: clientSecret,
+            code: code,
+            redirect_uri: redirectUri,
+            state: state
+        }, {
+            headers: { Accept: 'application/json' }
+        });
+        const githubAccessToken = tokenResponse.data.access_token;
+        if (!githubAccessToken) {
+            return res.status(400).send("GitHub access token not received");
+        }
+        const githubUserResponse = await axios.get('https://api.github.com/user', {
+            headers: {
+                Authorization: `token ${githubAccessToken}`,
+                Accept: 'application/json'
+            }
+        });
+        const githubUserData = githubUserResponse.data;
+        const github_id = githubUserData.id;
+        const github_username = githubUserData.login;
+        const github_avatar_url = githubUserData.avatar_url;
+        const updateQuery = `
+            UPDATE users
+            SET github_id = $1, github_username = $2, github_access_token = $3, github_avatar_url = $4
+            WHERE username = $5
+            ;
+        `;
+        const result = await pool.query(updateQuery, [github_id, github_username, githubAccessToken, github_avatar_url, userID]);
+        if (result.rowCount === 0) {
+            return res.status(400).send("Failed to update user information in the database.");
+        }
+        return res.sendFile(path.resolve(__dirname, '../public', 'github.html'));
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
 function capitalizeFirstLetter(word) {
     if (!word) return word;
     return word[0].toUpperCase() + word.slice(1);
@@ -420,7 +495,6 @@ function hashPassword(enteredPassword, storedSalt) {
     if (!enteredPassword || !storedSalt) {
         return null;
     }
-
     const saltedPasswordToCheck = storedSalt + enteredPassword;
     const hash = crypto.createHash('sha256');
     const hashedPassword = hash.update(saltedPasswordToCheck).digest('hex');

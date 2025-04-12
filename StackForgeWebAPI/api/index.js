@@ -53,5 +53,5 @@ process.on('uncaughtException', (error) => {
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
+  res.sendFile(path.resolve(__dirname, 'public', 'catchall.html'));
 });
