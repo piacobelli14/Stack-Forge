@@ -1,0 +1,641 @@
+@keyframes importProjectsCellFadeIn {
+  from {
+      opacity: 0;
+  }
+  to {
+      opacity: 1;
+  }
+}
+
+.importProjectsCellFadeIn {
+  animation: projectsCellFadeIn 2s ease-out;
+}
+
+.importProjectsPageWrapper {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  background: linear-gradient(to bottom, #0E0B1B, #29282D);
+}
+
+.importProjectsCellHeaderContainer {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100vw;
+  min-height: calc(100vh - 60px) !important;
+  overflow: hidden;
+  position: relative;
+  padding: 4vw 6vw 4vw 6vw;
+  box-sizing: border-box;
+  overflow: scroll; 
+}
+
+.importProjectsFlexCell {
+  display: flex;
+  width: 80%;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 6px;
+  background-color: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 0 10px black;
+  position: relative;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.importProjectsCellHeader {
+  width: 100%;
+  height: 100%; 
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 20px 1.5rem;
+  overflow: scroll;
+  gap: 0; 
+}
+
+.importProjectsNewProjectTitle {
+  margin: 0 ; 
+  padding: 0; 
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #c1c1c1; 
+  font-style: italic; 
+  width: 100%; 
+  margin-bottom: 1.5rem; 
+}
+
+.importProjectsImportingFromGithub {
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-style: italic;
+  text-overflow: ellipsis;
+  color: white;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 15px 20px;
+  margin: 0;
+  margin-bottom: 20px; 
+  box-sizing: border-box;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #f5f5f5;
+  cursor: pointer;
+  min-height: 60px;
+  width: 100%; 
+  gap: 0; 
+}
+
+.importProjectsImportingFromGithub:hover {
+  opacity: 0.8;
+  color: #f5f5f5;
+}
+
+.importProjectsImportingFromGithub span {
+  color: #A3A3A3; 
+  padding: 0; 
+  width: 70%; 
+  overflow: hidden; 
+  text-overflow: ellipsis;
+  white-space: nowrap;;
+}
+
+.importProjectsImportingFromGithub span p {
+  color: #c1c1c1; 
+  padding: 0; 
+  margin: 0; 
+  width: 100%; 
+  margin-bottom: 6px; 
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+.importProjectsImportingFromGithub strong {
+  color: #c1c1c1; 
+  font-weight: 900; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+  white-space: nowrap;
+  width: 100%; 
+}
+
+.importProjectsImportingFromGithub strong svg {
+  color: #c1c1c1; 
+  font-size: 1rem; 
+  margin-right: 0.6rem; 
+}
+
+.importProjectsImportingFromGithub i {
+  font-size: 1rem; 
+  display: flex; 
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.6rem; 
+  color: #9B68DD; 
+  width: 20%; 
+}
+
+.importProjectsBranchSelector {
+  display: flex; 
+  justify-content: center;
+  align-items: center;
+  gap: 0.6rem; 
+  width: 25%; 
+}
+
+.importProjectsBranchSelector svg {
+  color: #9B68DD !important; 
+}
+
+.importProjectsBranchSelectorButton {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.0);
+  border: none;
+  border-radius: 0;
+  padding: 0rem 0.8rem;
+  width: 70%; 
+  height: 40px;
+  box-sizing: border-box;
+  position: relative; 
+  gap: 0.6rem;
+  color: #9B68DD;
+}
+
+.importProjectsBranchSelectorButtonText {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #9B68DD !important;
+}
+
+.importProjectsBranchSelectorButton:hover {
+  border: none; 
+  outline: none; 
+}
+
+.importProjectsBranchSelectorButton:focus {
+  border: none; 
+  outline: none; 
+}
+
+@media (max-width: 700px) {
+  .importProjectsBranchSelector {
+    display: none; 
+  }
+}
+
+.importProjectsImportingFromGithub span,
+.importProjectsImportingFromGithub strong {
+  min-width: 0;
+}
+
+.importProjectsOperationsBar, 
+.importProjectsOperationsBarSupplement {
+  display: flex; 
+  flex-direction: column;
+  justify-content: center; 
+  box-sizing: border-box;
+  width: 100%; 
+  padding: 0 8px; 
+}
+
+.importProjectsOperationsBarSupplement {
+  margin-top: 30px; 
+}
+
+.importProjectsOperationsTitle {
+  font-size: 0.9rem; 
+  font-weight: 700; 
+  color: #c1c1c1; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+  white-space: nowrap; 
+  margin-bottom: 5px; 
+}
+
+.importProjectsOperationsFlex {
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  width: 100%; 
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.importProjectsOperationsContainerWrapper, 
+.importProjectsOperationsContainerWrapperWide, 
+.importProjectsOperationsContainerWrapperShort {
+  box-sizing: border-box;
+  overflow: hidden; 
+}
+
+.importProjectsOperationsContainerWrapper {
+  width: 48%; 
+}
+
+.importProjectsOperationsContainerWrapperWide {
+  width: 100%; 
+}
+
+.importProjectsOperationsContainerWrapperShort {
+  width: 35%; 
+}
+
+.importProjectsOperationsContainerWrapper p, 
+.importProjectsOperationsContainerWrapperWide p,
+.importProjectsOperationsContainerWrapperShort p {
+  font-size: 0.7rem; 
+  font-weight: 600; 
+  color: #A3A3A3; 
+  margin-left: 2px; 
+  font-style: italic; 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+}
+
+.importProjectsOperationsStack {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  background-color: rgba(255,255,255,0.05);
+  border: 1px solid #A3A3A3;
+  border-radius: 6px;
+  padding: 30px 0.8rem;
+  width: 100%;
+  height: auto;
+  min-height: 200px;
+  box-shadow: 0 0 8px black;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative; 
+}
+
+.importProjectsOperationsField {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: rgba(255,255,255,0.05);
+  border: 1px solid #A3A3A3;
+  border-radius: 6px;
+  padding: 0rem 0.8rem;
+  width: 100%;
+  height: 40px;
+  box-shadow: 0 0 8px black;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  position: relative; 
+}
+
+.importProjectsOperationsField span {
+  display: flex; 
+  align-items: center;
+}
+
+.importProjectsOperationsField p {
+  font-size: 0.7rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 0.6rem;
+  color: #c1c1c1;
+}
+
+.importProjectsOperationsField:hover {
+  opacity: 0.6;
+  border: 1px solid #A3A3A3;
+  outline: none;
+}
+
+.importProjectsOperationsField:focus {
+  border: 1px solid #A3A3A3;
+  outline: none;
+}
+
+.importProjectsOperationsDivider {
+  height: 0.5px; 
+  width: 100%; 
+  background-color: #c1c1c1;
+  opacity: 0.6; 
+  margin: 2rem 0 1rem 0
+}
+
+.importProjectsOperationsDropdownMenu {
+  position: fixed;
+  background: #222222;
+  border: 2px solid #414141;
+  border-radius: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  z-index: 999;
+  min-width: 200px;
+  padding: 0.4rem 0;
+  box-shadow: 0 0 20px black;
+}
+
+.importProjectsOperationsDropdownMenu button span {
+  display: flex; 
+  align-items: center;
+  gap: 10px; 
+}
+
+.importProjectsOperationsDropdownMenu button span p {
+  font-size: 0.5rem; 
+  font-weight: 600; 
+  margin-top: 4px;
+}
+
+.importProjectsOperationsDropdownMenu button {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.4rem 1rem;
+  color: #A3A3A3;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-style: italic;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.importProjectsOperationsDropdownMenu button svg {
+  font-size: 0.7rem;
+}
+
+.importProjectsOperationsDropdownMenu button:hover {
+  background: #2a2a2a;
+  border: none;
+  outline: none;
+}
+
+.importProjectsOperationsDropdownMenu button:focus {
+  background: #2a2a2a;
+  border: none;
+  outline: none;
+}
+
+.importProjectsOperationsDropdownMenu img {
+  height: 30px; 
+  width: 30px;
+  border-radius: 4px;  
+  box-shadow: 0 0 6px black; 
+}
+
+.importProjectsBranchesDropdownMenu {
+  position: fixed;
+  background: #222222;
+  border: 2px solid #414141;
+  border-radius: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  z-index: 999;
+  min-width: 150px;
+  padding: 0.4rem 0;
+  box-shadow: 0 0 20px black;
+}
+
+.importProjectsBranchesDropdownMenu button span {
+  display: flex; 
+  align-items: center;
+  gap: 10px; 
+}
+
+.importProjectsBranchesDropdownMenu button span p {
+  font-size: 0.5rem; 
+  font-weight: 600; 
+  margin-top: 4px;
+}
+
+.importProjectsBranchesDropdownMenu button {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.4rem 1rem;
+  color: #A3A3A3;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-style: italic;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.importProjectsBranchesDropdownMenu button svg {
+  font-size: 0.7rem;
+}
+
+.importProjectsBranchesDropdownMenu button:hover {
+  background: #2a2a2a;
+  border: none;
+  outline: none;
+}
+
+.importProjectsBranchesDropdownMenu button:focus {
+  background: #2a2a2a;
+  border: none;
+  outline: none;
+}
+
+.importProjectsOperationsDropdownMenu img {
+  height: 30px; 
+  width: 30px;
+  border-radius: 4px;  
+  box-shadow: 0 0 6px black; 
+}
+
+.rootIcon,
+.rootIconSupplement {
+    font-size: 0.9rem;
+}
+
+.rootIcon,
+.rootIconSupplement {
+    color: #A3A3A3;
+    margin-right: 0.5rem;
+}
+
+.rootIconSupplement {
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    margin-left: 0.5rem;
+}
+
+.rootIconSupplement:hover {
+    opacity: 0.6;
+    transform: scale(1.1);
+}
+
+.rootInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #A3A3A3;
+}
+
+.rootInput::placeholder {
+  color: #8b8b8b;
+  font-weight: 600;
+}
+
+.importProjectsOperationsBar,
+.importProjectsOperationsBarSupplement,
+.importProjectsImportingFromGithub,
+.importProjectsOperationsDivider {
+  flex: 0 0 auto; 
+}
+
+.importProjectsEnvVarsWrapper {
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%; 
+  box-sizing: border-box;
+}
+
+.importProjectsEnvVarsRow {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  padding: 0 2%; 
+  box-sizing: border-box;
+  gap: 0.6rem; 
+}
+
+.importProjectsEnvVarsInput {
+  flex: 1;
+  background: transparent;
+  border: 1px solid #A3A3A3;
+  border-radius: 6px;
+  color: #c1c1c1;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+}
+
+.importProjectsEnvVarsInput::placeholder {
+  color: #8b8b8b;
+}
+
+.importProjectsEnvVarsRemoveBtn {
+  background-color: rgba(255,255,255,0.05); 
+  border: 1px solid #A3A3A3;
+  color: #c1c1c1;
+  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.importProjectsEnvVarsRemoveBtn:hover {
+  opacity: 0.6; 
+  outline: none; 
+}
+
+.importProjectsEnvVarsRemoveBtn:focus {
+  opacity: 1.0; 
+  outline: none; 
+}
+
+.importProjectsEnvVarsAddBtn {
+  background-color: rgba(255,255,255,0.05);
+  border: 1px solid #A3A3A3;
+  color: #c1c1c1;
+  border-radius: 4px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-style: italic;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  width: fit-content;
+}
+
+.importProjectsEnvVarsAddBtn:hover {
+  opacity: 0.6; 
+  outline: none; 
+  border: 1px solid #A3A3A3;
+}
+
+.importProjectsEnvVarsAddBtn:focus {
+  opacity: 1.0; 
+  outline: none; 
+  border: 1px solid #A3A3A3;
+}
+
+.importProjectsClosePopout {
+  font-size: 1rem; 
+  position: absolute; 
+  top: 6%; 
+  right: 4%; 
+  cursor: pointer; 
+  color: #c1c1c1;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.importProjectsClosePopout:hover {
+  opacity: 0.6; 
+  transform: scale(1.1); 
+}
+
+.importProjectsDeployButton {
+  width: 100%; 
+  background-color: #A3A3A3;
+  font-size: 0.8rem; 
+  font-weight: 800; 
+  color: #222222; 
+  box-shadow: 0 0 20px black;
+  padding: 0; 
+  border-radius: 4px; 
+  height: 40px; 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+}
+
+.importProjectsDeployButton:hover {
+  opacity: 0.6; 
+  outline: none; 
+  border: none; 
+}
+
+.importProjectsDeployButton:focus {
+  outline: none; 
+  border: none; 
+}
+
+.importNewCaretIcon {
+  font-size: 1rem;
+  color: #A3A3A3;
+  margin-right: 0.6rem;
+}

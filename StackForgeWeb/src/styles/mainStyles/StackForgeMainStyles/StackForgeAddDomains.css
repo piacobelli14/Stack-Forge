@@ -30,7 +30,7 @@
     min-height: calc(100vh - 60px) !important;
     overflow: hidden;
     position: relative;
-    padding: 4vw 4vw 4vw 4vw;
+    padding: 4vw 6vw 4vw 6vw;
     box-sizing: border-box;
     overflow: scroll; 
 }

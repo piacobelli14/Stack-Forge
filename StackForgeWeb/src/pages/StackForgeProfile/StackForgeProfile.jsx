@@ -895,7 +895,7 @@ const StackForgeProfile = () => {
                                                         <label className="profileUserImageWrapper" htmlFor="teamImageUpload" style={{ background: userDetails.gitImage && userDetails.gitImage !== "" ? "none" : "", "box-shadow": userDetails.gitImage && userDetails.gitImage !== "" ? "none" : "" }}>
                                                             <img src={userDetails.gitImage} className="profileUserImage" alt="" />
                                                         </label>
-                                                        <input style={{ display: "none", padding: 0 }} type="file" id="teamImageUpload" accept="image/*" onChange={handleTeamImageChange} />
+                                                        <input style={{ display: "none", padding: 0 }} disabled={true} type="file" id="teamImageUpload" accept="image/*" onChange={handleTeamImageChange} />
                                                     </div>
                                                 </div>
                                                 <div className="profileContentFlexCellBottom">

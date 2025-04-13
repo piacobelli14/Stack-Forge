@@ -6,6 +6,7 @@ import Reset from "./pages/StackForgeAuthentication/StackForgeAuthReset";
 import Verification from "./pages/StackForgeAuthentication/StackForgeAuthVerifyEmail";
 import StackForgeMain from "./pages/StackForgeMain/StackForgeMain";
 import StackForgeAddProjects from "./pages/StackForgeMain/StackForgeAddProjects";
+import StackForgeImportProjects from "./pages/StackForgeMain/StackForgeImportProjects";
 import StackForgeAddDomains from "./pages/StackForgeMain/StackForgeAddDomains";
 import StackForgeProfile from "./pages/StackForgeProfile/StackForgeProfile";
 import { useEffect, useState } from "react";
@@ -40,6 +41,7 @@ function App() {
           <Route path="/verify" element={<Verification/>}/>
           <Route path="/stackforge" element={<StackForgeMain/>}/>
           <Route path="/add-new-project" element={<StackForgeAddProjects/>}/>
+          <Route path="/import-new-project" element={<StackForgeImportProjects/>}/>
           <Route path="/add-new-domain" element={<StackForgeAddDomains/>}/>
           <Route path="/profile" element={<StackForgeProfile/>}/>
           <Route index element={<Navigate to="/login" replace />} />

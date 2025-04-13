@@ -6,7 +6,6 @@ const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require
 const { s3Client, storage, upload, PutObjectCommand } = require('../config/s3');
 const { authenticateToken } = require('../middleware/auth');
 
-
 require('dotenv').config();
 secretKey = process.env.JWT_SECRET_KEY;
 
@@ -593,24 +592,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
         });
     };
 
-    /*
-    const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: smtpPort,
-        secure: false,
-        auth: {
-            user: smtpUser,
-            pass: smtpPassword,
-        },
-    });
-
-    const mailOptions = {
-        from: smtpUser,
-        subject: 'Access Request',
-        text: `Hi!\n\n${firstName} ${lastName} (@${userID}) has requested access to your team.\n\nPlease review this notification in your dashboard and take appropriate action.\n\n-The Nightingale Team`,
-    };
-    */
-
     const requestAccess = () => {
         isCodeValid(teamCode, (error, isValid) => {
             if (error) {
@@ -668,7 +649,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
                                     return;
                                 }
 
-                                // sendEmailsToAdmins(adminEmails);
                                 if (!res.headersSent) {
                                     return res.status(200).json({ message: 'Access request sent successfully.' });
                                 }
@@ -689,7 +669,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
                                     return;
                                 }
 
-                                // sendEmailsToAdmins(adminEmails);
                                 if (!res.headersSent) {
                                     return res.status(200).json({ message: 'Access request sent successfully.' });
                                 }
@@ -704,44 +683,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
             }
         });
     };
-
-    /*
-    const sendEmailsToAdmins = (adminEmails) => {
-        if (adminEmails.length === 0) {
-            if (!res.headersSent) {
-                return res.status(200).json({ message: 'Access request sent successfully, but no admins were notified.' });
-            }
-            return;
-        }
-
-        let emailsSent = 0;
-        let emailErrors = [];
-
-        adminEmails.forEach((email) => {
-            mailOptions.to = email;
-
-            transporter.sendMail(mailOptions, (error, info) => {
-                if (error) {
-                    emailErrors.push({ email, error });
-                }
-
-                emailsSent++;
-                if (emailsSent === adminEmails.length) {
-                    if (emailErrors.length > 0) {
-                        if (!res.headersSent) {
-                            return res.status(500).json({ message: 'Access request sent, but there were errors sending notification emails.' });
-                        }
-                    } else {
-                        if (!res.headersSent) {
-                            return res.status(200).json({ message: 'Access request sent successfully.' });
-                        }
-                        next(error); 
-                    }
-                }
-            });
-        });
-    };
-    */
 
     requestAccess();
 });
@@ -865,6 +806,29 @@ router.get('/git-repos', authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post('/git-branches', authenticateToken, async (req, res, next) => {
+    const { userID, owner, repo } = req.body;
+    try {
+        if (!owner || !repo) {
+            return res.status(400).json({ message: 'Owner and repository are required' });
+        }
+        const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [userID]);
+        if (result.rows.length === 0 || !result.rows[0].github_access_token) {
+            return res.status(400).json({ message: 'GitHub account not connected' });
+        }
+        const githubAccessToken = result.rows[0].github_access_token;
+        const gitResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/branches`, {
+            headers: {
+                Authorization: `token ${githubAccessToken}`,
+                Accept: 'application/json'
+            }
+        });
+        return res.status(200).json(gitResponse.data);
+    } catch (error) {
+        next(error);
+    }
+});
+
 router.post('/delete-github', authenticateToken, async (req, res, next) => {
     try {
         const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [req.user.userid]);
@@ -890,6 +854,5 @@ router.post('/delete-github', authenticateToken, async (req, res, next) => {
         next(error);
     }
 });
-
 
 module.exports = router;

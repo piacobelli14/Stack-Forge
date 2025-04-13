@@ -34,8 +34,6 @@ const StackForgeAddProject = () => {
     const { token, userID, loading, organizationID } = useAuth();
     const [isLoaded, setIsLoaded] = useState(false);
     const [screenSize, setScreenSize] = useState(window.innerWidth);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [repositories, setRepositories] = useState([]);
     const [userDetails, setUserDetails] = useState({
         email: "",
         firstName: "",
@@ -60,10 +58,9 @@ const StackForgeAddProject = () => {
         orgImage: "",
         orgCreated: ""
     });
-
-    const filteredRepositories = repositories.filter(repo =>
-        repo.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const [searchTerm, setSearchTerm] = useState('');
+    const [repositories, setRepositories] = useState([]);
+    const filteredRepositories = repositories.filter(repo => repo.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     useEffect(() => {
         if (!loading && !token) navigate("/login");
@@ -139,9 +136,7 @@ const StackForgeAddProject = () => {
                 date: new Date(repo.updated_at).toLocaleDateString()
             }));
             setRepositories(formattedRepos);
-        } catch (error) {
-            console.error(error);
-        }
+        } catch (e) {}
     };
 
     return (
@@ -161,15 +156,15 @@ const StackForgeAddProject = () => {
                                 <div className="addprojectsCellTitleSupplement">
                                     <div className="importNewWrapper">
                                         <button className="importNewButton">
-                                            <FontAwesomeIcon icon={faGithub}/>
+                                            <FontAwesomeIcon icon={faGithub} />
                                             {userDetails.gitUsername ? (
-                                            <p>
-                                               @{userDetails.gitUsername || "Github"}
-                                            </p>
+                                                <p>
+                                                   @{userDetails.gitUsername || "Github"}
+                                                </p>
                                             ) : (
                                                 <p>
-                                               No GitHub profile associated with this account.
-                                            </p>
+                                                   No GitHub profile associated with this account.
+                                                </p>
                                             )}
                                         </button>
                                         <div className="importSearchBarWrapper">
@@ -195,7 +190,7 @@ const StackForgeAddProject = () => {
                                                 <p className="repoName">{repo.name}</p>
                                                 <p className="repoDate">{repo.date}</p>
                                             </div>
-                                            <button className="importButton">Import</button>
+                                            <button className="importButton" onClick={() => {alert(`${userDetails.gitUsername}/${repo.name}`);  navigate("/import-new-project", { state: { repository: `${userDetails.gitUsername}/${repo.name}`, personalName: userID, personalImage: userDetails.image, gitUsername: userDetails.gitUsername, gitID: userDetails.gitID, teamName: userDetails.orgName, teamImage: userDetails.orgImage } }); }}>Import</button>
                                         </div>
                                     ))}
                                 </div>
