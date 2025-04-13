@@ -45,9 +45,7 @@ const StackForgeMain = () => {
             try {
                 getProjects();
                 setIsLoaded(true);
-            } catch (error) {
-                console.error(error);
-            }
+            } catch (error) {}
         };
         if (!loading && token) fetchData();
     }, [userID, loading, token]);
@@ -122,10 +120,8 @@ const StackForgeMain = () => {
             }
 
             const data = await response.json();
-            console.log("Received projects:", data);
             setProjects(Array.isArray(data) ? data : []);
         } catch (error) {
-            console.error("Error fetching projects:", error);
             setProjects([]);
         }
     };

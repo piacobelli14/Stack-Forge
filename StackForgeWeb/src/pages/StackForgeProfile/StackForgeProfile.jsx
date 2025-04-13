@@ -186,7 +186,7 @@ const StackForgeProfile = () => {
                 orgImage: d.organizationimage,
                 orgCreated: d.organizationcreated
             });
-        } catch (e) { }
+        } catch (error) { }
     };
 
     const handleUserImageChange = async e => {
@@ -265,7 +265,7 @@ const StackForgeProfile = () => {
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
             setEditModes(prev => ({ ...prev, [fieldKey]: false }));
-        } catch (e) { }
+        } catch (error) { }
     };
 
     const handleSaveTeamInfo = async (fieldKey, value) => {
@@ -287,9 +287,7 @@ const StackForgeProfile = () => {
             if (res.status !== 200) throw new Error("Internal Server Error");
             setEditModes(prev => ({ ...prev, [fieldKey]: false }));
             await fetchUserInfo(userID);
-        } catch (e) {
-            console.error("Error updating team name:", e);
-        }
+        } catch (error) {}
     };
 
     const handleAccountDelete = async () => {

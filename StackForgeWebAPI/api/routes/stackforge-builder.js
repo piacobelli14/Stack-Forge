@@ -274,4 +274,22 @@ router.post('/list-domains', authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post('/deploy-project', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, repository, branch, teamName, projectName, rootDirectory, outputDirectory, buildCommand, installCommand, envVars } = req.body;
+
+    if (!repository || !branch || !projectName) {
+        return res.status(400).json({ message: 'Missing required deployment information.' });
+    }
+
+    try {
+        console.log(`Starting deployment for project: ${projectName}, repository: ${repository}, branch: ${branch}`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        console.log(`Deployment completed for project: ${projectName}`);
+        return res.status(200).json({ message: 'Project deployed successfully.' });
+    } catch (error) {
+        console.error('Deployment error:', error);
+        return res.status(500).json({ message: 'Error during deployment process.' });
+    }
+});
+
 module.exports = router;

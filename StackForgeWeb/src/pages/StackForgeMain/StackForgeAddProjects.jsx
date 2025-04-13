@@ -120,7 +120,7 @@ const StackForgeAddProject = () => {
                 orgImage: d.organizationimage,
                 orgCreated: d.organizationcreated
             });
-        } catch (e) {}
+        } catch (error) {}
     };
 
     const fetchRepos = async () => {
@@ -136,7 +136,7 @@ const StackForgeAddProject = () => {
                 date: new Date(repo.updated_at).toLocaleDateString()
             }));
             setRepositories(formattedRepos);
-        } catch (e) {}
+        } catch (eerror) {}
     };
 
     return (

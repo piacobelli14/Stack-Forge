@@ -60,7 +60,11 @@ const StackForgeImportProject = () => {
   const [changeEnvironmentOpen, setChangeEnvironmentOpen] = useState(false);
   const [envVars, setEnvVars] = useState([]);
   const [selectedTeamName, setSelectedTeamName] = useState(teamName); 
-  const [selectedProjectName, setSelectedProjectName] = useState(""); 
+  const [selectedProjectName, setSelectedProjectName] = useState("");
+  const [rootDirectory, setRootDirectory] = useState("");
+  const [outputDirectory, setOutputDirectory] = useState("");
+  const [buildCommand, setBuildCommand] = useState("");
+  const [installCommand, setInstallCommand] = useState("");
 
   useEffect(() => {
     if (!loading && !token) navigate("/login");
@@ -71,9 +75,7 @@ const StackForgeImportProject = () => {
       try {
         fetchBranches();
         setIsLoaded(true);
-      } catch (error) {
-        console.error(error);
-      }
+      } catch (error) {}
     };
     if (!loading && token) fetchData();
   }, [userID, loading, token]);
@@ -173,40 +175,45 @@ const StackForgeImportProject = () => {
       if (data.length > 0) {
         setSelectedBranch(data[0].name);
       }
-    } catch (error) {
-      console.error("Failed to fetch branches:", error);
-    }
+    } catch (error) {}
   };
 
-  useEffect(() => {
-    const fetchBranches = async () => {
-      try {
-        const parts = repository.split("/");
-        const owner = parts[0];
-        const repoName = parts[1];
-        const t = localStorage.getItem("token");
-        const response = await fetch("http://localhost:3000/git-branches", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${t}`
-          },
-          body: JSON.stringify({ userID, owner, repo: repoName })
-        });
-        if (!response.ok) throw new Error("Error fetching branches");
-        const data = await response.json();
-        setBranches(data);
-        if (data.length > 0) {
-          setSelectedBranch(data[0].name);
-        }
-      } catch (error) {
-        console.error("Failed to fetch branches:", error);
-      }
+  const handleDeployProject = async () => {
+    const endpoint = "http://localhost:3000/deploy-project"; 
+    const deploymentData = {
+      userID,
+      organizationID,
+      repository,
+      branch: selectedBranch,
+      teamName: selectedTeamName,
+      projectName: selectedProjectName,
+      rootDirectory,
+      outputDirectory,
+      buildCommand,
+      installCommand,
+      envVars
     };
-    if (!loading && token) {
-      fetchBranches();
+    try {
+      const t = localStorage.getItem("token");
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${t}`
+        },
+        body: JSON.stringify(deploymentData)
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        await showDialog({ title: "Deployment Error", message: `Error deploying project: ${errorData.message}` });
+        return;
+      }
+      const result = await response.json();
+      await showDialog({ title: "Deployment Success", message: "Your project has been deployed successfully!" });
+    } catch (error) {
+      await showDialog({ title: "Deployment Error", message: "An unexpected error occurred during deployment." });
     }
-  }, [loading, token, repository]);
+  };
 
   const handleContainerScroll = () => {
     setChangeTeamOpen(false);
@@ -295,7 +302,11 @@ const StackForgeImportProject = () => {
                   </div>
                   <div className="importProjectsOperationsContainerWrapper">
                     <p>Project Name</p>
-                    <input className="importProjectsOperationsField" />
+                    <input 
+                      className="importProjectsOperationsField" 
+                      value={selectedProjectName} 
+                      onChange={(e) => setSelectedProjectName(e.target.value)}
+                    />
                   </div>
                 </div>
               </div>
@@ -306,7 +317,13 @@ const StackForgeImportProject = () => {
                     <p>Root Directory</p>
                     <div className="importProjectsOperationsField">
                       <p className="rootIcon">./</p>
-                      <input type="text" className="rootInput" placeholder="Enter new root directory..." />
+                      <input 
+                        type="text" 
+                        className="rootInput" 
+                        placeholder="Enter new root directory..." 
+                        value={rootDirectory}
+                        onChange={(e) => setRootDirectory(e.target.value)}
+                      />
                       <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                     </div>
                   </div>
@@ -318,7 +335,13 @@ const StackForgeImportProject = () => {
                     <p>Output Directory (optional)</p>
                     <div className="importProjectsOperationsField">
                       <p className="rootIcon">./</p>
-                      <input type="text" className="rootInput" placeholder="Ex. 'public'" />
+                      <input 
+                        type="text" 
+                        className="rootInput" 
+                        placeholder="Ex. 'public'" 
+                        value={outputDirectory}
+                        onChange={(e) => setOutputDirectory(e.target.value)}
+                      />
                       <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                     </div>
                   </div>
@@ -330,7 +353,13 @@ const StackForgeImportProject = () => {
                   <div className="importProjectsOperationsContainerWrapperWide">
                     <p>Build Command (optional)</p>
                     <div className="importProjectsOperationsField">
-                      <input type="text" className="rootInput" placeholder="Ex. 'npm run build'" />
+                      <input 
+                        type="text" 
+                        className="rootInput" 
+                        placeholder="Ex. 'npm run build'" 
+                        value={buildCommand}
+                        onChange={(e) => setBuildCommand(e.target.value)}
+                      />
                       <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                     </div>
                   </div>
@@ -341,12 +370,19 @@ const StackForgeImportProject = () => {
                   <div className="importProjectsOperationsContainerWrapperWide">
                     <p>Install Command (optional)</p>
                     <div className="importProjectsOperationsField">
-                      <input type="text" className="rootInput" placeholder="Ex. 'npm install'" />
+                      <input 
+                        type="text" 
+                        className="rootInput" 
+                        placeholder="Ex. 'npm install'" 
+                        value={installCommand}
+                        onChange={(e) => setInstallCommand(e.target.value)}
+                      />
                       <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                     </div>
                   </div>
                 </div>
               </div>
+              <div className="importProjectsOperationsDivider" />
               <div className="importProjectsOperationsBar">
                 <div className="importProjectsOperationsFlex">
                   <div className="importProjectsOperationsContainerWrapperWide">
@@ -420,7 +456,7 @@ const StackForgeImportProject = () => {
                 </div>
               </div>
               <div className="importProjectsOperationsBarSupplement">
-                <button className="importProjectsDeployButton">Deploy New Project</button>
+                <button className="importProjectsDeployButton" onClick={handleDeployProject}>Deploy New Project</button>
               </div>
             </div>
           </div>
@@ -474,7 +510,6 @@ const StackForgeImportProject = () => {
                 <span>No branches available.</span>
             </button>
           )}
-
         </div>
       )}
     </div>
