@@ -45,9 +45,7 @@ const StackForgeAddDomains = () => {
         const fetchData = async () => {
             try {
                 setIsLoaded(true);
-            } catch (error) {
-                console.error(error);
-            }
+            } catch (error) {}
         };
         if (!loading && token) fetchData();
     }, [userID, loading, token]);

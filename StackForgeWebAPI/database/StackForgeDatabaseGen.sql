@@ -190,6 +190,13 @@ CREATE TABLE projects
     project_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
+    branch TEXT,
+    team_name TEXT,
+    root_directory TEXT,
+    output_directory TEXT,
+    build_command TEXT,
+    install_command TEXT,
+    env_vars JSONB,
     created_by TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL, 
@@ -198,7 +205,8 @@ CREATE TABLE projects
     current_deployment TEXT, 
     image TEXT
 );
-CREATE INDEX idx_projects_orgid ON projects (orgid, username);
+DROP INDEX IF EXISTS idx_projects;
+CREATE INDEX idx_projects ON projects (orgid, username);
 
 DROP TABLE IF EXISTS domains;
 CREATE TABLE domains 

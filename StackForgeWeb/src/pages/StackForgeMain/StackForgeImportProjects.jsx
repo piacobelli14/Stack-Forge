@@ -37,6 +37,7 @@ const StackForgeImportProject = () => {
   const isTouchDevice = useIsTouchDevice();
   const { token, userID, loading, organizationID } = useAuth();
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
   const [screenSize, setScreenSize] = useState(window.innerWidth);
   const [resizeTrigger, setResizeTrigger] = useState(false);
   const scrollableContainerRef = useRef(null);
@@ -179,6 +180,7 @@ const StackForgeImportProject = () => {
   };
 
   const handleDeployProject = async () => {
+    setIsDeploying(true);
     const endpoint = "http://localhost:3000/deploy-project"; 
     const deploymentData = {
       userID,
@@ -206,12 +208,16 @@ const StackForgeImportProject = () => {
       if (!response.ok) {
         const errorData = await response.json();
         await showDialog({ title: "Deployment Error", message: `Error deploying project: ${errorData.message}` });
+        setIsDeploying(false);
         return;
       }
       const result = await response.json();
       await showDialog({ title: "Deployment Success", message: "Your project has been deployed successfully!" });
+      setIsDeploying(false);
+      navigate("/projects");
     } catch (error) {
       await showDialog({ title: "Deployment Error", message: "An unexpected error occurred during deployment." });
+      setIsDeploying(false);
     }
   };
 
@@ -261,7 +267,7 @@ const StackForgeImportProject = () => {
     >
       <StackForgeNav activePage="main" />
       {isLoaded && (
-        <div className="importProjectsCellHeaderContainer" ref={scrollableContainerRef} onScroll={handleContainerScroll}>
+        <div className="importProjectsCellHeaderContainer" ref={scrollableContainerRef} onScroll={handleContainerScroll} style={{ position: "relative", opacity: isDeploying ? 0.4 : 1 }}>
           <div className="importProjectsFlexCell">
             <div className="importProjectsCellHeader">
               <a className="importProjectsImportingFromGithub">
@@ -460,6 +466,7 @@ const StackForgeImportProject = () => {
               </div>
             </div>
           </div>
+          
         </div>
       )}
       {!isLoaded && (

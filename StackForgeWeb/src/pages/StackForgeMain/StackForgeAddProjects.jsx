@@ -61,7 +61,6 @@ const StackForgeAddProject = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [repositories, setRepositories] = useState([]);
     const filteredRepositories = repositories.filter(repo => repo.name.toLowerCase().includes(searchTerm.toLowerCase()));
-
     useEffect(() => {
         if (!loading && !token) navigate("/login");
     }, [token, loading, navigate]);
