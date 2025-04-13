@@ -190,7 +190,7 @@ const StackForgeAddProject = () => {
                                                 <p className="repoName">{repo.name}</p>
                                                 <p className="repoDate">{repo.date}</p>
                                             </div>
-                                            <button className="importButton" onClick={() => {alert(`${userDetails.gitUsername}/${repo.name}`);  navigate("/import-new-project", { state: { repository: `${userDetails.gitUsername}/${repo.name}`, personalName: userID, personalImage: userDetails.image, gitUsername: userDetails.gitUsername, gitID: userDetails.gitID, teamName: userDetails.orgName, teamImage: userDetails.orgImage } }); }}>Import</button>
+                                            <button className="importButton" onClick={() => {navigate("/import-new-project", { state: { repository: `${userDetails.gitUsername}/${repo.name}`, personalName: userID, personalImage: userDetails.image, gitUsername: userDetails.gitUsername, gitID: userDetails.gitID, teamName: userDetails.orgName, teamImage: userDetails.orgImage } }); }}>Import</button>
                                         </div>
                                     ))}
                                 </div>

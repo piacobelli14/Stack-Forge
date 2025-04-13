@@ -59,6 +59,8 @@ const StackForgeImportProject = () => {
   const [selectedBranch, setSelectedBranch] = useState("");
   const [changeEnvironmentOpen, setChangeEnvironmentOpen] = useState(false);
   const [envVars, setEnvVars] = useState([]);
+  const [selectedTeamName, setSelectedTeamName] = useState(teamName); 
+  const [selectedProjectName, setSelectedProjectName] = useState(""); 
 
   useEffect(() => {
     if (!loading && !token) navigate("/login");
@@ -434,7 +436,7 @@ const StackForgeImportProject = () => {
       )}
       {changeTeamOpen && (
         <div className="importProjectsOperationsDropdownMenu" ref={changeTeamDropdownRef} style={{ top: changeTeamDropdownPosition.top * 1.02, left: changeTeamDropdownPosition.left }}>
-          <button onClick={() => navigate("/add-new-project")}>
+          <button onClick={() => {setSelectedTeamName(teamName)}}>
             <span>
               <img src={teamImage} />
               <strong>
@@ -445,7 +447,7 @@ const StackForgeImportProject = () => {
             </span>
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
-          <button onClick={() => navigate("/add-new-project")}>
+          <button onClick={() => {setSelectedTeamName(personalName)}}>
             <span>
               <img src={personalImage} />
               <strong>
@@ -460,12 +462,19 @@ const StackForgeImportProject = () => {
       )}
       {branchOpen && (
         <div className="importProjectsBranchesDropdownMenu" ref={branchDropdownRef} style={{ top: branchDropdownPosition.top * 1.02, left: branchDropdownPosition.left }}>
-          {branches.map(branch => (
-            <button key={branch.name} onClick={() => { setSelectedBranch(branch.name); setBranchOpen(false); }}>
-              <span>{branch.name}</span>
-              {selectedBranch === branch.name && <FontAwesomeIcon icon={faCheckDouble} />}
+          {branches && branches.length > 0 ? (
+            branches.map(branch => (
+                <button key={branch.name} onClick={() => { setSelectedBranch(branch.name); setBranchOpen(false); }}>
+                <span>{branch.name}</span>
+                {selectedBranch === branch.name && <FontAwesomeIcon icon={faCheckDouble} />}
+                </button>
+            ))
+          ) : (
+            <button>
+                <span>No branches available.</span>
             </button>
-          ))}
+          )}
+
         </div>
       )}
     </div>
