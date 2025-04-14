@@ -791,7 +791,7 @@ router.get('/git-repos', authenticateToken, async (req, res, next) => {
     try {
         const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [req.user.userid]);
         if (result.rows.length === 0 || !result.rows[0].github_access_token) {
-            return res.status(400).json({ message: 'GitHub account not connected' });
+            return res.status(400).json({ message: 'GitHub account not connected.' });
         }
         const githubAccessToken = result.rows[0].github_access_token;
         const gitResponse = await axios.get('https://api.github.com/user/repos', {
@@ -802,6 +802,9 @@ router.get('/git-repos', authenticateToken, async (req, res, next) => {
         });
         return res.status(200).json(gitResponse.data);
     } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
         next(error);
     }
 });
@@ -810,11 +813,11 @@ router.post('/git-branches', authenticateToken, async (req, res, next) => {
     const { userID, owner, repo } = req.body;
     try {
         if (!owner || !repo) {
-            return res.status(400).json({ message: 'Owner and repository are required' });
+            return res.status(400).json({ message: 'Owner and repository are required.' });
         }
         const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [userID]);
         if (result.rows.length === 0 || !result.rows[0].github_access_token) {
-            return res.status(400).json({ message: 'GitHub account not connected' });
+            return res.status(400).json({ message: 'GitHub account not connected.' });
         }
         const githubAccessToken = result.rows[0].github_access_token;
         const gitResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/branches`, {
@@ -825,6 +828,9 @@ router.post('/git-branches', authenticateToken, async (req, res, next) => {
         });
         return res.status(200).json(gitResponse.data);
     } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
         next(error);
     }
 });
@@ -833,7 +839,7 @@ router.post('/delete-github', authenticateToken, async (req, res, next) => {
     try {
         const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [req.user.userid]);
         if (result.rows.length === 0 || !result.rows[0].github_access_token) {
-            return res.status(400).json({ message: 'GitHub account not connected' });
+            return res.status(400).json({ message: 'GitHub account not connected.' });
         }
         const githubAccessToken = result.rows[0].github_access_token;
         const clientID = process.env.GITHUB_CLIENT_ID;
@@ -851,6 +857,9 @@ router.post('/delete-github', authenticateToken, async (req, res, next) => {
         await pool.query(updateQuery, [req.user.userid]);
         res.status(200).json({ message: 'GitHub access revoked successfully.' });
     } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
         next(error);
     }
 });

@@ -21,11 +21,11 @@ import {
     faArrowRightArrowLeft
 } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
-import "../../styles/mainStyles/StackForgeMainStyles/StackForgeAddProjects.css";
+import "../../styles/mainStyles/StackForgeMainStyles/StackForgeAddProject.css";
 import "../../styles/helperStyles/LoadingSpinner.css";
-import StackForgeNav from "../../helpers/StackForgeNav";
-import { showDialog } from "../../helpers/StackForgeAlert";
-import useAuth from "../../UseAuth";
+import StackForgeNav from "../../helpers/StackForgeNav.jsx";
+import { showDialog } from "../../helpers/StackForgeAlert.jsx";
+import useAuth from "../../UseAuth.jsx";
 import useIsTouchDevice from "../../TouchDevice.jsx";
 
 const StackForgeAddProject = () => {

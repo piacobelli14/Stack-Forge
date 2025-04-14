@@ -3,14 +3,16 @@ const router = express.Router();
 const { pool } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
+const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
 
 class DeployManager {
     async launchWebsite({ userID, organizationID, projectName, domainName, template, repository, branch, teamName, rootDirectory, outputDirectory, buildCommand, installCommand, envVars }) {
         const deploymentId = uuidv4();
         const timestamp = new Date().toISOString();
         const url = `https://${domainName}.stackforge.app`;
-        const projectId = uuidv4();
-
+        const projectID = uuidv4();
         await pool.query(
             `
             INSERT INTO projects 
@@ -19,9 +21,8 @@ class DeployManager {
             ON CONFLICT DO NOTHING
             ;
             `,
-            [organizationID, userID, projectId, projectName, null, branch, teamName, rootDirectory, outputDirectory, buildCommand, installCommand, JSON.stringify(envVars), userID, timestamp, timestamp, url, repository, deploymentId, null]
+            [organizationID, userID, projectID, projectName, null, branch, teamName, rootDirectory, outputDirectory, buildCommand, installCommand, JSON.stringify(envVars), userID, timestamp, timestamp, url, repository, deploymentId, null]
         );
-
         const domainId = uuidv4();
         await pool.query(
             `
@@ -31,9 +32,8 @@ class DeployManager {
             ON CONFLICT DO NOTHING
             ;
             `,
-            [organizationID, userID, domainId, domainName, projectId, userID, timestamp, timestamp]
+            [organizationID, userID, domainId, domainName, projectID, userID, timestamp, timestamp]
         );
-
         await pool.query(
             `
             INSERT INTO deployments 
@@ -41,9 +41,8 @@ class DeployManager {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ;
             `,
-            [organizationID, userID, deploymentId, projectId, domainId, 'active', url, template || 'default', timestamp, timestamp, timestamp]
+            [organizationID, userID, deploymentId, projectID, domainId, 'active', url, template || 'default', timestamp, timestamp, timestamp]
         );
-
         await pool.query(
             `
             INSERT INTO deployment_logs 
@@ -53,10 +52,8 @@ class DeployManager {
             `,
             [organizationID, userID, 'launch', deploymentId, timestamp, '127.0.0.1']
         );
-
         return { url, deploymentId };
     }
-
     async getDeploymentStatus(deploymentId, organizationID, userID) {
         const result = await pool.query(
             `
@@ -79,7 +76,6 @@ class DeployManager {
         }
         return result.rows[0];
     }
-
     async listDeployments(organizationID) {
         const result = await pool.query(
             `
@@ -111,30 +107,11 @@ class DeployManager {
         );
         return result.rows;
     }
-
     async listProjects(organizationID) {
         const result = await pool.query(
             `
             SELECT 
-                project_id,
-                orgid,
-                username,
-                name,
-                description,
-                branch,
-                team_name,
-                root_directory,
-                output_directory,
-                build_command,
-                install_command,
-                env_vars,
-                created_by,
-                created_at,
-                updated_at,
-                url,
-                repository,
-                current_deployment,
-                image
+                *
             FROM projects
             WHERE orgid = $1
             ORDER BY created_at DESC
@@ -144,7 +121,6 @@ class DeployManager {
         );
         return result.rows;
     }
-
     async listDomains(organizationID) {
         const result = await pool.query(
             `
@@ -170,43 +146,6 @@ class DeployManager {
 
 const deployManager = new DeployManager();
 
-router.post('/launch', authenticateToken, async (req, res, next) => {
-    const { organizationID, userID, projectName, domainName, template } = req.body;
-    try {
-        if (!projectName || !domainName) {
-            return res.status(400).json({ error: 'Project name and domain name are required' });
-        }
-        const orgCheck = await pool.query(
-            `SELECT orgid FROM organizations WHERE orgid = $1`,
-            [organizationID]
-        );
-        if (orgCheck.rows.length === 0) {
-            return res.status(404).json({ error: 'Organization not found' });
-        }
-        const deploymentResult = await deployManager.launchWebsite({
-            userID,
-            organizationID,
-            projectName,
-            domainName,
-            template: template || 'default'
-        });
-        res.status(200).json({
-            success: true,
-            url: deploymentResult.url,
-            deploymentId: deploymentResult.deploymentId,
-            message: 'Website launched successfully'
-        });
-    } catch (error) {
-        if (!res.headersSent) {
-            res.status(500).json({
-                message: 'Error launching website',
-                error: error.message
-            });
-        }
-        next(error);
-    }
-});
-
 router.post('/status', authenticateToken, async (req, res, next) => {
     const { organizationID, userID, deploymentId } = req.body;
     try {
@@ -214,10 +153,7 @@ router.post('/status', authenticateToken, async (req, res, next) => {
         res.status(200).json(status);
     } catch (error) {
         if (!res.headersSent) {
-            res.status(500).json({
-                message: 'Error getting deployment status',
-                error: error.message
-            });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
@@ -230,10 +166,7 @@ router.post('/list-projects', authenticateToken, async (req, res, next) => {
         res.status(200).json(projects);
     } catch (error) {
         if (!res.headersSent) {
-            res.status(500).json({
-                message: 'Error listing projects',
-                error: error.message
-            });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
@@ -246,10 +179,7 @@ router.post('/list-deployments', authenticateToken, async (req, res, next) => {
         res.status(200).json(deployments);
     } catch (error) {
         if (!res.headersSent) {
-            res.status(500).json({
-                message: 'Error listing deployments',
-                error: error.message
-            });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
@@ -262,10 +192,7 @@ router.post('/list-domains', authenticateToken, async (req, res, next) => {
         res.status(200).json(domains);
     } catch (error) {
         if (!res.headersSent) {
-            res.status(500).json({
-                message: 'Error listing domains',
-                error: error.message
-            });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
@@ -307,7 +234,104 @@ router.post('/deploy-project', authenticateToken, async (req, res, next) => {
             deploymentId: deploymentResult.deploymentId
         });
     } catch (error) {
-        return res.status(500).json({ message: 'Error during deployment process.' });
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/project-details', authenticateToken, async (req, res, next) => {
+    const { organizationID, userID, projectID } = req.body;
+    try {
+        const projectResult = await pool.query(
+            `SELECT * FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3`,
+            [projectID, organizationID, userID]
+        );
+        if (projectResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Project not found or access denied.' });
+        }
+        const project = projectResult.rows[0];
+        const domainsResult = await pool.query(
+            `SELECT * FROM domains WHERE project_id = $1 AND orgid = $2`,
+            [projectID, organizationID]
+        );
+        const deploymentsResult = await pool.query(
+            `SELECT * FROM deployments WHERE project_id = $1 AND orgid = $2`,
+            [projectID, organizationID]
+        );
+        return res.status(200).json({ project, domains: domainsResult.rows, deployments: deploymentsResult.rows });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/snapshot', authenticateToken, async (req, res, next) => {
+    const { projectID, organizationID, userID } = req.body;
+    try {
+        const projectResult = await pool.query(
+            `SELECT url FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3`,
+            [projectID, organizationID, userID]
+        );
+        if (projectResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Project not found or access denied.' });
+        }
+        const url = projectResult.rows[0].url;
+        const browser = await puppeteer.launch();
+        const page = await browser.newPage();
+        try {
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+            const buffer = await page.screenshot();
+            await browser.close();
+            res.writeHead(200, {
+                "Content-Type": "image/png",
+                "Content-Length": buffer.length
+            });
+            return res.end(buffer);
+        } catch (error) {
+            await browser.close();
+            const defaultImagePath = path.join(__dirname, '../public/StackForgeLogo.png');
+            const buffer = fs.readFileSync(defaultImagePath);
+            res.writeHead(200, {
+                "Content-Type": "image/png",
+                "Content-Length": buffer.length
+            });
+            return res.end(buffer);
+        }
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/git-commits', authenticateToken, async (req, res, next) => {
+    const { userID, owner, repo } = req.body;
+    try {
+        if (!owner || !repo) {
+            return res.status(400).json({ message: 'Owner and repository are required.' });
+        }
+        const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [userID]);
+        if (result.rows.length === 0 || !result.rows[0].github_access_token) {
+            return res.status(400).json({ message: 'GitHub account not connected.' });
+        }
+        const githubAccessToken = result.rows[0].github_access_token;
+        const gitResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/commits`, {
+            headers: {
+                Authorization: `token ${githubAccessToken}`,
+                Accept: 'application/json'
+            }
+        });
+        return res.status(200).json(gitResponse.data);
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
     }
 });
 

@@ -23,7 +23,7 @@ import {
   faCheckDouble
 } from "@fortawesome/free-solid-svg-icons";
 import { faGit, faGithub } from "@fortawesome/free-brands-svg-icons";
-import "../../styles/mainStyles/StackForgeMainStyles/StackForgeImportProjects.css";
+import "../../styles/mainStyles/StackForgeMainStyles/StackForgeBuildProject.css";
 import "../../styles/helperStyles/LoadingSpinner.css";
 import StackForgeNav from "../../helpers/StackForgeNav.jsx";
 import { showDialog } from "../../helpers/StackForgeAlert.jsx";
@@ -31,7 +31,7 @@ import useAuth from "../../UseAuth.jsx";
 import useIsTouchDevice from "../../TouchDevice.jsx";
 import { faXmark } from "@fortawesome/free-solid-svg-icons/faXmark";
 
-const StackForgeImportProject = () => {
+const StackForgeBuildProject = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isTouchDevice = useIsTouchDevice();
@@ -214,7 +214,7 @@ const StackForgeImportProject = () => {
       const result = await response.json();
       await showDialog({ title: "Deployment Success", message: "Your project has been deployed successfully!" });
       setIsDeploying(false);
-      navigate("/projects");
+      navigate("/stackforge");
     } catch (error) {
       await showDialog({ title: "Deployment Error", message: "An unexpected error occurred during deployment." });
       setIsDeploying(false);
@@ -523,4 +523,4 @@ const StackForgeImportProject = () => {
   );
 };
 
-export default StackForgeImportProject;
+export default StackForgeBuildProject;

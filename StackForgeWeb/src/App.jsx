@@ -4,9 +4,10 @@ import Login from "./pages/StackForgeAuthentication/StackForgeAuthLogin";
 import Register from "./pages/StackForgeAuthentication/StackForgeAuthRegister"; 
 import Reset from "./pages/StackForgeAuthentication/StackForgeAuthReset";
 import Verification from "./pages/StackForgeAuthentication/StackForgeAuthVerifyEmail";
-import StackForgeMain from "./pages/StackForgeMain/StackForgeMain";
-import StackForgeAddProjects from "./pages/StackForgeMain/StackForgeAddProjects";
-import StackForgeImportProjects from "./pages/StackForgeMain/StackForgeImportProjects";
+import StackForgeProjects from "./pages/StackForgeMain/StackForgeProjects";
+import StackForgeProjectDetails from "./pages/StackForgeMain/StackForgeProjectDetails";
+import StackForgeAddProject from "./pages/StackForgeMain/StackForgeAddProject";
+import StackForgeBuildProject from "./pages/StackForgeMain/StackForgeBuildProject";
 import StackForgeAddDomains from "./pages/StackForgeMain/StackForgeAddDomains";
 import StackForgeProfile from "./pages/StackForgeProfile/StackForgeProfile";
 import { useEffect, useState } from "react";
@@ -39,9 +40,10 @@ function App() {
           <Route path="/register" element={<Register/>}/>
           <Route path="/reset" element={<Reset/>}/>
           <Route path="/verify" element={<Verification/>}/>
-          <Route path="/stackforge" element={<StackForgeMain/>}/>
-          <Route path="/add-new-project" element={<StackForgeAddProjects/>}/>
-          <Route path="/import-new-project" element={<StackForgeImportProjects/>}/>
+          <Route path="/stackforge" element={<StackForgeProjects/>}/>
+          <Route path="/project-details" element={<StackForgeProjectDetails/>}/>
+          <Route path="/add-new-project" element={<StackForgeAddProject/>}/>
+          <Route path="/import-new-project" element={<StackForgeBuildProject/>}/>
           <Route path="/add-new-domain" element={<StackForgeAddDomains/>}/>
           <Route path="/profile" element={<StackForgeProfile/>}/>
           <Route index element={<Navigate to="/login" replace />} />
