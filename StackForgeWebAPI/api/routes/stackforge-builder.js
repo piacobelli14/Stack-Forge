@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios');
 const router = express.Router();
 const { pool } = require('../config/db');
 const { authenticateToken } = require('../middleware/auth');
@@ -320,16 +321,73 @@ router.post('/git-commits', authenticateToken, async (req, res, next) => {
             return res.status(400).json({ message: 'GitHub account not connected.' });
         }
         const githubAccessToken = result.rows[0].github_access_token;
-        const gitResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/commits`, {
+        let repoName = repo;
+        let repoOwner = owner;
+        if (repo.includes('/')) {
+            let parts = repo.split('/');
+            repoOwner = parts[0];
+            repoName = parts[1];
+        }
+        const url = `https://api.github.com/repos/${repoOwner}/${repoName}/commits`;
+        const gitResponse = await axios.get(url, {
             headers: {
                 Authorization: `token ${githubAccessToken}`,
-                Accept: 'application/json'
+                Accept: 'application/vnd.github.v3+json'
             }
         });
         return res.status(200).json(gitResponse.data);
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: 'Error fetching git commits.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/git-analytics', authenticateToken, async (req, res, next) => {
+    const { userID, websiteURL, repository, owner } = req.body;
+    let websiteAnalytics = null;
+    let repositoryAnalytics = null;
+    try {
+        if (websiteURL) {
+            const startTime = Date.now();
+            const websiteResponse = await axios.get(websiteURL, { timeout: 30000 });
+            const responseTime = Date.now() - startTime;
+            let contentLength = websiteResponse.headers['content-length'];
+            if (!contentLength && websiteResponse.data) {
+                contentLength = websiteResponse.data.toString().length;
+            }
+            websiteAnalytics = {
+                status: websiteResponse.status,
+                responseTime,
+                contentLength: contentLength
+            };
+        }
+        if (repository) {
+            let repoName = repository;
+            let repoOwner = owner;
+            if (repository.includes('/')) {
+                let parts = repository.split('/');
+                repoOwner = parts[0];
+                repoName = parts[1];
+            }
+            const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [userID]);
+            if (result.rows.length === 0 || !result.rows[0].github_access_token) {
+                return res.status(400).json({ message: 'GitHub account not connected.' });
+            }
+            const githubAccessToken = result.rows[0].github_access_token;
+            const repoResponse = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
+                headers: {
+                    Authorization: `token ${githubAccessToken}`,
+                    Accept: 'application/vnd.github.v3+json'
+                }
+            });
+            repositoryAnalytics = repoResponse.data;
+        }
+        return res.status(200).json({ websiteAnalytics, repositoryAnalytics });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error fetching analytics.', error: error.message });
         }
         next(error);
     }
