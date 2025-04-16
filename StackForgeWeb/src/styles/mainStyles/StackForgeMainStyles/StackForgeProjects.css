@@ -360,7 +360,7 @@
 .deploymentsContainer.grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
+    gap: 40px;
     width: 100%;
 }
 
@@ -412,17 +412,25 @@
     align-items: center;
     box-sizing: border-box;
     background-color: rgba(0, 0, 0, 0.2);
-    border-radius: 6px;
     width: 100%;
     padding: 10px 15px;
     color: #A3A3A3;
     cursor: pointer;
 }
 
+.deploymentsContainer.grid .deploymentCellHeaderTop {
+    border-top-right-radius: 6px;
+    border-top-left-radius: 6px;
+}
+
+.deploymentsContainer.grid .deploymentCellHeaderBottom {
+    border-bottom-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+
 .deploymentCell:hover {
     opacity: 0.9; 
 }
-
 
 .deploymentsContainer.list .deploymentCellHeaderTop,
 .deploymentsContainer.list .deploymentCellHeaderBottom {
@@ -438,6 +446,16 @@
     padding: 0;
     margin: 0;
     color: #A3A3A3;
+}
+
+.deploymentsContainer.list .deploymentCellHeaderTop {
+    border-top-right-radius: 6px;
+    border-top-left-radius: 6px;
+}
+
+.deploymentsContainer.list .deploymentCellHeaderBottom {
+    border-bottom-right-radius: 6px;
+    border-bottom-left-radius: 6px;
 }
 
 .deploymentsContainer.list .deploymentCellHeaderBottom {
@@ -501,7 +519,7 @@
 }
 
 .deploymentCellHeaderProjectName {
-    font-size: 0.9rem;
+    font-size: 1.2rem;
     font-weight: 700;
     display: inline-block;
     max-width: 100%;

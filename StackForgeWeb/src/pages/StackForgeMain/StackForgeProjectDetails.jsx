@@ -214,7 +214,9 @@ const StackForgeProjectDetails = () => {
                                         </a>
                                     ) : (
                                         <div className="productionDeploymentPlaceholder">
+                                            <div className="loading-wrapper"> 
                                             <div className="loading-circle" />
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -353,7 +355,9 @@ const StackForgeProjectDetails = () => {
                                             )}
                                         </>
                                     ) : (
+                                        <div className="loading-wrapper">
                                         <div className="loading-circle" />
+                                        </div>
                                     )}
                                 </div>
                             </div>
