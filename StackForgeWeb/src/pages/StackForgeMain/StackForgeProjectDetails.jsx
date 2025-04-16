@@ -74,9 +74,7 @@ const StackForgeProjectDetails = () => {
             }
             const data = await response.json();
             setProjectDetails(data);
-        } catch (error) {
-            console.error(error);
-        }
+        } catch (error) {}
     };
 
     const fetchSnapshot = async () => {
@@ -99,9 +97,7 @@ const StackForgeProjectDetails = () => {
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             setSnapshotUrl(url);
-        } catch (error) {
-            console.error(error);
-        }
+        } catch (error) {}
     };
 
     const fetchCommits = async () => {
@@ -123,9 +119,7 @@ const StackForgeProjectDetails = () => {
             }
             const data = await response.json();
             setCommits(data);
-        } catch (error) {
-            console.error(error);
-        }
+        } catch (error) {}
     };
 
     const fetchAnalytics = async () => {
@@ -148,9 +142,15 @@ const StackForgeProjectDetails = () => {
             }
             const data = await response.json();
             setAnalytics(data);
-        } catch (error) {
-            console.error("Error fetching analytics:", error);
+        } catch (error) {}
+    };
+
+    const getGithubUrl = () => {
+        if (projectDetails && projectDetails.project) {
+            const repo = projectDetails.project.repository;
+            return repo.includes("/") ? `https://github.com/${repo}` : `https://github.com/${projectDetails.project.created_by}/${repo}`;
         }
+        return "#";
     };
 
     return (
@@ -171,7 +171,11 @@ const StackForgeProjectDetails = () => {
                             <p>ID: {projectID}</p>
                         </h1>
                         <span>
-                            <button>
+                            <button
+                                onClick={() =>
+                                    window.open(getGithubUrl(), "_blank")
+                                }
+                            >
                                 <FontAwesomeIcon icon={faGithub} />
                                 <p>GitHub Repository</p>
                             </button>
@@ -205,7 +209,9 @@ const StackForgeProjectDetails = () => {
                             <div className="productionDeploymentBody">
                                 <div className="productionDeploymentScreenshot">
                                     {snapshotUrl ? (
-                                        <img src={snapshotUrl} alt="Deployment Snapshot" />
+                                        <a href={projectDetails.project.url} target="_blank" rel="noopener noreferrer">
+                                            <img src={snapshotUrl} alt="Deployment Snapshot" />
+                                        </a>
                                     ) : (
                                         <div className="productionDeploymentPlaceholder">
                                             <div className="loading-circle" />
@@ -282,12 +288,12 @@ const StackForgeProjectDetails = () => {
                         <div className="productionDeploymentMultiCellFlex">
                             <div className="productionDeploymentCellShort">
                                 <div className="productionDeploymentCellShortHeader">
-                                    <h2>Previous Deployments</h2>
+                                    <h2>Previous Updates</h2>
                                     <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
                                 </div>
                                 <div className="previousDeploymentsList">
                                     {commits && commits.map((commit) => (
-                                        <div key={commit.sha} className="previousCommitItem">
+                                        <div key={commit.sha} className="previousCommitItem" onClick={() => { navigate("/update-details", { state: { commitDetails: commit, repository: projectDetails.project.repository, owner: projectDetails.project.created_by } }) }}>
                                             <span>
                                                 <p>
                                                     <FontAwesomeIcon icon={faCodeCommit} /> {commit.sha.substring(0, 6)} - {commit.commit.message}
@@ -324,9 +330,7 @@ const StackForgeProjectDetails = () => {
                                                     </div>
                                                 </div>
                                             )}
-
                                             <digv className="productionAnalyticsListItemDivider"/>
-
                                             {analytics.repositoryAnalytics && (
                                                 <div className="productionAnalyticsListItem">
                                                     <div>
@@ -357,13 +361,8 @@ const StackForgeProjectDetails = () => {
                     </div>
                 </div>
             )}
-            {isLoaded && !projectDetails && (
-                <div className="addProjectsCellHeaderContainer">
-                    <p>No project details available.</p>
-                </div>
-            )}
             {!isLoaded && (
-                <div className="addProjectsCellHeaderContainer" style={{ justifyContent: "center" }}>
+                <div className="projectDetailsCellHeaderContainer" style={{ justifyContent: "center" }}>
                     <div className="loading-wrapper">
                         <div className="loading-circle" />
                         <label className="loading-title">Stack Forge</label>

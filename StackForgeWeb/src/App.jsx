@@ -6,6 +6,7 @@ import Reset from "./pages/StackForgeAuthentication/StackForgeAuthReset";
 import Verification from "./pages/StackForgeAuthentication/StackForgeAuthVerifyEmail";
 import StackForgeProjects from "./pages/StackForgeMain/StackForgeProjects";
 import StackForgeProjectDetails from "./pages/StackForgeMain/StackForgeProjectDetails";
+import StackForgeUpdateDetails from "./pages/StackForgeMain/StackForgeUpdateDetails";
 import StackForgeAddProject from "./pages/StackForgeMain/StackForgeAddProject";
 import StackForgeBuildProject from "./pages/StackForgeMain/StackForgeBuildProject";
 import StackForgeAddDomains from "./pages/StackForgeMain/StackForgeAddDomains";
@@ -42,6 +43,7 @@ function App() {
           <Route path="/verify" element={<Verification/>}/>
           <Route path="/stackforge" element={<StackForgeProjects/>}/>
           <Route path="/project-details" element={<StackForgeProjectDetails/>}/>
+          <Route path="/update-details" element={<StackForgeUpdateDetails/>}/>
           <Route path="/add-new-project" element={<StackForgeAddProject/>}/>
           <Route path="/import-new-project" element={<StackForgeBuildProject/>}/>
           <Route path="/add-new-domain" element={<StackForgeAddDomains/>}/>

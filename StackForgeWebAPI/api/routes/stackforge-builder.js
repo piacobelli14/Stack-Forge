@@ -344,6 +344,40 @@ router.post('/git-commits', authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post('/git-commit-details', authenticateToken, async (req, res, next) => {
+    const { userID, owner, repo, commitSha } = req.body;
+    try {
+        if (!owner || !repo || !commitSha) {
+            return res.status(400).json({ message: 'Owner, repository, and commitSha are required.' });
+        }
+        const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [userID]);
+        if (result.rows.length === 0 || !result.rows[0].github_access_token) {
+            return res.status(400).json({ message: 'GitHub account not connected.' });
+        }
+        const githubAccessToken = result.rows[0].github_access_token;
+        let repoName = repo;
+        let repoOwner = owner;
+        if (repo.includes('/')) {
+            let parts = repo.split('/');
+            repoOwner = parts[0];
+            repoName = parts[1];
+        }
+        const url = `https://api.github.com/repos/${repoOwner}/${repoName}/commits/${commitSha}`;
+        const gitResponse = await axios.get(url, {
+            headers: {
+                Authorization: `token ${githubAccessToken}`,
+                Accept: 'application/vnd.github.v3+json'
+            }
+        });
+        return res.status(200).json(gitResponse.data);
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error fetching commit details.' });
+        }
+        next(error);
+    }
+});
+
 router.post('/git-analytics', authenticateToken, async (req, res, next) => {
     const { userID, websiteURL, repository, owner } = req.body;
     let websiteAnalytics = null;

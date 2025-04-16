@@ -1,0 +1,395 @@
+@keyframes updateDetailsCellFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.updateDetailsCellFadeIn {
+    animation: projectsCellFadeIn 2s ease-out;
+}
+
+.updateDetailsPageWrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    background: linear-gradient(to bottom, #0E0B1B, #29282D);
+}
+
+.updateDetailsCellHeaderContainer {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100vw;
+    min-height: calc(100vh - 60px) !important;
+    position: relative;
+}
+
+.updateDetailsTopBar {
+    position: sticky;
+    top: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    min-height: 80px;
+    max-height: 80px;
+    background-color: rgba(25, 25, 25, 0.7);
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-right: 0.2vh solid rgba(255, 255, 255, 0.1);
+    box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 2vw;
+}
+
+.updateDetailsTopBar h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #f1f1f1;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    padding: 0;
+    margin: 0;
+    padding: 0 1rem;
+    font-style: italic; 
+}
+
+.updateDetailsTopBar div {
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    gap: 1rem; 
+}
+
+.updateDetailsTopBar div span {
+    font-size: 1.2rem; 
+    font-weight: 700; 
+    color: #c1c1c1; 
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 6px; 
+    padding: 10px;  
+    box-shadow: 0 0 10px black;
+}
+
+.updateCellContentWrapper {
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    background-color: #24242B;
+    width: 100%;
+    height: calc(100% - 80px); 
+    flex: 1;
+}
+
+.updateCellContentWrapper {
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    background-color: #24242B;
+    width: 100%;
+    flex: 1;
+}
+
+.updateContentSideBar {
+    width: 220px;
+    height: 100%; 
+    background-color: rgba(50, 42, 84, 0.2);
+    padding-top: 10px;
+    box-sizing: border-box;
+    padding: 0; 
+    border-right: 0.5px solid rgba(255, 255, 255, 0.2); 
+}
+
+.updateSideBarButtonWrapper {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 10px;
+    overflow: auto;
+    background-color: rgba(255, 255, 255, 0.0);
+    height: calc(100% - 60px); 
+    box-sizing: border-box; 
+}
+
+.updateSideBarButton {
+    margin: 5px 0;
+    padding: 5px 15px;
+    background-color: rgba(255, 255, 255, 0.0);
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 0.8rem;
+    font-weight: 800; 
+    text-align: left;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    min-width: 80%;
+    max-width: 80%; 
+    font-style: italic; 
+    color: #c0c0c0;
+}
+
+.updateSideBarButton:hover {
+    background-color: rgba(25, 25, 25, 0.4);
+    border: 1px solid #333;
+    border-left-color: #4caf50; 
+    outline: none; 
+    transform: scale(1.05); 
+    padding: 10px 15px; 
+}
+
+.updateSideBarButton:focus {
+    background-color: rgba(25, 25, 25, 0.4);
+    box-shadow: 0 0 8px black;
+    border: 1px solid #333;
+    border-left-color: #4caf50;
+    outline: none; 
+    padding: 10px 15px; 
+}
+
+.updateSideBarButton span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+}
+
+.updateSideBarButton span p {
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+    padding: 0; 
+    margin: 0;
+}
+
+.updateSideBarSearchWrapper {
+    width: 100%; 
+    height: 40px; 
+    background-color: rgba(25, 25, 25, 0.3);
+    position: sticky; 
+    top: 0; 
+    padding: 0; 
+    margin: 0; 
+    border-bottom: 0.5px solid rgba(255, 255, 255, 0.2); 
+    border-right: 0.5px solid rgba(255, 255, 255, 0.2); 
+    display: flex; 
+    align-items: center;
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+
+.updateSideBarSearchWrapper input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #A3A3A3;
+    box-sizing: border-box;  
+    height: 100%; 
+}
+
+.updateContentMainFlex {
+    width: calc(100% - 220px);
+    height: calc(100% - 80px);
+    background: linear-gradient(to bottom, #322A54, #29282D);
+    display: flex;
+    flex-direction: column;
+    padding: 4vh 60px 10vh 60px; 
+    padding-bottom: 10vh;
+    overflow-y: scroll;
+    overflow-x: hidden;
+}
+
+@media (max-width: 700px) {
+    .updateContentMainFlex {
+        padding: 4vh 20px 10vh 20px; 
+    }
+}
+
+.fileDiffCell {
+    box-sizing: border-box;
+    border: none;
+    border-radius: 6px;
+    width: 100%;
+    background-color: rgba(0, 0, 0, 0.2);
+    box-shadow: 0 0 10px black;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    margin-bottom: 30px;
+    overflow: visible;
+    gap: 0 !important; 
+}
+
+.fileDiffHeader {
+    width: 100%; 
+    height: 30px; 
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem; 
+    box-sizing: border-box;
+    background-color: #25242E;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-top-right-radius: 6px;
+    border-top-left-radius: 6px;
+    margin: 0;
+}
+
+.fileDiffHeaderFileName {
+    font-size: 1rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    font-style: italic;
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.fileDiffHeaderSupplement {
+    display: flex; 
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+    overflow: hidden;
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+}
+
+.fileDiffStatus {
+    white-space: pre; 
+    font-size: 0.9rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    font-style: italic; 
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    gap: 0.6rem;
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.fileDiffStatus p {
+    font-style: none !important;
+}
+
+@media (max-width: 700px) {
+    .fileDiffStatus {
+        display: none; 
+    }
+}
+
+.fileDiffBinaryNote {
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    padding: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    box-sizing: border-box;
+    width: 100%; 
+    text-align: center;
+    padding: 0 2vw;
+}
+
+.fileDiffContent {
+    box-sizing: border-box;
+    height: auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0;
+    width: 100%;
+    border-bottom-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+
+.fileDiffChangeWrapper {
+    background-color: #1e1e1e;
+    overflow-x: auto;
+    font-family: monospace;
+    line-height: 1.4;
+    box-sizing: border-box;
+    width: auto;
+    min-width: max-content;
+}
+
+.dileDiffChangeWrapperMeta {
+    width: 100%; 
+    padding: 0 0 0 0; 
+    box-sizing: border-box;
+    background-color: #1e1e1e;
+    border-bottom-right-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+
+.fileDiffLine {
+    white-space: pre;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #c1c1c1;
+    font-style: italic;
+    display: flex;
+    justify-content: flex-start;
+    align-items: stretch;
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+    gap: 0.6rem;
+    min-width: max-content;
+}
+
+.diffChunkHeader {
+    background-color: #444444;
+    color: #e2e2e2;
+}
+
+.diffAdd {
+    background-color: rgba(0, 255, 115, 0.3);
+    color: white;
+}
+
+.diffRemove {
+    background-color: rgba(255, 0, 0, 0.3);
+    color: white;
+}
+
+.lineNumberMargin {
+    background-color: #2A2A2A !important;
+    align-self: stretch;
+    display: flex; 
+    justify-content: flex-start; 
+    align-items: center;
+    text-align: right;
+    min-width: 40px;
+    padding: 0.2rem 0.5rem;
+    height: 100%;
+    box-sizing: border-box;
+    font-size: 0.7rem;
+    border-right: 1px solid rgba(255,255,255,0.2);
+}
+
+.lineContent {
+    flex: 1;
+}
+
+
