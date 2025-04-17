@@ -26,6 +26,20 @@
         animation: spin-large 2s linear infinite; 
     }
 
+    .loading-circle-supplement {
+        width: 1.5vw; 
+        height: 1.5vw; 
+        border-radius: 50%;
+        background: conic-gradient(
+            from 0deg,
+            rgba(255, 255, 255, 1) 0deg, 
+            rgba(255, 255, 255, 0) 300deg 
+        );
+        mask: radial-gradient(farthest-side, transparent 80%, black 60%); 
+        animation: spin-medium 1.5s linear infinite; 
+    }
+
+
     .loading-title {
         font-size: 2vw;
         color: #ffffff;
@@ -139,6 +153,20 @@
         animation: spin-small 1.5s linear infinite;
     }
 
+    .loading-circle-supplement {
+        width: 3vw; 
+        height: 3vw; 
+        border-radius: 50%;
+        background: conic-gradient(
+            from 0deg,
+            rgba(255, 255, 255, 1) 0deg, 
+            rgba(255, 255, 255, 0) 300deg 
+        );
+        mask: radial-gradient(farthest-side, transparent 80%, black 60%); 
+        animation: spin-medium 1.5s linear infinite; 
+    }
+
+
     .loading-title {
         font-size: 4vw;
         color: #ffffff;
@@ -183,6 +211,20 @@
         mask: radial-gradient(farthest-side, transparent 80%, black 60%); 
         animation: spin-small 1.5s linear infinite;
     }
+
+    .loading-circle-supplement {
+        width: 3vw; 
+        height: 3vw; 
+        border-radius: 50%;
+        background: conic-gradient(
+            from 0deg,
+            rgba(255, 255, 255, 1) 0deg, 
+            rgba(255, 255, 255, 0) 300deg 
+        );
+        mask: radial-gradient(farthest-side, transparent 80%, black 60%); 
+        animation: spin-medium 1.5s linear infinite; 
+    }
+
 
     .loading-title {
         font-size: 4vw;

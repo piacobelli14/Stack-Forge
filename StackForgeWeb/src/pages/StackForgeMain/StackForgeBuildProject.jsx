@@ -20,7 +20,10 @@ import {
   faCodeBranch,
   faArrowRightArrowLeft,
   faXmarkSquare,
-  faCheckDouble
+  faCheckDouble,
+  faDownLong,
+  faClone,
+  faGlobe
 } from "@fortawesome/free-solid-svg-icons";
 import { faGit, faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeBuildProject.css";
@@ -40,6 +43,8 @@ const StackForgeBuildProject = () => {
   const [isDeploying, setIsDeploying] = useState(false);
   const [screenSize, setScreenSize] = useState(window.innerWidth);
   const [resizeTrigger, setResizeTrigger] = useState(false);
+  const [buildLogs, setBuildLogs] = useState([]);
+  const [typedLogs, setTypedLogs] = useState([]);
   const scrollableContainerRef = useRef(null);
   const repository = location.state?.repository;
   const personalName = location.state?.personalName;
@@ -60,7 +65,7 @@ const StackForgeBuildProject = () => {
   const [selectedBranch, setSelectedBranch] = useState("");
   const [changeEnvironmentOpen, setChangeEnvironmentOpen] = useState(false);
   const [envVars, setEnvVars] = useState([]);
-  const [selectedTeamName, setSelectedTeamName] = useState(teamName); 
+  const [selectedTeamName, setSelectedTeamName] = useState(teamName);
   const [selectedProjectName, setSelectedProjectName] = useState("");
   const [rootDirectory, setRootDirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
@@ -76,7 +81,7 @@ const StackForgeBuildProject = () => {
       try {
         fetchBranches();
         setIsLoaded(true);
-      } catch (error) {}
+      } catch (error) { }
     };
     if (!loading && token) fetchData();
   }, [userID, loading, token]);
@@ -156,6 +161,27 @@ const StackForgeBuildProject = () => {
     return () => document.removeEventListener("mousedown", handleClickOutsideBranch);
   }, [branchOpenRef, branchDropdownRef]);
 
+  useEffect(() => {
+    if (buildLogs.length > typedLogs.length) {
+      const newLog = buildLogs[buildLogs.length - 1];
+      setTypedLogs(prev => [...prev, ""]);
+      let charIndex = 0;
+      const interval = setInterval(() => {
+        setTypedLogs(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = newLog.slice(0, charIndex + 1);
+          return updated;
+        });
+        charIndex++;
+        if (charIndex >= newLog.length) {
+          clearInterval(interval);
+        }
+      }, 20);
+      return () => clearInterval(interval);
+    }
+  }, [buildLogs]);
+  
+
   const fetchBranches = async () => {
     try {
       const parts = repository.split("/");
@@ -176,13 +202,15 @@ const StackForgeBuildProject = () => {
       if (data.length > 0) {
         setSelectedBranch(data[0].name);
       }
-    } catch (error) {}
+    } catch (error) { }
   };
 
-  const handleDeployProject = async () => {
+  const handleDeployProject = () => {
     setIsDeploying(true);
-    const endpoint = "http://localhost:3000/deploy-project"; 
-    const deploymentData = {
+    setBuildLogs([]);
+    setTypedLogs([]);
+
+    const params = new URLSearchParams({
       userID,
       organizationID,
       repository,
@@ -193,32 +221,35 @@ const StackForgeBuildProject = () => {
       outputDirectory,
       buildCommand,
       installCommand,
-      envVars
-    };
-    try {
-      const t = localStorage.getItem("token");
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${t}`
-        },
-        body: JSON.stringify(deploymentData)
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        await showDialog({ title: "Deployment Error", message: `Error deploying project: ${errorData.message}` });
+      envVars: JSON.stringify(envVars),
+      token: localStorage.getItem("token")
+    });
+
+    const sse = new EventSource(`http://localhost:3000/deploy-project-stream?${params.toString()}`);
+
+    sse.onmessage = (e) => {
+      const data = e.data.replace(/\\n/g, "\n");
+      if (data === "__BUILD_COMPLETE__") {
         setIsDeploying(false);
-        return;
+        sse.close();
+        showDialog({ title: "Deployment Success", message: "Your project has been deployed successfully!" })
+          .then(() => navigate("/stackforge"));
+      } else if (data.startsWith("__BUILD_ERROR__")) {
+        const errMsg = data.replace("__BUILD_ERROR__", "");
+        setIsDeploying(false);
+        sse.close();
+        setBuildLogs(prev => [...prev, `ERROR: ${errMsg}`]);
+      } else {
+        setBuildLogs(prev => [...prev, data]);
       }
-      const result = await response.json();
-      await showDialog({ title: "Deployment Success", message: "Your project has been deployed successfully!" });
+    };
+
+    sse.onerror = (err) => {
+      console.error("SSE error", err);
       setIsDeploying(false);
-      navigate("/stackforge");
-    } catch (error) {
-      await showDialog({ title: "Deployment Error", message: "An unexpected error occurred during deployment." });
-      setIsDeploying(false);
-    }
+      sse.close();
+      setBuildLogs(prev => [...prev, "ERROR: Connection lost during build."]);
+    };
   };
 
   const handleContainerScroll = () => {
@@ -267,206 +298,243 @@ const StackForgeBuildProject = () => {
     >
       <StackForgeNav activePage="main" />
       {isLoaded && (
-        <div className="importProjectsCellHeaderContainer" ref={scrollableContainerRef} onScroll={handleContainerScroll} style={{ position: "relative", opacity: isDeploying ? 0.4 : 1 }}>
-          <div className="importProjectsFlexCell">
-            <div className="importProjectsCellHeader">
-              <a className="importProjectsImportingFromGithub">
-                <span>
-                  <p>Importing from GitHub</p>
-                  <strong>
-                    <FontAwesomeIcon icon={faGithub} />
-                    {repository}
-                  </strong>
-                </span>
-                <div className="importProjectsBranchSelector">
-                  <button className="importProjectsBranchSelectorButton" ref={branchOpenRef} onClick={toggleBranchDropdown}>
-                    <FontAwesomeIcon icon={faCodeBranch} />
-                    <span className="importProjectsBranchSelectorButtonText">
-                      {selectedBranch ? selectedBranch : "Select Branch"}
-                    </span>
-                  </button>
-                </div>
-              </a>
-              <div className="importProjectsOperationsBar">
-                <div className="importProjectsOperationsFlex">
-                  <div className="importProjectsOperationsContainerWrapper">
-                    <p>Stack Forge Team</p>
-                    <button className="importProjectsOperationsField" ref={changeTeamOpenRef} onClick={toggleChangeTeamDropdown}>
-                      <span>
-                        <FontAwesomeIcon icon={faGithub} />
-                        <p>{teamName}</p>
+        <div
+          className="importProjectsCellHeaderContainer"
+          ref={scrollableContainerRef}
+          onScroll={handleContainerScroll}
+          style={{ position: "relative" }}
+        >
+          <div className="buildProjectsFlexCellWrapper">
+            <div className="buildProjectsFlexCellLeading" style={{ opacity: isDeploying ? 0.4 : 1 }}>
+              <div className="importProjectsCellHeader">
+                <a className="importProjectsImportingFromGithub">
+                  <span>
+                    <p>Importing from GitHub</p>
+                    <strong>
+                      <FontAwesomeIcon icon={faGithub} />
+                      {repository}
+                    </strong>
+                  </span>
+                  <div className="importProjectsBranchSelector">
+                    <button className="importProjectsBranchSelectorButton" ref={branchOpenRef} onClick={toggleBranchDropdown}>
+                      <FontAwesomeIcon icon={faCodeBranch} />
+                      <span className="importProjectsBranchSelectorButtonText">
+                        {selectedBranch ? selectedBranch : "Select Branch"}
                       </span>
-                      <FontAwesomeIcon
-                        icon={faCaretDown}
-                        className="importNewCaretIcon"
-                        style={{
-                          transform: changeTeamOpen ? "rotate(180deg)" : "rotate(0deg)",
-                          transition: "transform 0.3s ease"
-                        }}
-                      />
                     </button>
                   </div>
-                  <div className="importProjectsOperationsContainerWrapper">
-                    <p>Project Name</p>
-                    <input 
-                      className="importProjectsOperationsField" 
-                      value={selectedProjectName} 
-                      onChange={(e) => setSelectedProjectName(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="importProjectsOperationsDivider" />
-              <div className="importProjectsOperationsBar">
-                <div className="importProjectsOperationsFlex">
-                  <div className="importProjectsOperationsContainerWrapperWide">
-                    <p>Root Directory</p>
-                    <div className="importProjectsOperationsField">
-                      <p className="rootIcon">./</p>
-                      <input 
-                        type="text" 
-                        className="rootInput" 
-                        placeholder="Enter new root directory..." 
-                        value={rootDirectory}
-                        onChange={(e) => setRootDirectory(e.target.value)}
-                      />
-                      <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="importProjectsOperationsBar">
-                <div className="importProjectsOperationsFlex">
-                  <div className="importProjectsOperationsContainerWrapperWide">
-                    <p>Output Directory (optional)</p>
-                    <div className="importProjectsOperationsField">
-                      <p className="rootIcon">./</p>
-                      <input 
-                        type="text" 
-                        className="rootInput" 
-                        placeholder="Ex. 'public'" 
-                        value={outputDirectory}
-                        onChange={(e) => setOutputDirectory(e.target.value)}
-                      />
-                      <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="importProjectsOperationsDivider" />
-              <div className="importProjectsOperationsBar">
-                <div className="importProjectsOperationsFlex">
-                  <div className="importProjectsOperationsContainerWrapperWide">
-                    <p>Build Command (optional)</p>
-                    <div className="importProjectsOperationsField">
-                      <input 
-                        type="text" 
-                        className="rootInput" 
-                        placeholder="Ex. 'npm run build'" 
-                        value={buildCommand}
-                        onChange={(e) => setBuildCommand(e.target.value)}
-                      />
-                      <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="importProjectsOperationsBar">
-                <div className="importProjectsOperationsFlex">
-                  <div className="importProjectsOperationsContainerWrapperWide">
-                    <p>Install Command (optional)</p>
-                    <div className="importProjectsOperationsField">
-                      <input 
-                        type="text" 
-                        className="rootInput" 
-                        placeholder="Ex. 'npm install'" 
-                        value={installCommand}
-                        onChange={(e) => setInstallCommand(e.target.value)}
-                      />
-                      <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="importProjectsOperationsDivider" />
-              <div className="importProjectsOperationsBar">
-                <div className="importProjectsOperationsFlex">
-                  <div className="importProjectsOperationsContainerWrapperWide">
-                    <p>Environment Variables</p>
-                    {changeEnvironmentOpen ? (
-                      <div className="importProjectsOperationsStack">
-                        <FontAwesomeIcon
-                          icon={faXmark}
-                          className="importProjectsClosePopout"
-                          onClick={toggleChangeEnvironmentPopout}
-                          style={{
-                            transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)",
-                            transition: "transform 0.3s ease"
-                          }}
-                        />
-                        <div className="importProjectsEnvVarsWrapper">
-                          {envVars.map((envVar, index) => (
-                            <div key={index} className="importProjectsEnvVarsRow">
-                              <div className="importProjectsOperationsContainerWrapperShort">
-                                <div className="importProjectsOperationsField" style={{ backgroundColor: "rgba(30, 30, 30, 0.4)" }}>
-                                  <input
-                                    type="text"
-                                    className="rootInput"
-                                    placeholder="Key"
-                                    value={envVar.key}
-                                    onChange={(e) => handleEnvVarChange(index, "key", e.target.value)}
-                                    style={{ color: "white" }}
-                                  />
-                                </div>
-                              </div>
-                              <div className="importProjectsOperationsContainerWrapperShort">
-                                <div className="importProjectsOperationsField" style={{ backgroundColor: "rgba(30, 30, 30, 0.4)" }}>
-                                  <input
-                                    type="text"
-                                    className="rootInput"
-                                    placeholder="Value"
-                                    value={envVar.value}
-                                    onChange={(e) => handleEnvVarChange(index, "value", e.target.value)}
-                                    style={{ color: "white" }}
-                                  />
-                                </div>
-                              </div>
-                              <button className="importProjectsEnvVarsRemoveBtn" onClick={() => handleRemoveEnvVar(index)}>
-                                -
-                              </button>
-                            </div>
-                          ))}
-                          <div className="importProjectsEnvVarsRow">
-                            <button className="importProjectsEnvVarsAddBtn" onClick={handleAddEnvVar}>
-                              Add More
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <button className="importProjectsOperationsField" onClick={toggleChangeEnvironmentPopout} style={{ transition: "transform 0.3s ease" }}>
+                </a>
+
+                <div className="importProjectsOperationsBar">
+                  <div className="importProjectsOperationsFlex">
+                    <div className="importProjectsOperationsContainerWrapper">
+                      <p>Stack Forge Team</p>
+                      <button className="importProjectsOperationsField" ref={changeTeamOpenRef} onClick={toggleChangeTeamDropdown}>
                         <span>
-                          <p>Environment Variables</p>
+                          <FontAwesomeIcon icon={faGithub} />
+                          <p>{teamName}</p>
                         </span>
                         <FontAwesomeIcon
                           icon={faCaretDown}
                           className="importNewCaretIcon"
                           style={{
-                            transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)",
+                            transform: changeTeamOpen ? "rotate(180deg)" : "rotate(0deg)",
                             transition: "transform 0.3s ease"
                           }}
                         />
                       </button>
-                    )}
+                    </div>
+                    <div className="importProjectsOperationsContainerWrapper">
+                      <p>Project Name</p>
+                      <input
+                        className="importProjectsOperationsField"
+                        value={selectedProjectName}
+                        onChange={(e) => setSelectedProjectName(e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="importProjectsOperationsBarSupplement">
-                <button className="importProjectsDeployButton" onClick={handleDeployProject}>Deploy New Project</button>
+                <div className="importProjectsOperationsDivider" />
+                <div className="importProjectsOperationsBar">
+                  <div className="importProjectsOperationsFlex">
+                    <div className="importProjectsOperationsContainerWrapperWide">
+                      <p>Root Directory</p>
+                      <div className="importProjectsOperationsField">
+                        <p className="rootIcon">./</p>
+                        <input
+                          type="text"
+                          className="rootInput"
+                          placeholder="Enter new root directory..."
+                          value={rootDirectory}
+                          onChange={(e) => setRootDirectory(e.target.value)}
+                        />
+                        <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="importProjectsOperationsBar">
+                  <div className="importProjectsOperationsFlex">
+                    <div className="importProjectsOperationsContainerWrapperWide">
+                      <p>Output Directory (optional)</p>
+                      <div className="importProjectsOperationsField">
+                        <p className="rootIcon">./</p>
+                        <input
+                          type="text"
+                          className="rootInput"
+                          placeholder="Ex. 'public'"
+                          value={outputDirectory}
+                          onChange={(e) => setOutputDirectory(e.target.value)}
+                        />
+                        <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="importProjectsOperationsDivider" />
+                <div className="importProjectsOperationsBar">
+                  <div className="importProjectsOperationsFlex">
+                    <div className="importProjectsOperationsContainerWrapperWide">
+                      <p>Build Command (optional)</p>
+                      <div className="importProjectsOperationsField">
+                        <input
+                          type="text"
+                          className="rootInput"
+                          placeholder="Ex. 'npm run build'"
+                          value={buildCommand}
+                          onChange={(e) => setBuildCommand(e.target.value)}
+                        />
+                        <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="importProjectsOperationsBar">
+                  <div className="importProjectsOperationsFlex">
+                    <div className="importProjectsOperationsContainerWrapperWide">
+                      <p>Install Command (optional)</p>
+                      <div className="importProjectsOperationsField">
+                        <input
+                          type="text"
+                          className="rootInput"
+                          placeholder="Ex. 'npm install'"
+                          value={installCommand}
+                          onChange={(e) => setInstallCommand(e.target.value)}
+                        />
+                        <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="importProjectsOperationsDivider" />
+                <div className="importProjectsOperationsBar">
+                  <div className="importProjectsOperationsFlex">
+                    <div className="importProjectsOperationsContainerWrapperWide">
+                      <p>Environment Variables</p>
+                      {changeEnvironmentOpen ? (
+                        <div className="importProjectsOperationsStack">
+                          <FontAwesomeIcon
+                            icon={faXmark}
+                            className="importProjectsClosePopout"
+                            onClick={toggleChangeEnvironmentPopout}
+                            style={{
+                              transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)",
+                              transition: "transform 0.3s ease"
+                            }}
+                          />
+                          <div className="importProjectsEnvVarsWrapper">
+                            {envVars.map((envVar, index) => (
+                              <div key={index} className="importProjectsEnvVarsRow">
+                                <div className="importProjectsOperationsContainerWrapperShort">
+                                  <div className="importProjectsOperationsField" style={{ backgroundColor: "rgba(30, 30, 30, 0.4)" }}>
+                                    <input
+                                      type="text"
+                                      className="rootInput"
+                                      placeholder="Key"
+                                      value={envVar.key}
+                                      onChange={(e) => handleEnvVarChange(index, "key", e.target.value)}
+                                      style={{ color: "white" }}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="importProjectsOperationsContainerWrapperShort">
+                                  <div className="importProjectsOperationsField" style={{ backgroundColor: "rgba(30, 30, 30, 0.4)" }}>
+                                    <input
+                                      type="text"
+                                      className="rootInput"
+                                      placeholder="Value"
+                                      value={envVar.value}
+                                      onChange={(e) => handleEnvVarChange(index, "value", e.target.value)}
+                                      style={{ color: "white" }}
+                                    />
+                                  </div>
+                                </div>
+                                <button className="importProjectsEnvVarsRemoveBtn" onClick={() => handleRemoveEnvVar(index)}>
+                                  -
+                                </button>
+                              </div>
+                            ))}
+                            <div className="importProjectsEnvVarsRow">
+                              <button className="importProjectsEnvVarsAddBtn" onClick={handleAddEnvVar}>
+                                Add More
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <button className="importProjectsOperationsField" onClick={toggleChangeEnvironmentPopout} style={{ transition: "transform 0.3s ease" }}>
+                          <span>
+                            <p>Environment Variables</p>
+                          </span>
+                          <FontAwesomeIcon
+                            icon={faCaretDown}
+                            className="importNewCaretIcon"
+                            style={{
+                              transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)",
+                              transition: "transform 0.3s ease"
+                            }}
+                          />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="importProjectsOperationsBarSupplement">
+                  <button className="importProjectsDeployButton" onClick={handleDeployProject}>
+                    Deploy New Project
+                  </button>
+                </div>
               </div>
             </div>
+
+            <div className="buildProjectsFlexCellTrailing">
+              <div className="consoleLogsHeader"> 
+                <span>
+                  <h3>Project Build Logs</h3>
+                  <button>
+                    <FontAwesomeIcon icon={faClone}/>
+                  </button> 
+                </span>
+                {isDeploying && <div className="loading-circle-supplement"/>}
+              </div>
+              <div className="importProjectsBuildLogsCell">
+                {typedLogs.length === 0 ? (
+                  <div className="noBuildLogsDisplay">
+                    <FontAwesomeIcon icon={faGlobe}/>
+                  </div>
+                ) : (
+                  typedLogs.map((line, idx) => (
+                    <div className="importProjectsBuildLogsCellLogDisplay" key={idx}>
+                      <div style={line.startsWith("ERROR:") ? { color: "#E54B4B" } : undefined}>
+                        {line}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
           </div>
-          
         </div>
       )}
       {!isLoaded && (
@@ -479,9 +547,9 @@ const StackForgeBuildProject = () => {
       )}
       {changeTeamOpen && (
         <div className="importProjectsOperationsDropdownMenu" ref={changeTeamDropdownRef} style={{ top: changeTeamDropdownPosition.top * 1.02, left: changeTeamDropdownPosition.left }}>
-          <button onClick={() => {setSelectedTeamName(teamName)}}>
+          <button onClick={() => { setSelectedTeamName(teamName); setChangeTeamOpen(false); }}>
             <span>
-              <img src={teamImage} />
+              <img src={teamImage} alt="Team" />
               <strong>
                 {teamName}
                 <br />
@@ -490,13 +558,13 @@ const StackForgeBuildProject = () => {
             </span>
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
-          <button onClick={() => {setSelectedTeamName(personalName)}}>
+          <button onClick={() => { setSelectedTeamName(personalName); setChangeTeamOpen(false); }}>
             <span>
-              <img src={personalImage} />
+              <img src={personalImage} alt="Personal" />
               <strong>
                 {personalName}
                 <br />
-                <p>Team Project</p>
+                <p>Personal Project</p>
               </strong>
             </span>
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
@@ -507,14 +575,14 @@ const StackForgeBuildProject = () => {
         <div className="importProjectsBranchesDropdownMenu" ref={branchDropdownRef} style={{ top: branchDropdownPosition.top * 1.02, left: branchDropdownPosition.left }}>
           {branches && branches.length > 0 ? (
             branches.map(branch => (
-                <button key={branch.name} onClick={() => { setSelectedBranch(branch.name); setBranchOpen(false); }}>
+              <button key={branch.name} onClick={() => { setSelectedBranch(branch.name); setBranchOpen(false); }}>
                 <span>{branch.name}</span>
                 {selectedBranch === branch.name && <FontAwesomeIcon icon={faCheckDouble} />}
-                </button>
+              </button>
             ))
           ) : (
             <button>
-                <span>No branches available.</span>
+              <span>No branches available.</span>
             </button>
           )}
         </div>

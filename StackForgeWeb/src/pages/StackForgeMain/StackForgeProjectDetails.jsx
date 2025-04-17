@@ -1,7 +1,31 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSearch, faThLarge, faList, faCaretDown, faCheck, faInfo, faKeyboard, faInfoCircle, faCircleInfo, faGrip, faSquare, faSquareArrowUpRight, faArrowUpRightFromSquare, faEllipsisV, faEllipsisH, faCodeBranch, faArrowRightArrowLeft, faArrowRotateLeft, faHammer, faGaugeHigh, faCircleCheck, faCodeCommit, faCaretRight } from "@fortawesome/free-solid-svg-icons";
+import {
+    faSearch,
+    faThLarge,
+    faList,
+    faCaretDown,
+    faCheck,
+    faInfo,
+    faKeyboard,
+    faInfoCircle,
+    faCircleInfo,
+    faGrip,
+    faSquare,
+    faSquareArrowUpRight,
+    faArrowUpRightFromSquare,
+    faEllipsisV,
+    faEllipsisH,
+    faCodeBranch,
+    faArrowRightArrowLeft,
+    faArrowRotateLeft,
+    faHammer,
+    faGaugeHigh,
+    faCircleCheck,
+    faCodeCommit,
+    faCaretRight
+} from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeProjectDetails.css";
 import "../../styles/helperStyles/LoadingSpinner.css";
@@ -74,7 +98,9 @@ const StackForgeProjectDetails = () => {
             }
             const data = await response.json();
             setProjectDetails(data);
-        } catch (error) {}
+        } catch (error) {
+            console.error(error);
+        }
     };
 
     const fetchSnapshot = async () => {
@@ -97,7 +123,9 @@ const StackForgeProjectDetails = () => {
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             setSnapshotUrl(url);
-        } catch (error) {}
+        } catch (error) {
+            console.error(error);
+        }
     };
 
     const fetchCommits = async () => {
@@ -119,7 +147,9 @@ const StackForgeProjectDetails = () => {
             }
             const data = await response.json();
             setCommits(data);
-        } catch (error) {}
+        } catch (error) {
+            console.error(error);
+        }
     };
 
     const fetchAnalytics = async () => {
@@ -142,15 +172,9 @@ const StackForgeProjectDetails = () => {
             }
             const data = await response.json();
             setAnalytics(data);
-        } catch (error) {}
-    };
-
-    const getGithubUrl = () => {
-        if (projectDetails && projectDetails.project) {
-            const repo = projectDetails.project.repository;
-            return repo.includes("/") ? `https://github.com/${repo}` : `https://github.com/${projectDetails.project.created_by}/${repo}`;
+        } catch (error) {
+            console.error("Error fetching analytics:", error);
         }
-        return "#";
     };
 
     return (
@@ -162,7 +186,7 @@ const StackForgeProjectDetails = () => {
             }}
         >
             <StackForgeNav activePage="main" />
-            {isLoaded && (
+            {isLoaded && projectDetails?.project && (
                 <div className="projectDetailsCellHeaderContainer">
                     <div className="projectDetailsTopBar">
                         <h1>
@@ -171,11 +195,7 @@ const StackForgeProjectDetails = () => {
                             <p>ID: {projectID}</p>
                         </h1>
                         <span>
-                            <button
-                                onClick={() =>
-                                    window.open(getGithubUrl(), "_blank")
-                                }
-                            >
+                            <button>
                                 <FontAwesomeIcon icon={faGithub} />
                                 <p>GitHub Repository</p>
                             </button>
@@ -209,12 +229,10 @@ const StackForgeProjectDetails = () => {
                             <div className="productionDeploymentBody">
                                 <div className="productionDeploymentScreenshot">
                                     {snapshotUrl ? (
-                                        <a href={projectDetails.project.url} target="_blank" rel="noopener noreferrer">
-                                            <img src={snapshotUrl} alt="Deployment Snapshot" />
-                                        </a>
+                                        <img src={snapshotUrl} alt="Deployment Snapshot" />
                                     ) : (
                                         <div className="productionDeploymentPlaceholder">
-                                            <div className="loading-wrapper"> 
+                                            <div className="loading-wrapper">
                                             <div className="loading-circle" />
                                             </div>
                                         </div>
@@ -229,7 +247,9 @@ const StackForgeProjectDetails = () => {
                                         <strong>Domains</strong>
                                         <span>
                                             {projectDetails.domains[0]?.domain_name}
-                                            {projectDetails.domains.length > 1 ? ` +${projectDetails.domains.length - 1}` : ""}
+                                            {projectDetails.domains.length > 1
+                                                ? ` +${projectDetails.domains.length - 1}`
+                                                : ""}
                                         </span>
                                     </div>
                                     <div className="deploymentDetailLineFlex">
@@ -238,12 +258,18 @@ const StackForgeProjectDetails = () => {
                                             <span>
                                                 {projectDetails.deployments[0]?.status === "active" ? (
                                                     <>
-                                                        <span className="statusDot" style={{ backgroundColor: "#21BF68" }}></span>
+                                                        <span
+                                                            className="statusDot"
+                                                            style={{ backgroundColor: "#21BF68" }}
+                                                        ></span>
                                                         Ready
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <span className="statusDot" style={{ backgroundColor: "#E54B4B" }}></span>
+                                                        <span
+                                                            className="statusDot"
+                                                            style={{ backgroundColor: "#E54B4B" }}
+                                                        ></span>
                                                         {projectDetails.deployments[0]?.status}
                                                     </>
                                                 )}
@@ -252,7 +278,10 @@ const StackForgeProjectDetails = () => {
                                         <div className="deploymentDetailLine">
                                             <strong>Created</strong>
                                             <span>
-                                                {new Date(projectDetails.deployments[0]?.created_at).toLocaleDateString()} by {projectDetails.deployments[0]?.username}
+                                                {new Date(
+                                                    projectDetails.deployments[0]?.created_at
+                                                ).toLocaleDateString()}{" "}
+                                                by {projectDetails.deployments[0]?.username}
                                             </span>
                                         </div>
                                     </div>
@@ -260,10 +289,16 @@ const StackForgeProjectDetails = () => {
                                         <strong>Source</strong>
                                         <span>
                                             <p>
-                                                <FontAwesomeIcon icon={faCodeBranch} /> {projectDetails.project.branch} <br />
+                                                <FontAwesomeIcon icon={faCodeBranch} />{" "}
+                                                {projectDetails.project.branch} <br />
                                             </p>
                                             <p>
-                                                <FontAwesomeIcon icon={faCodeCommit} /> {projectDetails.project.current_deployment?.substring(0, 6)} <i>update</i>
+                                                <FontAwesomeIcon icon={faCodeCommit} />{" "}
+                                                {projectDetails.project.current_deployment?.substring(
+                                                    0,
+                                                    6
+                                                )}{" "}
+                                                <i>update</i>
                                             </p>
                                         </span>
                                     </div>
@@ -273,16 +308,25 @@ const StackForgeProjectDetails = () => {
                                 <button>Deployment Configuration</button>
                                 <div className="deploymentProtectionToggles">
                                     <p>
-                                        <FontAwesomeIcon icon={faCircleCheck} style={{ color: "#21BF68" }} />
-                                        Fluid Compute 
+                                        <FontAwesomeIcon
+                                            icon={faCircleCheck}
+                                            style={{ color: "#21BF68" }}
+                                        />
+                                        Fluid Compute
                                     </p>
                                     <p>
-                                        <FontAwesomeIcon icon={faCircleCheck} style={{ color: "#21BF68" }} />
-                                        Deployment Protection 
+                                        <FontAwesomeIcon
+                                            icon={faCircleCheck}
+                                            style={{ color: "#21BF68" }}
+                                        />
+                                        Deployment Protection
                                     </p>
                                     <p>
-                                        <FontAwesomeIcon icon={faCircleCheck} style={{ color: "#21BF68" }} />
-                                        Skew Protection 
+                                        <FontAwesomeIcon
+                                            icon={faCircleCheck}
+                                            style={{ color: "#21BF68" }}
+                                        />
+                                        Skew Protection
                                     </p>
                                 </div>
                             </div>
@@ -290,20 +334,31 @@ const StackForgeProjectDetails = () => {
                         <div className="productionDeploymentMultiCellFlex">
                             <div className="productionDeploymentCellShort">
                                 <div className="productionDeploymentCellShortHeader">
-                                    <h2>Previous Updates</h2>
+                                    <h2>Previous Deployments</h2>
                                     <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
                                 </div>
                                 <div className="previousDeploymentsList">
-                                    {commits && commits.map((commit) => (
-                                        <div key={commit.sha} className="previousCommitItem" onClick={() => { navigate("/update-details", { state: { commitDetails: commit, repository: projectDetails.project.repository, owner: projectDetails.project.created_by } }) }}>
+                                    {commits.map((commit) => (
+                                        <div key={commit.sha} className="previousCommitItem">
                                             <span>
                                                 <p>
-                                                    <FontAwesomeIcon icon={faCodeCommit} /> {commit.sha.substring(0, 6)} - {commit.commit.message}
+                                                    <FontAwesomeIcon icon={faCodeCommit} />{" "}
+                                                    {commit.sha.substring(0, 6)} -{" "}
+                                                    {commit.commit.message}
                                                 </p>
-                                                <small>by {commit.commit.author.name} on {new Date(commit.commit.author.date).toLocaleDateString()}</small>
+                                                <small>
+                                                    by {commit.commit.author.name} on{" "}
+                                                    {new Date(
+                                                        commit.commit.author.date
+                                                    ).toLocaleDateString()}
+                                                </small>
                                             </span>
                                             <div>
-                                                <img src={commit.author?.avatar_url} alt={commit.author?.login} className="commitAvatar" />
+                                                <img
+                                                    src={commit.author?.avatar_url}
+                                                    alt={commit.author?.login}
+                                                    className="commitAvatar"
+                                                />
                                             </div>
                                         </div>
                                     ))}
@@ -322,34 +377,59 @@ const StackForgeProjectDetails = () => {
                                                     <div>
                                                         <strong>Status:</strong>
                                                         <span>
-                                                            <i className="statusDot" style={{ backgroundColor: analytics.websiteAnalytics.status === 200 ? "#21BF68" : "#E54B4B" }}></i>
-                                                            <p>{analytics.websiteAnalytics.status === 200 ? "OK" : analytics.websiteAnalytics.status}</p>
+                                                            <i
+                                                                className="statusDot"
+                                                                style={{
+                                                                    backgroundColor:
+                                                                        analytics.websiteAnalytics.status ===
+                                                                            200
+                                                                            ? "#21BF68"
+                                                                            : "#E54B4B"
+                                                                }}
+                                                            ></i>
+                                                            <p>
+                                                                {analytics.websiteAnalytics.status === 200
+                                                                    ? "OK"
+                                                                    : analytics.websiteAnalytics.status}
+                                                            </p>
                                                         </span>
                                                     </div>
                                                     <div>
-                                                        <strong>Response Time:</strong> 
-                                                        <p>{analytics.websiteAnalytics.responseTime} ms</p>
+                                                        <strong>Response Time:</strong>
+                                                        <p>
+                                                            {analytics.websiteAnalytics.responseTime} ms
+                                                        </p>
                                                     </div>
                                                 </div>
                                             )}
-                                            <digv className="productionAnalyticsListItemDivider"/>
+
+                                            <div className="productionAnalyticsListItemDivider" />
+
                                             {analytics.repositoryAnalytics && (
                                                 <div className="productionAnalyticsListItem">
                                                     <div>
-                                                        <strong>Name:</strong> 
-                                                        <p>{analytics.repositoryAnalytics.full_name}</p>
+                                                        <strong>Name:</strong>
+                                                        <p>
+                                                            {analytics.repositoryAnalytics.full_name}
+                                                        </p>
                                                     </div>
                                                     <div>
-                                                        <strong>Stars:</strong> 
-                                                        <p>{analytics.repositoryAnalytics.stargazers_count}</p>
+                                                        <strong>Stars:</strong>
+                                                        <p>
+                                                            {analytics.repositoryAnalytics.stargazers_count}
+                                                        </p>
                                                     </div>
                                                     <div>
-                                                        <strong>Forks:</strong> 
-                                                        <p>{analytics.repositoryAnalytics.forks_count}</p>
+                                                        <strong>Forks:</strong>
+                                                        <p>
+                                                            {analytics.repositoryAnalytics.forks_count}
+                                                        </p>
                                                     </div>
                                                     <div>
-                                                        <strong>Open Issues:</strong> 
-                                                        <p>{analytics.repositoryAnalytics.open_issues_count}</p>
+                                                        <strong>Open Issues:</strong>
+                                                        <p>
+                                                            {analytics.repositoryAnalytics.open_issues_count}
+                                                        </p>
                                                     </div>
                                                 </div>
                                             )}
@@ -365,8 +445,22 @@ const StackForgeProjectDetails = () => {
                     </div>
                 </div>
             )}
+            {isLoaded && !projectDetails?.project && (
+                <div
+                    className="addProjectsCellHeaderContainer"
+                    style={{ justifyContent: "center" }}
+                >
+                    <div className="loading-wrapper">
+                        <div className="loading-circle" />
+                        <label className="loading-title">Stack Forge</label>
+                    </div>
+                </div>
+            )}
             {!isLoaded && (
-                <div className="projectDetailsCellHeaderContainer" style={{ justifyContent: "center" }}>
+                <div
+                    className="addProjectsCellHeaderContainer"
+                    style={{ justifyContent: "center" }}
+                >
                     <div className="loading-wrapper">
                         <div className="loading-circle" />
                         <label className="loading-title">Stack Forge</label>

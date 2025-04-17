@@ -265,39 +265,6 @@ const StackForgeUpdateDetails = () => {
                                     </div>
                                 ))
                             )}
-
-                             {/*<div className="commit-files-changed-container" style={{ overflow: "scroll" }}>
-
-                        
-                        <main className="right-panel">
-                            <div className="files-changed-header">
-                                <h2>{totalFilesChanged} files changed</h2>
-                                <div className="lines-changed">
-                                    <span className="additions">+{totalAdditions}</span>
-                                    <span className="deletions">-{totalDeletions}</span>
-                                </div>
-                                <div className="code-search-bar">
-                                    <FontAwesomeIcon icon={faSearch} />
-                                    <input type="text" placeholder="Search within code" className="search-input" />
-                                </div>
-                            </div>
-                            <div className="files-changed-list">
-                                {filteredFiles.map((file) => (
-                                    <div key={file.sha} className="file-diff-card">
-                                        <div className="file-diff-header">
-                                            <span className="file-name">{file.filename}</span>
-                                            <span className={file-status ${file.status}}>{file.status}</span>
-                                            <span className="file-line-changes">
-                                                +{file.additions} -{file.deletions}
-                                            </span>
-                                        </div>
-                                        {renderDiffView(file.patch)}
-                                    </div>
-                                ))}
-                            </div>
-                        </main>
-                    </div>
-                    */}
                         </div>
                     </div>
                 </div>
