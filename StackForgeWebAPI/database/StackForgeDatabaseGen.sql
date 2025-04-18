@@ -245,6 +245,8 @@ CREATE TABLE deployment_logs
 (
     orgid TEXT,
     username TEXT,
+    project_name TEXT,
+    project_id TEXT,
     action TEXT,
     deployment_id TEXT,
     timestamp TIMESTAMP,
@@ -252,3 +254,16 @@ CREATE TABLE deployment_logs
 );
 DROP INDEX IF EXISTS idx_deployment_logs;
 CREATE INDEX idx_deployment_logs ON deployment_logs (orgid, username);
+
+DROP TABLE IF EXISTS build_logs; 
+CREATE TABLE build_logs (
+    orgid TEXT,
+    username TEXT,
+    deployment_id TEXT,
+    build_log_id TEXT PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL,
+    log_path TEXT NOT NULL,
+    log_messages TEXT NOT NULL
+);
+DROP INDEX IF EXISTS idx_build_logs;
+CREATE INDEX idx_build_logs ON build_logs (orgid, username, deployment_id);

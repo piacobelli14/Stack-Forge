@@ -9,10 +9,33 @@ const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
 const { spawnSync, spawn } = require("child_process");
-const { Route53Client, ChangeResourceRecordSetsCommand, ListResourceRecordSetsCommand } = require("@aws-sdk/client-route-53");
-const { ECRClient, DescribeRepositoriesCommand, CreateRepositoryCommand, GetAuthorizationTokenCommand } = require("@aws-sdk/client-ecr");
-const { ECSClient, RegisterTaskDefinitionCommand, DescribeServicesCommand, CreateServiceCommand, UpdateServiceCommand } = require("@aws-sdk/client-ecs");
-const { ElasticLoadBalancingV2Client, DescribeRulesCommand, CreateRuleCommand, ModifyRuleCommand, DescribeTargetGroupsCommand, CreateTargetGroupCommand } = require("@aws-sdk/client-elastic-load-balancing-v2");
+const {
+    Route53Client,
+    ChangeResourceRecordSetsCommand,
+    ListResourceRecordSetsCommand
+} = require("@aws-sdk/client-route-53");
+const {
+    ECRClient,
+    DescribeRepositoriesCommand,
+    CreateRepositoryCommand,
+    GetAuthorizationTokenCommand
+} = require("@aws-sdk/client-ecr");
+const {
+    ECSClient,
+    RegisterTaskDefinitionCommand,
+    DescribeServicesCommand,
+    CreateServiceCommand,
+    UpdateServiceCommand
+} = require("@aws-sdk/client-ecs");
+const {
+    ElasticLoadBalancingV2Client,
+    DescribeRulesCommand,
+    CreateRuleCommand,
+    ModifyRuleCommand,
+    DescribeTargetGroupsCommand,
+    CreateTargetGroupCommand
+} = require("@aws-sdk/client-elastic-load-balancing-v2");
+
 const route53Client = new Route53Client({ region: process.env.AWS_REGION });
 
 class DeployManager {
@@ -25,8 +48,7 @@ class DeployManager {
     commandExists(cmd) {
         try {
             const result = spawnSync(cmd, ["--version"], { encoding: "utf-8" });
-            if (result.status === 0) return true;
-            return false;
+            return result.status === 0;
         } catch {
             return false;
         }
@@ -35,23 +57,18 @@ class DeployManager {
     runCommand(cmd, cwd, env, mainLogPath) {
         const commandLogPath = path.join(path.dirname(mainLogPath), `cmd-${uuidv4()}.log`);
         fs.writeFileSync(commandLogPath, "");
-
         fs.appendFileSync(mainLogPath, `\n> Running command: ${cmd}\n`);
         if (cwd) fs.appendFileSync(mainLogPath, `CWD: ${cwd}\n`);
-
         const parts = cmd.split(" ");
-        const shellCmd = `${cmd} >> ${commandLogPath} 2>&1`;
         const result = spawnSync(parts[0], parts.slice(1), {
             cwd,
             env,
             shell: true,
             stdio: ["ignore", "ignore", "ignore"]
         });
-
         const commandOutput = fs.readFileSync(commandLogPath, "utf-8");
         fs.appendFileSync(mainLogPath, commandOutput);
         fs.appendFileSync(mainLogPath, `Exit code: ${result.status}\n`);
-
         if (result.status !== 0) throw new Error(`Command failed: ${cmd}`);
         return commandLogPath;
     }
@@ -96,7 +113,12 @@ class DeployManager {
         const auth = await this.ecr.send(new GetAuthorizationTokenCommand({}));
         const token = Buffer.from(auth.authorizationData[0].authorizationToken, "base64").toString();
         const [username, password] = token.split(":");
-        this.runCommand(`docker login -u ${username} -p ${password} ${auth.authorizationData[0].proxyEndpoint}`, null, process.env, mainLogPath);
+        this.runCommand(
+            `docker login -u ${username} -p ${password} ${auth.authorizationData[0].proxyEndpoint}`,
+            null,
+            process.env,
+            mainLogPath
+        );
         this.runCommand(`docker build -t ${projectName} .`, workspaceRoot, process.env, mainLogPath);
         this.runCommand(`docker tag ${projectName}:latest ${repoUri}:latest`, null, process.env, mainLogPath);
         this.runCommand(`docker push ${repoUri}:latest`, null, process.env, mainLogPath);
@@ -129,16 +151,18 @@ class DeployManager {
             const resp = await this.elbv2.send(new DescribeTargetGroupsCommand({ Names: [projectName] }));
             return resp.TargetGroups[0].TargetGroupArn;
         } catch {
-            const resp = await this.elbv2.send(new CreateTargetGroupCommand({
-                Name: projectName,
-                Protocol: "HTTP",
-                Port: 3000,
-                VpcId: process.env.VPC_ID,
-                TargetType: "ip",
-                HealthCheckProtocol: "HTTP",
-                HealthCheckPath: "/",
-                Matcher: { HttpCode: "200-399" }
-            }));
+            const resp = await this.elbv2.send(
+                new CreateTargetGroupCommand({
+                    Name: projectName,
+                    Protocol: "HTTP",
+                    Port: 3000,
+                    VpcId: process.env.VPC_ID,
+                    TargetType: "ip",
+                    HealthCheckProtocol: "HTTP",
+                    HealthCheckPath: "/",
+                    Matcher: { HttpCode: "200-399" }
+                })
+            );
             return resp.TargetGroups[0].TargetGroupArn;
         }
     }
@@ -155,58 +179,112 @@ class DeployManager {
             existing = false;
         }
         if (!existing) {
-            await this.ecs.send(new CreateServiceCommand({
-                cluster,
-                serviceName,
-                taskDefinition: taskDefArn,
-                desiredCount: 1,
-                launchType: "FARGATE",
-                networkConfiguration: {
-                    awsvpcConfiguration: {
-                        subnets: process.env.SUBNETS.split(","),
-                        securityGroups: process.env.SECURITY_GROUPS.split(","),
-                        assignPublicIp: "ENABLED"
-                    }
-                },
-                loadBalancers: [
-                    {
-                        targetGroupArn,
-                        containerName: projectName,
-                        containerPort: 3000
-                    }
-                ]
-            }));
+            await this.ecs.send(
+                new CreateServiceCommand({
+                    cluster,
+                    serviceName,
+                    taskDefinition: taskDefArn,
+                    desiredCount: 1,
+                    launchType: "FARGATE",
+                    networkConfiguration: {
+                        awsvpcConfiguration: {
+                            subnets: process.env.SUBNETS.split(","),
+                            securityGroups: process.env.SECURITY_GROUPS.split(","),
+                            assignPublicIp: "ENABLED"
+                        }
+                    },
+                    loadBalancers: [
+                        {
+                            targetGroupArn,
+                            containerName: projectName,
+                            containerPort: 3000
+                        }
+                    ]
+                })
+            );
         } else {
             await this.ecs.send(new UpdateServiceCommand({ cluster, service: serviceName, taskDefinition: taskDefArn }));
         }
         const rules = await this.elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
-        const hostRule = rules.Rules.find(r =>
-            r.Conditions &&
-            r.Conditions.some(c =>
-                c.Field === "host-header" &&
-                c.HostHeaderConfig.Values.includes(`${domainName}.stackforgeengine.com`)
-            )
+        const hostRule = rules.Rules.find(
+            r =>
+                r.Conditions &&
+                r.Conditions.some(
+                    c =>
+                        c.Field === "host-header" &&
+                        c.HostHeaderConfig.Values.includes(`${domainName}.stackforgeengine.com`)
+                )
         );
         if (!hostRule) {
-            await this.elbv2.send(new CreateRuleCommand({
-                ListenerArn: listenerArn,
-                Priority: parseInt(process.env.RULE_PRIORITY, 10),
-                Conditions: [{ Field: "host-header", HostHeaderConfig: { Values: [`${domainName}.stackforgeengine.com`] } }],
-                Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
-            }));
+            await this.elbv2.send(
+                new CreateRuleCommand({
+                    ListenerArn: listenerArn,
+                    Priority: parseInt(process.env.RULE_PRIORITY, 10),
+                    Conditions: [
+                        { Field: "host-header", HostHeaderConfig: { Values: [`${domainName}.stackforgeengine.com`] } }
+                    ],
+                    Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
+                })
+            );
         } else {
-            await this.elbv2.send(new ModifyRuleCommand({
-                RuleArn: hostRule.RuleArn,
-                Conditions: [{ Field: "host-header", HostHeaderConfig: { Values: [`${domainName}.stackforgeengine.com`] } }]
-            }));
+            await this.elbv2.send(
+                new ModifyRuleCommand({
+                    RuleArn: hostRule.RuleArn,
+                    Conditions: [
+                        { Field: "host-header", HostHeaderConfig: { Values: [`${domainName}.stackforgeengine.com`] } }
+                    ]
+                })
+            );
         }
     }
 
-    async launchContainer({ userID, organizationID, projectName, domainName, repository, branch, teamName, rootDirectory, installCommand, buildCommand, envVars }) {
-        const workspaceRoot = path.join(process.env.DEPLOY_WORKSPACE || "/tmp", `${projectName}-${uuidv4()}`);
+    async recordBuildLogCombined(orgid, username, deploymentId, logDir, streamBuffer = "") {
+        let fileLogs = "";
+        try {
+            const files = fs.readdirSync(logDir).filter(f => f.endsWith(".log"));
+            for (const f of files) {
+                fileLogs += fs.readFileSync(path.join(logDir, f), "utf-8") + "\n";
+            }
+        } catch (err) {
+            fileLogs = `Error reading log files: ${err.message}\n`;
+        }
+        const combined = fileLogs + streamBuffer;
+        await pool.query(
+            `INSERT INTO build_logs 
+         (orgid, username, deployment_id, build_log_id, timestamp, log_path, log_messages)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [
+                orgid,
+                username,
+                deploymentId,
+                uuidv4(),
+                new Date().toISOString(),
+                logDir,
+                combined
+            ]
+        );
+    }
+
+    async launchContainer({
+        userID,
+        organizationID,
+        projectName,
+        domainName,
+        repository,
+        branch,
+        teamName,
+        rootDirectory,
+        installCommand,
+        buildCommand,
+        envVars
+    }) {
+        const workspaceRoot = path.join(
+            process.env.DEPLOY_WORKSPACE || "/tmp",
+            `${projectName}-${uuidv4()}`
+        );
         fs.mkdirSync(workspaceRoot, { recursive: true });
         const logPath = path.join(workspaceRoot, "deploy.log");
-        fs.writeFileSync(logPath, ""); // Initialize empty file
+        fs.writeFileSync(logPath, "");
 
         let repoUrl = repository;
         if (!/^https?:\/\//i.test(repository) && !/^git@/i.test(repository)) {
@@ -217,7 +295,8 @@ class DeployManager {
         const installCmd = installCommand || "npm install";
         const [installName] = installCmd.split(" ");
         if (!this.commandExists(installName)) this.runCommand(`npm install -g ${installName}`, null, process.env, logPath);
-        if (!fs.existsSync(path.join(projectRoot, "node_modules"))) this.runCommand(installCmd, projectRoot, { ...process.env, ...envVars }, logPath);
+        if (!fs.existsSync(path.join(projectRoot, "node_modules")))
+            this.runCommand(installCmd, projectRoot, { ...process.env, ...envVars }, logPath);
         const buildCmd = buildCommand || "npm run build";
         const [buildName] = buildCmd.split(" ");
         if (!this.commandExists(buildName)) this.runCommand(`npm install -g ${buildName}`, null, process.env, logPath);
@@ -230,11 +309,23 @@ class DeployManager {
         return logPath;
     }
 
-    async cloneAndBuild({ repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, envVars, projectName }) {
-        const workspaceRoot = path.join(process.env.DEPLOY_WORKSPACE || "/tmp", `${projectName}-${uuidv4()}`);
+    async cloneAndBuild({
+        repository,
+        branch,
+        rootDirectory,
+        outputDirectory,
+        buildCommand,
+        installCommand,
+        envVars,
+        projectName
+    }) {
+        const workspaceRoot = path.join(
+            process.env.DEPLOY_WORKSPACE || "/tmp",
+            `${projectName}-${uuidv4()}`
+        );
         fs.mkdirSync(workspaceRoot, { recursive: true });
         const logPath = path.join(workspaceRoot, "build.log");
-        fs.writeFileSync(logPath, ""); // Initialize empty file
+        fs.writeFileSync(logPath, "");
 
         let repoUrl = repository;
         if (!/^https?:\/\//i.test(repository) && !/^git@/i.test(repository)) {
@@ -250,12 +341,17 @@ class DeployManager {
             const installCmd = installCommand || "npm install";
             const [installName] = installCmd.split(" ");
             if (!this.commandExists(installName)) this.runCommand(`npm install -g ${installName}`, null, process.env, logPath);
-            if (!fs.existsSync(path.join(projectRoot, "node_modules"))) this.runCommand(installCmd, projectRoot, { ...process.env, ...envVars }, logPath);
+            if (!fs.existsSync(path.join(projectRoot, "node_modules")))
+                this.runCommand(installCmd, projectRoot, { ...process.env, ...envVars }, logPath);
             const buildCmd = buildCommand || "npm run build";
             const [buildName] = buildCmd.split(" ");
             if (!this.commandExists(buildName)) this.runCommand(`npm install -g ${buildName}`, null, process.env, logPath);
             this.runCommand(buildCmd, projectRoot, { ...process.env, ...envVars }, logPath);
-            spawn("npx", ["serve", "-s", path.join(projectRoot, outputDirectory || "build"), "-l", "3000"], { detached: true, stdio: "ignore" }).unref();
+            spawn(
+                "npx",
+                ["serve", "-s", path.join(projectRoot, outputDirectory || "build"), "-l", "3000"],
+                { detached: true, stdio: "ignore" }
+            ).unref();
             return logPath;
         } catch (err) {
             err.logPath = logPath;
@@ -263,26 +359,29 @@ class DeployManager {
         }
     }
 
-    async cloneAndBuildStream({ repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, envVars, projectName }, onData) {
-        const workspaceRoot = path.join(process.env.DEPLOY_WORKSPACE || "/tmp", `${projectName}-${uuidv4()}`);
-        const logDir = path.join(workspaceRoot, "logs"); 
-        const repoDir = path.join(workspaceRoot, "repo"); 
+    async cloneAndBuildStream(
+        { repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, envVars, projectName },
+        onData
+    ) {
+        const workspaceRoot = path.join(
+            process.env.DEPLOY_WORKSPACE || "/tmp",
+            `${projectName}-${uuidv4()}`
+        );
+        const logDir = path.join(workspaceRoot, "logs");
+        const repoDir = path.join(workspaceRoot, "repo");
         onData(`Process ID: ${process.pid}, Setting up workspace directory: ${workspaceRoot}\n`);
         try {
             if (fs.existsSync(workspaceRoot)) {
                 onData(`Cleaning up existing directory: ${workspaceRoot}\n`);
-                fs.rmSync(workspaceRoot, { recursive: true, force: true }); 
+                fs.rmSync(workspaceRoot, { recursive: true, force: true });
                 onData(`Cleaned up directory: ${workspaceRoot}\n`);
             } else {
                 onData(`No existing directory found: ${workspaceRoot}\n`);
             }
-
             fs.mkdirSync(workspaceRoot, { recursive: true });
             onData(`Created new directory: ${workspaceRoot}\n`);
-
             fs.mkdirSync(logDir, { recursive: true });
             onData(`Created log directory: ${logDir}\n`);
-
             let dirContents = fs.readdirSync(workspaceRoot);
             if (dirContents.length > 1 || (dirContents.length === 1 && dirContents[0] !== "logs")) {
                 onData(`Error: Directory ${workspaceRoot} is not empty after creation. Contents: ${dirContents.join(", ")}\n`);
@@ -306,28 +405,26 @@ class DeployManager {
 
         const executeWithSummary = async (cmd, cwd, env, summary) => {
             onData(`Starting: ${summary}\n`);
-            const logPath = path.join(logDir, `cmd-${uuidv4()}.log`);
-            fs.writeFileSync(logPath, ""); 
+            const cmdLog = path.join(logDir, `cmd-${uuidv4()}.log`);
+            fs.writeFileSync(cmdLog, "");
             const parts = cmd.split(" ");
             const child = spawn(parts[0], parts.slice(1), { cwd, env });
-
             let output = "";
-            child.stdout.on("data", (data) => {
+            child.stdout.on("data", data => {
                 output += data.toString();
-                fs.appendFileSync(logPath, data.toString());
+                fs.appendFileSync(cmdLog, data.toString());
             });
-            child.stderr.on("data", (data) => {
+            child.stderr.on("data", data => {
                 output += data.toString();
-                fs.appendFileSync(logPath, data.toString());
+                fs.appendFileSync(cmdLog, data.toString());
             });
-
             return new Promise((resolve, reject) => {
-                child.on("error", (err) => {
-                    fs.appendFileSync(logPath, err.message);
+                child.on("error", err => {
+                    fs.appendFileSync(cmdLog, err.message);
                     onData(`Failed: ${summary}\nError Details: ${err.message}\n`);
                     reject(new Error(`Command failed: ${cmd}\n${err.message}`));
                 });
-                child.on("close", (code) => {
+                child.on("close", code => {
                     if (code === 0) {
                         onData(`Completed: ${summary}\n`);
                         resolve();
@@ -342,7 +439,6 @@ class DeployManager {
         try {
             fs.mkdirSync(repoDir, { recursive: true });
             onData(`Created repo directory: ${repoDir}\n`);
-
             let repoDirContents = fs.readdirSync(repoDir);
             if (repoDirContents.length > 0) {
                 onData(`Error: Repo directory ${repoDir} is not empty before clone. Contents: ${repoDirContents.join(", ")}\n`);
@@ -361,7 +457,6 @@ class DeployManager {
             const projectRoot = path.join(repoDir, rootDirectory || "");
             const installCmd = installCommand || "npm install";
             const [installName] = installCmd.split(" ");
-
             if (!this.commandExists(installName)) {
                 await executeWithSummary(
                     `npm install -g ${installName}`,
@@ -384,7 +479,6 @@ class DeployManager {
 
             const buildCmd = buildCommand || "npm run build";
             const [buildName] = buildCmd.split(" ");
-
             if (!this.commandExists(buildName)) {
                 await executeWithSummary(
                     `npm install -g ${buildName}`,
@@ -407,6 +501,8 @@ class DeployManager {
                 stdio: "ignore"
             }).unref();
             onData("Local server started successfully\n");
+
+            return logDir;
         } catch (err) {
             try {
                 const dirContentsOnError = fs.readdirSync(workspaceRoot);
@@ -420,53 +516,191 @@ class DeployManager {
             throw err;
         }
     }
-    async launchWebsite({ userID, organizationID, projectName, domainName, template, repository, branch, teamName, rootDirectory, outputDirectory, buildCommand, installCommand, envVars }) {
+
+    async launchWebsite({
+        userID,
+        organizationID,
+        projectName,
+        domainName,
+        template,
+        repository,
+        branch,
+        teamName,
+        rootDirectory,
+        outputDirectory,
+        buildCommand,
+        installCommand,
+        envVars
+    }) {
         const deploymentId = uuidv4();
         const timestamp = new Date().toISOString();
         const url = `https://${domainName}.stackforgeengine.com`;
-        const projectID = uuidv4();
-        await pool.query(
-            `INSERT INTO projects 
-      (orgid, username, project_id, name, description, branch, team_name, root_directory, output_directory, build_command, install_command, env_vars, created_by, created_at, updated_at, url, repository, current_deployment, image) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-      ON CONFLICT DO NOTHING;`,
-            [organizationID, userID, projectID, projectName, null, branch, teamName, rootDirectory, outputDirectory, buildCommand, installCommand, JSON.stringify(envVars), userID, timestamp, timestamp, url, repository, deploymentId, null]
+        const workspaceRoot = path.join(
+            process.env.DEPLOY_WORKSPACE || "/tmp",
+            `${projectName}-${uuidv4()}`
         );
-        const domainId = uuidv4();
-        await pool.query(
-            `INSERT INTO domains 
-      (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT DO NOTHING;`,
-            [organizationID, userID, domainId, domainName, projectID, userID, timestamp, timestamp]
+        fs.mkdirSync(workspaceRoot, { recursive: true });
+        const logPath = path.join(workspaceRoot, "deploy.log");
+        fs.writeFileSync(logPath, "");
+
+        let projectID;
+        let isNewProject = false;
+        let domainId;
+        const existingProjRes = await pool.query(
+            "SELECT project_id FROM projects WHERE orgid = $1 AND username = $2 AND name = $3",
+            [organizationID, userID, projectName]
         );
-        await pool.query(
-            `INSERT INTO deployments 
-      (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`,
-            [organizationID, userID, deploymentId, projectID, domainId, "building", url, template || "default", timestamp, timestamp, timestamp]
-        );
-        await pool.query(
-            `INSERT INTO deployment_logs 
-      (orgid, username, action, deployment_id, timestamp, ip_address) 
-      VALUES ($1, $2, $3, $4, $5, $6);`,
-            [organizationID, userID, "launch", deploymentId, timestamp, "127.0.0.1"]
-        );
-        await this.updateDNSRecord(domainName);
-        let logPath = null;
-        try {
-            logPath = await this.launchContainer({ userID, organizationID, projectName, domainName, repository, branch, teamName, rootDirectory, installCommand, buildCommand, envVars });
-            await pool.query("UPDATE deployments SET status=$1, updated_at=$2 WHERE deployment_id=$3", ["active", new Date().toISOString(), deploymentId]);
-            return { url, deploymentId, logPath };
-        } catch (error) {
-            await pool.query("UPDATE deployments SET status=$1, updated_at=$2 WHERE deployment_id=$3", ["failed", new Date().toISOString(), deploymentId]);
+
+        if (existingProjRes.rows.length > 0) {
+            projectID = existingProjRes.rows[0].project_id;
+            await pool.query(
+                `UPDATE projects
+         SET current_deployment = $1, updated_at = $2
+         WHERE project_id = $3`,
+                [deploymentId, timestamp, projectID]
+            );
+        } else {
+            isNewProject = true;
+            projectID = uuidv4();
+            domainId = uuidv4();
+        }
+
+        if (!isNewProject) {
+            const existingDomainRes = await pool.query(
+                "SELECT domain_id FROM domains WHERE project_id = $1 AND domain_name = $2",
+                [projectID, domainName]
+            );
+            if (existingDomainRes.rows.length > 0) {
+                domainId = existingDomainRes.rows[0].domain_id;
+                await pool.query(
+                    `UPDATE domains
+           SET updated_at = $1
+           WHERE domain_id = $2`,
+                    [timestamp, domainId]
+                );
+            } else {
+                domainId = uuidv4();
+                await pool.query(
+                    `INSERT INTO domains 
+           (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [organizationID, userID, domainId, domainName, projectID, userID, timestamp, timestamp]
+                );
+            }
+
+            await pool.query(
+                `INSERT INTO deployments 
+         (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                [organizationID, userID, deploymentId, projectID, domainId, "building", url, template || "default", timestamp, timestamp, timestamp]
+            );
+
+            const action = isNewProject ? "launch" : "update";
             await pool.query(
                 `INSERT INTO deployment_logs 
-        (orgid, username, action, deployment_id, timestamp, ip_address) 
-        VALUES ($1, $2, $3, $4, $5, $6);`,
-                [organizationID, userID, "build_failed", deploymentId, new Date().toISOString(), "127.0.0.1"]
+         (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [organizationID, userID, projectID, projectName, action, deploymentId, timestamp, "127.0.0.1"]
             );
-            error.logPath = logPath;
+        }
+
+        try {
+            await this.updateDNSRecord(domainName);
+        } catch (error) {
+            fs.appendFileSync(logPath, `DNS update failed: ${error.message}\n`);
+            throw error;
+        }
+
+        try {
+            await this.launchContainer({
+                userID,
+                organizationID,
+                projectName,
+                domainName,
+                repository,
+                branch,
+                teamName,
+                rootDirectory,
+                installCommand,
+                buildCommand,
+                envVars
+            });
+
+            if (isNewProject) {
+                await pool.query(
+                    `INSERT INTO projects 
+           (orgid, username, project_id, name, description, branch, team_name, root_directory, output_directory, build_command, install_command, env_vars, created_by, created_at, updated_at, url, repository, current_deployment, image) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+                    [
+                        organizationID,
+                        userID,
+                        projectID,
+                        projectName,
+                        null,
+                        branch,
+                        teamName,
+                        rootDirectory,
+                        outputDirectory,
+                        buildCommand,
+                        installCommand,
+                        JSON.stringify(envVars),
+                        userID,
+                        timestamp,
+                        timestamp,
+                        url,
+                        repository,
+                        deploymentId,
+                        null
+                    ]
+                );
+
+                await pool.query(
+                    `INSERT INTO domains 
+           (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [organizationID, userID, domainId, domainName, projectID, userID, timestamp, timestamp]
+                );
+
+                await pool.query(
+                    `INSERT INTO deployments 
+           (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                    [organizationID, userID, deploymentId, projectID, domainId, "active", url, template || "default", timestamp, timestamp, timestamp]
+                );
+
+                await pool.query(
+                    `INSERT INTO deployment_logs 
+           (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [organizationID, userID, projectID, projectName, "launch", deploymentId, timestamp, "127.0.0.1"]
+                );
+            } else {
+                await pool.query(
+                    "UPDATE deployments SET status = $1, updated_at = $2 WHERE deployment_id = $3",
+                    ["active", new Date().toISOString(), deploymentId]
+                );
+            }
+
+            await this.recordBuildLogCombined(organizationID, userID, deploymentId, path.dirname(logPath));
+
+            return { url, deploymentId, logPath };
+        } catch (error) {
+            if (!isNewProject) {
+                await pool.query(
+                    "UPDATE deployments SET status = $1, updated_at = $2 WHERE deployment_id = $3",
+                    ["failed", new Date().toISOString(), deploymentId]
+                );
+
+                await pool.query(
+                    `INSERT INTO deployment_logs 
+           (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [organizationID, userID, projectID, projectName, "build_failed", deploymentId, new Date().toISOString(), "127.0.0.1"]
+                );
+
+                await this.recordBuildLogCombined(organizationID, userID, deploymentId, path.dirname(logPath));
+            }
+
             throw error;
         }
     }
@@ -478,39 +712,180 @@ class DeployManager {
         const deploymentId = uuidv4();
         const timestamp = new Date().toISOString();
         const url = `https://${domainName}.stackforgeengine.com`;
-        const projectID = uuidv4();
-        await pool.query(
-            `INSERT INTO projects 
-      (orgid, username, project_id, name, description, branch, team_name, root_directory, output_directory, build_command, install_command, env_vars, created_by, created_at, updated_at, url, repository, current_deployment, image) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-      ON CONFLICT DO NOTHING;`,
-            [organizationID, userID, projectID, projectName, null, branch, teamName, rootDirectory, outputDirectory, buildCommand, installCommand, JSON.stringify(envVars), userID, timestamp, timestamp, url, repository, deploymentId, null]
+        const workspaceRoot = path.join(
+            process.env.DEPLOY_WORKSPACE || "/tmp",
+            `${projectName}-${uuidv4()}`
         );
-        const domainId = uuidv4();
-        await pool.query(
-            `INSERT INTO domains 
-      (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT DO NOTHING;`,
-            [organizationID, userID, domainId, domainName, projectID, userID, timestamp, timestamp]
+        const logDir = path.join(workspaceRoot, "logs");
+        try {
+            if (fs.existsSync(workspaceRoot)) {
+                onData(`Cleaning up existing directory: ${workspaceRoot}\n`);
+                fs.rmSync(workspaceRoot, { recursive: true, force: true });
+                onData(`Cleaned up directory: ${workspaceRoot}\n`);
+            }
+            fs.mkdirSync(workspaceRoot, { recursive: true });
+            fs.mkdirSync(logDir, { recursive: true });
+            onData(`Created workspace and log directories: ${workspaceRoot}, ${logDir}\n`);
+        } catch (err) {
+            onData(`Failed to set up directories: ${err.message}\n`);
+            throw new Error(`Directory setup failed: ${err.message}`);
+        }
+
+        let projectID;
+        let isNewProject = false;
+        let domainId;
+        const existingProjRes = await pool.query(
+            "SELECT project_id FROM projects WHERE orgid = $1 AND username = $2 AND name = $3",
+            [organizationID, userID, projectName]
         );
-        await pool.query(
-            `INSERT INTO deployments 
-      (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`,
-            [organizationID, userID, deploymentId, projectID, domainId, "building", url, template || "default", timestamp, timestamp, timestamp]
-        );
-        await pool.query(
-            `INSERT INTO deployment_logs 
-        (orgid, username, action, deployment_id, timestamp, ip_address) 
-        VALUES ($1, $2, $3, $4, $5, $6);`,
-            [organizationID, userID, "launch", deploymentId, timestamp, "127.0.0.1"]
-        );
-        await this.updateDNSRecord(domainName);
-        await this.cloneAndBuildStream(
-            { repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, envVars, projectName },
-            onData
-        );
+
+        if (existingProjRes.rows.length > 0) {
+            projectID = existingProjRes.rows[0].project_id;
+            await pool.query(
+                `UPDATE projects
+         SET current_deployment = $1, updated_at = $2
+         WHERE project_id = $3`,
+                [deploymentId, timestamp, projectID]
+            );
+        } else {
+            isNewProject = true;
+            projectID = uuidv4();
+            domainId = uuidv4();
+        }
+
+        if (!isNewProject) {
+            const existingDomainRes2 = await pool.query(
+                "SELECT domain_id FROM domains WHERE project_id = $1 AND domain_name = $2",
+                [projectID, domainName]
+            );
+            if (existingDomainRes2.rows.length > 0) {
+                domainId = existingDomainRes2.rows[0].domain_id;
+                await pool.query(
+                    `UPDATE domains
+           SET updated_at = $1
+           WHERE domain_id = $2`,
+                    [timestamp, domainId]
+                );
+            } else {
+                domainId = uuidv4();
+                await pool.query(
+                    `INSERT INTO domains 
+           (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [organizationID, userID, domainId, domainName, projectID, userID, timestamp, timestamp]
+                );
+            }
+
+            await pool.query(
+                `INSERT INTO deployments 
+         (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                [organizationID, userID, deploymentId, projectID, domainId, "building", url, template || "default", timestamp, timestamp, timestamp]
+            );
+
+            const actionStream = isNewProject ? "launch" : "update";
+            await pool.query(
+                `INSERT INTO deployment_logs 
+         (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [organizationID, userID, projectID, projectName, actionStream, deploymentId, timestamp, "127.0.0.1"]
+            );
+        }
+
+        let streamBuffer = "";
+        const capturingOnData = chunk => {
+            streamBuffer += chunk;
+            onData(chunk);
+        };
+
+        try {
+            await this.updateDNSRecord(domainName);
+            capturingOnData("DNS record updated successfully\n");
+        } catch (error) {
+            capturingOnData(`DNS update failed: ${error.message}\n`);
+            throw error;
+        }
+
+        try {
+            await this.cloneAndBuildStream(
+                { repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, envVars, projectName },
+                capturingOnData
+            );
+
+            if (isNewProject) {
+                await pool.query(
+                    `INSERT INTO projects 
+           (orgid, username, project_id, name, description, branch, team_name, root_directory, output_directory, build_command, install_command, env_vars, created_by, created_at, updated_at, url, repository, current_deployment, image) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+                    [
+                        organizationID,
+                        userID,
+                        projectID,
+                        projectName,
+                        null,
+                        branch,
+                        teamName,
+                        rootDirectory,
+                        outputDirectory,
+                        buildCommand,
+                        installCommand,
+                        JSON.stringify(envVars),
+                        userID,
+                        timestamp,
+                        timestamp,
+                        url,
+                        repository,
+                        deploymentId,
+                        null
+                    ]
+                );
+
+                await pool.query(
+                    `INSERT INTO domains 
+           (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [organizationID, userID, domainId, domainName, projectID, userID, timestamp, timestamp]
+                );
+
+                await pool.query(
+                    `INSERT INTO deployments 
+           (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                    [organizationID, userID, deploymentId, projectID, domainId, "active", url, template || "default", timestamp, timestamp, timestamp]
+                );
+
+                await pool.query(
+                    `INSERT INTO deployment_logs 
+           (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [organizationID, userID, projectID, projectName, "launch", deploymentId, timestamp, "127.0.0.1"]
+                );
+            } else {
+                await pool.query(
+                    "UPDATE deployments SET status = $1, updated_at = $2 WHERE deployment_id = $3",
+                    ["active", new Date().toISOString(), deploymentId]
+                );
+            }
+
+            await this.recordBuildLogCombined(organizationID, userID, deploymentId, logDir, streamBuffer);
+        } catch (error) {
+            if (!isNewProject) {
+                await pool.query(
+                    "UPDATE deployments SET status = $1, updated_at = $2 WHERE deployment_id = $3",
+                    ["failed", new Date().toISOString(), deploymentId]
+                );
+
+                await pool.query(
+                    `INSERT INTO deployment_logs 
+           (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    [organizationID, userID, projectID, projectName, "build_failed", deploymentId, new Date().toISOString(), "127.0.0.1"]
+                );
+
+                await this.recordBuildLogCombined(organizationID, userID, deploymentId, logDir, streamBuffer);
+            }
+            throw error;
+        }
     }
 
     async updateDNSRecord(subdomain) {
@@ -521,12 +896,14 @@ class DeployManager {
         const recordName = `${subdomain}.stackforgeengine.com`;
         let changes = [];
         try {
-            const listResp = await route53Client.send(new ListResourceRecordSetsCommand({
-                HostedZoneId: hostedZoneId,
-                StartRecordName: recordName,
-                StartRecordType: "CNAME",
-                MaxItems: "1"
-            }));
+            const listResp = await route53Client.send(
+                new ListResourceRecordSetsCommand({
+                    HostedZoneId: hostedZoneId,
+                    StartRecordName: recordName,
+                    StartRecordType: "CNAME",
+                    MaxItems: "1"
+                })
+            );
             const existing = listResp.ResourceRecordSets && listResp.ResourceRecordSets[0];
             if (existing && existing.Name.replace(/\.$/, "") === recordName) {
                 changes.push({
@@ -557,15 +934,15 @@ class DeployManager {
     async getDeploymentStatus(deploymentId, organizationID, userID) {
         const result = await pool.query(
             `SELECT 
-          d.*,
-          p.name AS project_name,
-          dm.domain_name AS domain,
-          o.orgname 
-        FROM deployments d
-        LEFT JOIN projects p ON d.project_id = p.project_id
-        LEFT JOIN domains dm ON d.domain_id = dm.domain_id
-        JOIN organizations o ON d.orgid = o.orgid
-        WHERE d.deployment_id = $1 AND d.orgid = $2 AND d.username = $3;`,
+         d.*,
+         p.name AS project_name,
+         dm.domain_name AS domain,
+         o.orgname 
+       FROM deployments d
+       LEFT JOIN projects p ON d.project_id = p.project_id
+       LEFT JOIN domains dm ON d.domain_id = dm.domain_id
+       JOIN organizations o ON d.orgid = o.orgid
+       WHERE d.deployment_id = $1 AND d.orgid = $2 AND d.username = $3;`,
             [deploymentId, organizationID, userID]
         );
         if (result.rows.length === 0) throw new Error("Deployment not found or access denied");
@@ -575,18 +952,18 @@ class DeployManager {
     async listDeployments(organizationID) {
         const result = await pool.query(
             `SELECT 
-          d.deployment_id,
-          d.orgid,
-          d.username,
-          d.status,
-          d.url,
-          d.template,
-          d.created_at,
-          d.updated_at,
-          d.last_deployed_at
-        FROM deployments d
-        WHERE d.orgid = $1
-        ORDER BY d.created_at DESC;`,
+         d.deployment_id,
+         d.orgid,
+         d.username,
+         d.status,
+         d.url,
+         d.template,
+         d.created_at,
+         d.updated_at,
+         d.last_deployed_at
+       FROM deployments d
+       WHERE d.orgid = $1
+       ORDER BY d.created_at DESC;`,
             [organizationID]
         );
         return result.rows;
@@ -594,11 +971,9 @@ class DeployManager {
 
     async listProjects(organizationID) {
         const result = await pool.query(
-            `SELECT 
-          *
-        FROM projects
-        WHERE orgid = $1
-        ORDER BY created_at DESC;`,
+            `SELECT * FROM projects
+       WHERE orgid = $1
+       ORDER BY created_at DESC;`,
             [organizationID]
         );
         return result.rows;
@@ -607,17 +982,17 @@ class DeployManager {
     async listDomains(organizationID) {
         const result = await pool.query(
             `SELECT 
-          domain_id,
-          orgid,
-          username,
-          domain_name,
-          project_id,
-          created_by,
-          created_at,
-          updated_at
-        FROM domains
-        WHERE orgid = $1
-        ORDER BY created_at DESC;`,
+         domain_id,
+         orgid,
+         username,
+         domain_name,
+         project_id,
+         created_by,
+         created_at,
+         updated_at
+       FROM domains
+       WHERE orgid = $1
+       ORDER BY created_at DESC;`,
             [organizationID]
         );
         return result.rows;
@@ -642,9 +1017,24 @@ router.get("/deploy-project-stream", (req, res, next) => {
             if (res.flush) res.flush();
         }, 15000);
         res.write(`: connected\n\n`);
-        const { userID, organizationID, repository, branch, teamName, projectName, rootDirectory, outputDirectory, buildCommand, installCommand } = req.query;
+        const {
+            userID,
+            organizationID,
+            repository,
+            branch,
+            teamName,
+            projectName,
+            rootDirectory,
+            outputDirectory,
+            buildCommand,
+            installCommand
+        } = req.query;
         let envVars = [];
-        try { envVars = JSON.parse(req.query.envVars || "[]"); } catch { envVars = []; }
+        try {
+            envVars = JSON.parse(req.query.envVars || "[]");
+        } catch {
+            envVars = [];
+        }
         const domainName = projectName.toLowerCase().replace(/\s+/g, "-");
         function sendLine(chunk) {
             let safe = chunk.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
@@ -658,7 +1048,21 @@ router.get("/deploy-project-stream", (req, res, next) => {
 
         try {
             await deployManager.launchWebsiteStream(
-                { userID, organizationID, projectName, domainName, template: "default", repository, branch, teamName, rootDirectory, outputDirectory, buildCommand, installCommand, envVars },
+                {
+                    userID,
+                    organizationID,
+                    projectName,
+                    domainName,
+                    template: "default",
+                    repository,
+                    branch,
+                    teamName,
+                    rootDirectory,
+                    outputDirectory,
+                    buildCommand,
+                    installCommand,
+                    envVars
+                },
                 sendLine
             );
             clearInterval(heartbeat);
@@ -671,7 +1075,6 @@ router.get("/deploy-project-stream", (req, res, next) => {
         }
     });
 });
-
 
 router.post("/status", authenticateToken, async (req, res, next) => {
     const { organizationID, userID, deploymentId } = req.body;
@@ -718,15 +1121,47 @@ router.post("/list-domains", authenticateToken, async (req, res, next) => {
 });
 
 router.post("/deploy-project", authenticateToken, async (req, res, next) => {
-    const { userID, organizationID, repository, branch, teamName, projectName, rootDirectory, outputDirectory, buildCommand, installCommand, envVars } = req.body;
-    if (!repository || !branch || !projectName) return res.status(400).json({ message: "Missing required deployment information." });
+    const {
+        userID,
+        organizationID,
+        repository,
+        branch,
+        teamName,
+        projectName,
+        rootDirectory,
+        outputDirectory,
+        buildCommand,
+        installCommand,
+        envVars
+    } = req.body;
+    if (!repository || !branch || !projectName)
+        return res.status(400).json({ message: "Missing required deployment information." });
     try {
-        const existingProjectResult = await pool.query("SELECT * FROM projects WHERE orgid = $1 AND username = $2 AND name = $3", [organizationID, userID, projectName]);
-        if (existingProjectResult.rows.length > 0) return res.status(400).json({ message: "A project with the same name already exists for this user and organization." });
         const domainName = projectName.toLowerCase().replace(/\s+/g, "-");
         try {
-            const deploymentResult = await deployManager.launchWebsite({ userID, organizationID, projectName, domainName, template: "default", repository, branch, teamName, rootDirectory, outputDirectory, buildCommand, installCommand, envVars });
-            return res.status(200).json({ message: "Project deployed successfully.", url: deploymentResult.url, deploymentId: deploymentResult.deploymentId, buildLog: deploymentResult.logPath });
+            const deploymentResult = await deployManager.launchWebsite({
+                userID,
+                organizationID,
+                projectName,
+                domainName,
+                template: "default",
+                repository,
+                branch,
+                teamName,
+                rootDirectory,
+                outputDirectory,
+                buildCommand,
+                installCommand,
+                envVars
+            });
+            return res
+                .status(200)
+                .json({
+                    message: "Project deployed successfully.",
+                    url: deploymentResult.url,
+                    deploymentId: deploymentResult.deploymentId,
+                    buildLog: deploymentResult.logPath
+                });
         } catch (err) {
             return res.status(500).json({ message: err.message, buildLog: err.logPath });
         }
@@ -739,11 +1174,21 @@ router.post("/deploy-project", authenticateToken, async (req, res, next) => {
 router.post("/project-details", authenticateToken, async (req, res, next) => {
     const { organizationID, userID, projectID } = req.body;
     try {
-        const projectResult = await pool.query("SELECT * FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3", [projectID, organizationID, userID]);
-        if (projectResult.rows.length === 0) return res.status(404).json({ message: "Project not found or access denied." });
+        const projectResult = await pool.query(
+            "SELECT * FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
+            [projectID, organizationID, userID]
+        );
+        if (projectResult.rows.length === 0)
+            return res.status(404).json({ message: "Project not found or access denied." });
         const project = projectResult.rows[0];
-        const domainsResult = await pool.query("SELECT * FROM domains WHERE project_id = $1 AND orgid = $2", [projectID, organizationID]);
-        const deploymentsResult = await pool.query("SELECT * FROM deployments WHERE project_id = $1 AND orgid = $2", [projectID, organizationID]);
+        const domainsResult = await pool.query("SELECT * FROM domains WHERE project_id = $1 AND orgid = $2", [
+            projectID,
+            organizationID
+        ]);
+        const deploymentsResult = await pool.query("SELECT * FROM deployments WHERE project_id = $1 AND orgid = $2", [
+            projectID,
+            organizationID
+        ]);
         return res.status(200).json({ project, domains: domainsResult.rows, deployments: deploymentsResult.rows });
     } catch (error) {
         if (!res.headersSent) return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
@@ -754,8 +1199,12 @@ router.post("/project-details", authenticateToken, async (req, res, next) => {
 router.post("/snapshot", authenticateToken, async (req, res, next) => {
     const { projectID, organizationID, userID } = req.body;
     try {
-        const projectResult = await pool.query("SELECT url FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3", [projectID, organizationID, userID]);
-        if (projectResult.rows.length === 0) return res.status(404).json({ message: "Project not found or access denied." });
+        const projectResult = await pool.query(
+            "SELECT url FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
+            [projectID, organizationID, userID]
+        );
+        if (projectResult.rows.length === 0)
+            return res.status(404).json({ message: "Project not found or access denied." });
         const url = projectResult.rows[0].url;
         const browser = await puppeteer.launch();
         const page = await browser.newPage();
@@ -783,7 +1232,8 @@ router.post("/git-commits", authenticateToken, async (req, res, next) => {
     try {
         if (!owner || !repo) return res.status(400).json({ message: "Owner and repository are required." });
         const result = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
-        if (result.rows.length === 0 || !result.rows[0].github_access_token) return res.status(400).json({ message: "GitHub account not connected." });
+        if (result.rows.length === 0 || !result.rows[0].github_access_token)
+            return res.status(400).json({ message: "GitHub account not connected." });
         const githubAccessToken = result.rows[0].github_access_token;
         let repoName = repo;
         let repoOwner = owner;
@@ -793,10 +1243,12 @@ router.post("/git-commits", authenticateToken, async (req, res, next) => {
             repoName = parts[1];
         }
         const url = `https://api.github.com/repos/${repoOwner}/${repoName}/commits`;
-        const gitResponse = await axios.get(url, { headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" } });
+        const gitResponse = await axios.get(url, {
+            headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
+        });
         return res.status(200).json(gitResponse.data);
     } catch (error) {
-        if (!res.headersSent) return res.status(500).json({ message: "Error fetching git commits." });
+        if (!res.headersSent) return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         next(error);
     }
 });
@@ -804,9 +1256,11 @@ router.post("/git-commits", authenticateToken, async (req, res, next) => {
 router.post("/git-commit-details", authenticateToken, async (req, res, next) => {
     const { userID, owner, repo, commitSha } = req.body;
     try {
-        if (!owner || !repo || !commitSha) return res.status(400).json({ message: "Owner, repository, and commitSha are required." });
+        if (!owner || !repo || !commitSha)
+            return res.status(400).json({ message: "Owner, repository, and commitSha are required." });
         const result = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
-        if (result.rows.length === 0 || !result.rows[0].github_access_token) return res.status(400).json({ message: "GitHub account not connected." });
+        if (result.rows.length === 0 || !result.rows[0].github_access_token)
+            return res.status(400).json({ message: "GitHub account not connected." });
         const githubAccessToken = result.rows[0].github_access_token;
         let repoName = repo;
         let repoOwner = owner;
@@ -816,10 +1270,12 @@ router.post("/git-commit-details", authenticateToken, async (req, res, next) => 
             repoName = parts[1];
         }
         const url = `https://api.github.com/repos/${repoOwner}/${repoName}/commits/${commitSha}`;
-        const gitResponse = await axios.get(url, { headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" } });
+        const gitResponse = await axios.get(url, {
+            headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
+        });
         return res.status(200).json(gitResponse.data);
     } catch (error) {
-        if (!res.headersSent) return res.status(400).json({ message: "Error fetching commit details." });
+        if (!res.headersSent) return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         next(error);
     }
 });
@@ -846,7 +1302,8 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                 repoName = parts[1];
             }
             const result = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
-            if (result.rows.length === 0 || !result.rows[0].github_access_token) return res.status(400).json({ message: "GitHub account not connected." });
+            if (result.rows.length === 0 || !result.rows[0].github_access_token)
+                return res.status(400).json({ message: "GitHub account not connected." });
             const githubAccessToken = result.rows[0].github_access_token;
             const repoResponse = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
                 headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
@@ -855,7 +1312,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
         }
         return res.status(200).json({ websiteAnalytics, repositoryAnalytics });
     } catch (error) {
-        if (!res.headersSent) return res.status(500).json({ message: "Error fetching analytics.", error: error.message });
+        if (!res.headersSent) return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         next(error);
     }
 });
