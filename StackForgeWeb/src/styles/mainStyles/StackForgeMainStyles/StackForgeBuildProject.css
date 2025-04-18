@@ -695,38 +695,65 @@
   color: #A3A3A3;
   margin-right: 0.6rem;
 }
-
-.importProjectsBuildLogsCell {
+.importProjectsBuildLogsCell, 
+.importProjectsBuildLogsCellLong {
   width: 100%;  
+  height: calc(100% - 30px); 
   display: flex; 
-  flex-direction: flex-start;
-  justify-content: center;
+  flex-direction: column;
+  justify-content: flex-start;
   align-items: flex-start; 
   box-sizing: border-box;
-  min-height: calc(100% - 60px);
-  max-height: calc(100% - 60px);
+  padding: 0; 
+  margin: 0;
+  padding: 30px 20px;
+  overflow-y: scroll;
+  overflow-x: hidden;
 }
 
-.importProjectsBuildLogsCellLogDisplay {
-  white-space: wrap; 
-  font-size: 0.8rem; 
-  font-weight: 700; 
-  color: #c1c1c1; 
-  width: 100%; 
-  text-align: left;
-  font-style: italic;
-  padding: 30px 20px;
-  box-sizing: border-box;
+.importProjectsBuildLogsCellLong {
+  padding-bottom: 100px;
 }
 
 .importProjectsBuildLogsCellLogDisplay {
   white-space: pre-wrap;
+  font-size: 0.8rem;
+  width: 100%;
+  text-align: left;
+  font-style: italic;
+  box-sizing: border-box;
+  margin-bottom: 0.5rem;
 }
 
-.errorLogLine {
+.log-content {
+  color: #c1c1c1;
+  font-weight: 500;
+}
+
+.log-content.errorLogLine {
   color: #E54B4B;
+  font-weight: 700;
 }
 
+.log-content.warningLogLine {
+  color: #E5A53B;
+  font-weight: 600;
+}
+
+.log-content.infoLogLine {
+  color: #5BA4E5;
+  font-weight: 500;
+}
+
+.log-content.debugLogLine {
+  color: #888888;
+  font-weight: 400;
+}
+
+.log-content.successLogLine {
+  color: #4BB543;
+  font-weight: 700;
+}
 
 .consoleLogsHeader {
   width: 100%; 
@@ -783,8 +810,9 @@
   font-size: 0.8rem; 
   font-weight: 600; 
   color: #c1c1c1; 
-  width: 70%; 
-  height: 100%;
+  width: 100%; 
+  min-height: 100%;
+  max-height: 100%;
   font-style: italic;
   padding: 30px 20px;
   box-sizing: border-box;

@@ -2,37 +2,22 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faSearch,
-  faThLarge,
-  faList,
   faCaretDown,
-  faCheck,
-  faInfo,
-  faKeyboard,
-  faInfoCircle,
-  faCircleInfo,
-  faGrip,
-  faSquare,
-  faSquareArrowUpRight,
-  faArrowUpRightFromSquare,
-  faEllipsisV,
-  faEllipsisH,
   faCodeBranch,
-  faArrowRightArrowLeft,
-  faXmarkSquare,
   faCheckDouble,
-  faDownLong,
+  faCircleInfo,
+  faArrowUpRightFromSquare,
+  faXmark,
   faClone,
+  faSquareCheck,
   faGlobe
 } from "@fortawesome/free-solid-svg-icons";
-import { faGit, faGithub } from "@fortawesome/free-brands-svg-icons";
+import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeBuildProject.css";
 import "../../styles/helperStyles/LoadingSpinner.css";
 import StackForgeNav from "../../helpers/StackForgeNav.jsx";
-import { showDialog } from "../../helpers/StackForgeAlert.jsx";
 import useAuth from "../../UseAuth.jsx";
 import useIsTouchDevice from "../../TouchDevice.jsx";
-import { faXmark } from "@fortawesome/free-solid-svg-icons/faXmark";
 
 const StackForgeBuildProject = () => {
   const navigate = useNavigate();
@@ -41,18 +26,19 @@ const StackForgeBuildProject = () => {
   const { token, userID, loading, organizationID } = useAuth();
   const [isLoaded, setIsLoaded] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
+  const [buildFinished, setBuildFinished] = useState(false);
   const [screenSize, setScreenSize] = useState(window.innerWidth);
-  const [resizeTrigger, setResizeTrigger] = useState(false);
   const [buildLogs, setBuildLogs] = useState([]);
-  const [typedLogs, setTypedLogs] = useState([]);
+  const [typedText, setTypedText] = useState("");
+  const [copied, setCopied] = useState(false);
   const scrollableContainerRef = useRef(null);
+  const logsContainerRef = useRef(null);
+  const typingIntervalRef = useRef(null);
   const repository = location.state?.repository;
   const personalName = location.state?.personalName;
   const personalImage = location.state?.personalImage;
   const teamName = location.state?.teamName;
   const teamImage = location.state?.teamImage;
-  const gitUsername = location.state?.gitUsername;
-  const gitID = location.state?.gitID;
   const changeTeamOpenRef = useRef(null);
   const [changeTeamOpen, setChangeTeamOpen] = useState(false);
   const changeTeamDropdownRef = useRef(null);
@@ -71,6 +57,8 @@ const StackForgeBuildProject = () => {
   const [outputDirectory, setOutputDirectory] = useState("");
   const [buildCommand, setBuildCommand] = useState("");
   const [installCommand, setInstallCommand] = useState("");
+  const buildLogsString = buildLogs.join("\n");
+  const [successfulDeployment, setSuccessfulDeployment] = useState(false);
 
   useEffect(() => {
     if (!loading && !token) navigate("/login");
@@ -81,7 +69,7 @@ const StackForgeBuildProject = () => {
       try {
         fetchBranches();
         setIsLoaded(true);
-      } catch (error) { }
+      } catch {}
     };
     if (!loading && token) fetchData();
   }, [userID, loading, token]);
@@ -92,7 +80,6 @@ const StackForgeBuildProject = () => {
       setChangeTeamOpen(false);
       setBranchOpen(false);
       setScreenSize(window.innerWidth);
-      setResizeTrigger(prev => !prev);
       setTimeout(() => setIsLoaded(true), 300);
     };
     window.addEventListener("resize", handleResize);
@@ -100,116 +87,102 @@ const StackForgeBuildProject = () => {
   }, []);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
+    const handleClickOutside = e => {
       if (
         changeTeamOpenRef.current &&
-        !changeTeamOpenRef.current.contains(event.target) &&
+        !changeTeamOpenRef.current.contains(e.target) &&
         changeTeamDropdownRef.current &&
-        !changeTeamDropdownRef.current.contains(event.target)
-      ) {
+        !changeTeamDropdownRef.current.contains(e.target)
+      )
         setChangeTeamOpen(false);
-      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [changeTeamOpenRef, changeTeamDropdownRef]);
+  }, []);
 
   useEffect(() => {
     if (changeTeamOpen && changeTeamOpenRef.current && changeTeamDropdownRef.current) {
-      const buttonRect = changeTeamOpenRef.current.getBoundingClientRect();
-      const dropdownRect = changeTeamDropdownRef.current.getBoundingClientRect();
-      let newTop = buttonRect.bottom + 5;
-      let newLeft = buttonRect.right - dropdownRect.width;
-      if (newTop + dropdownRect.height > window.innerHeight) {
-        newTop = window.innerHeight - dropdownRect.height;
-      }
-      if (newLeft < 0) {
-        newLeft = 0;
-      }
-      setChangeTeamDropdownPosition({ top: newTop, left: newLeft });
+      const b = changeTeamOpenRef.current.getBoundingClientRect();
+      const d = changeTeamDropdownRef.current.getBoundingClientRect();
+      let top = b.bottom + 5;
+      let left = b.right - d.width;
+      if (top + d.height > window.innerHeight) top = window.innerHeight - d.height;
+      if (left < 0) left = 0;
+      setChangeTeamDropdownPosition({ top, left });
     }
   }, [changeTeamOpen]);
 
   useEffect(() => {
+    const handleClickOutsideBranch = e => {
+      if (
+        branchOpenRef.current &&
+        !branchOpenRef.current.contains(e.target) &&
+        branchDropdownRef.current &&
+        !branchDropdownRef.current.contains(e.target)
+      )
+        setBranchOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutsideBranch);
+    return () => document.removeEventListener("mousedown", handleClickOutsideBranch);
+  }, []);
+
+  useEffect(() => {
     if (branchOpen && branchOpenRef.current && branchDropdownRef.current) {
-      const buttonRect = branchOpenRef.current.getBoundingClientRect();
-      const dropdownRect = branchDropdownRef.current.getBoundingClientRect();
-      let newTop = buttonRect.bottom + 5;
-      let newLeft = buttonRect.left;
-      if (newTop + dropdownRect.height > window.innerHeight) {
-        newTop = window.innerHeight - dropdownRect.height;
-      }
-      if (newLeft + dropdownRect.width > window.innerWidth) {
-        newLeft = window.innerWidth - dropdownRect.width;
-      }
-      setBranchDropdownPosition({ top: newTop, left: newLeft });
+      const b = branchOpenRef.current.getBoundingClientRect();
+      const d = branchDropdownRef.current.getBoundingClientRect();
+      let top = b.bottom + 5;
+      let left = b.left;
+      if (top + d.height > window.innerHeight) top = window.innerHeight - d.height;
+      if (left + d.width > window.innerWidth) left = window.innerWidth - d.width;
+      setBranchDropdownPosition({ top, left });
     }
   }, [branchOpen]);
 
   useEffect(() => {
-    const handleClickOutsideBranch = (event) => {
-      if (
-        branchOpenRef.current &&
-        !branchOpenRef.current.contains(event.target) &&
-        branchDropdownRef.current &&
-        !branchDropdownRef.current.contains(event.target)
-      ) {
-        setBranchOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutsideBranch);
-    return () => document.removeEventListener("mousedown", handleClickOutsideBranch);
-  }, [branchOpenRef, branchDropdownRef]);
+    if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
+    if (typedText.length >= buildLogsString.length) return;
+    typingIntervalRef.current = setInterval(() => {
+      setTypedText(prev => buildLogsString.slice(0, prev.length + 1));
+    }, 5);
+    return () => clearInterval(typingIntervalRef.current);
+  }, [buildLogsString, typedText]);
 
   useEffect(() => {
-    if (buildLogs.length > typedLogs.length) {
-      const newLog = buildLogs[buildLogs.length - 1];
-      setTypedLogs(prev => [...prev, ""]);
-      let charIndex = 0;
-      const interval = setInterval(() => {
-        setTypedLogs(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = newLog.slice(0, charIndex + 1);
-          return updated;
-        });
-        charIndex++;
-        if (charIndex >= newLog.length) {
-          clearInterval(interval);
-        }
-      }, 20);
-      return () => clearInterval(interval);
+    if (logsContainerRef.current) logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
+  }, [typedText]);
+
+  useEffect(() => {
+    if (buildFinished && typedText.length === buildLogsString.length) setIsDeploying(false);
+  }, [buildFinished, typedText, buildLogsString]);
+
+  useEffect(() => {
+    if (buildFinished && typedText.length === buildLogsString.length && buildLogs.includes("Deployment successful!")) {
+      setSuccessfulDeployment(true);
     }
-  }, [buildLogs]);
-  
+  }, [buildFinished, typedText, buildLogsString, buildLogs]);
 
   const fetchBranches = async () => {
     try {
-      const parts = repository.split("/");
-      const owner = parts[0];
-      const repoName = parts[1];
+      const [owner, repoName] = repository.split("/");
       const t = localStorage.getItem("token");
-      const response = await fetch("http://localhost:3000/git-branches", {
+      const r = await fetch("http://localhost:3000/git-branches", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${t}`
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
         body: JSON.stringify({ userID, owner, repo: repoName })
       });
-      if (!response.ok) throw new Error("Error fetching branches");
-      const data = await response.json();
+      if (!r.ok) throw new Error("Error fetching branches");
+      const data = await r.json();
       setBranches(data);
-      if (data.length > 0) {
-        setSelectedBranch(data[0].name);
-      }
-    } catch (error) { }
+      if (data.length > 0) setSelectedBranch(data[0].name);
+    } catch {}
   };
 
   const handleDeployProject = () => {
+    setSuccessfulDeployment(false);
     setIsDeploying(true);
+    setBuildFinished(false);
     setBuildLogs([]);
-    setTypedLogs([]);
-
+    setTypedText("");
     const params = new URLSearchParams({
       userID,
       organizationID,
@@ -224,32 +197,49 @@ const StackForgeBuildProject = () => {
       envVars: JSON.stringify(envVars),
       token: localStorage.getItem("token")
     });
-
     const sse = new EventSource(`http://localhost:3000/deploy-project-stream?${params.toString()}`);
-
-    sse.onmessage = (e) => {
-      const data = e.data.replace(/\\n/g, "\n");
-      if (data === "__BUILD_COMPLETE__") {
-        setIsDeploying(false);
+    sse.onmessage = e => {
+      const raw = e.data;
+      if (raw === "__BUILD_COMPLETE__") {
+        setBuildFinished(true);
         sse.close();
-        showDialog({ title: "Deployment Success", message: "Your project has been deployed successfully!" })
-          .then(() => navigate("/stackforge"));
-      } else if (data.startsWith("__BUILD_ERROR__")) {
-        const errMsg = data.replace("__BUILD_ERROR__", "");
-        setIsDeploying(false);
-        sse.close();
-        setBuildLogs(prev => [...prev, `ERROR: ${errMsg}`]);
-      } else {
-        setBuildLogs(prev => [...prev, data]);
+        setBuildLogs(p => [...p, "Deployment successful!"]);
+        return;
       }
+      if (raw.startsWith("__BUILD_ERROR__")) {
+        setBuildFinished(true);
+        sse.close();
+        setBuildLogs(p => [...p, `ERROR: ${raw.replace("__BUILD_ERROR__", "")}`]);
+        return;
+      }
+      const decoded = raw.replace(/\\r/g, "\r").replace(/\\n/g, "\n");
+      decoded.split("\n").forEach(seg => {
+        if (seg === "") return;
+        if (seg.includes("\r")) {
+          const last = seg.split("\r").pop();
+          setBuildLogs(p => {
+            if (p.length === 0) return [last];
+            const c = [...p];
+            c[c.length - 1] = last;
+            return c;
+          });
+        } else setBuildLogs(p => [...p, seg]);
+      });
     };
-
-    sse.onerror = (err) => {
-      console.error("SSE error", err);
-      setIsDeploying(false);
+    sse.onerror = () => {
+      setBuildFinished(true);
       sse.close();
-      setBuildLogs(prev => [...prev, "ERROR: Connection lost during build."]);
+      setBuildLogs(p => [...p, "ERROR: Connection lost during build."]);
     };
+  };
+
+  const handleCopyLogs = () => {
+    navigator.clipboard
+      .writeText(buildLogsString)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
   };
 
   const handleContainerScroll = () => {
@@ -257,44 +247,26 @@ const StackForgeBuildProject = () => {
     setBranchOpen(false);
   };
 
-  const toggleChangeTeamDropdown = () => {
-    setChangeTeamOpen(prev => !prev);
-  };
-
+  const toggleChangeTeamDropdown = () => setChangeTeamOpen(p => !p);
   const toggleChangeEnvironmentPopout = () => {
-    if (!changeEnvironmentOpen && envVars.length === 0) {
-      setEnvVars([{ key: "", value: "" }]);
-    }
-    setChangeEnvironmentOpen(prev => !prev);
+    if (!changeEnvironmentOpen && envVars.length === 0) setEnvVars([{ key: "", value: "" }]);
+    setChangeEnvironmentOpen(p => !p);
   };
+  const toggleBranchDropdown = () => setBranchOpen(p => !p);
 
-  const toggleBranchDropdown = () => {
-    setBranchOpen(prev => !prev);
-  };
-
-  const handleAddEnvVar = () => {
-    setEnvVars([...envVars, { key: "", value: "" }]);
-  };
-
-  const handleEnvVarChange = (index, field, newValue) => {
-    setEnvVars(prevEnvVars => {
-      const updated = [...prevEnvVars];
-      updated[index][field] = newValue;
-      return updated;
+  const handleAddEnvVar = () => setEnvVars([...envVars, { key: "", value: "" }]);
+  const handleEnvVarChange = (i, f, v) =>
+    setEnvVars(prev => {
+      const up = [...prev];
+      up[i][f] = v;
+      return up;
     });
-  };
-
-  const handleRemoveEnvVar = (index) => {
-    setEnvVars(prevEnvVars => prevEnvVars.filter((_, i) => i !== index));
-  };
+  const handleRemoveEnvVar = i => setEnvVars(prev => prev.filter((_, idx) => idx !== i));
 
   return (
     <div
       className="importProjectsPageWrapper"
-      style={{
-        background: "linear-gradient(to bottom, #322A54, #29282D)",
-        display: screenSize >= 5300 ? "none" : ""
-      }}
+      style={{ background: "linear-gradient(to bottom, #322A54, #29282D)", display: screenSize >= 5300 ? "none" : "" }}
     >
       <StackForgeNav activePage="main" />
       {isLoaded && (
@@ -324,7 +296,6 @@ const StackForgeBuildProject = () => {
                     </button>
                   </div>
                 </a>
-
                 <div className="importProjectsOperationsBar">
                   <div className="importProjectsOperationsFlex">
                     <div className="importProjectsOperationsContainerWrapper">
@@ -337,20 +308,13 @@ const StackForgeBuildProject = () => {
                         <FontAwesomeIcon
                           icon={faCaretDown}
                           className="importNewCaretIcon"
-                          style={{
-                            transform: changeTeamOpen ? "rotate(180deg)" : "rotate(0deg)",
-                            transition: "transform 0.3s ease"
-                          }}
+                          style={{ transform: changeTeamOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.3s ease" }}
                         />
                       </button>
                     </div>
                     <div className="importProjectsOperationsContainerWrapper">
                       <p>Project Name</p>
-                      <input
-                        className="importProjectsOperationsField"
-                        value={selectedProjectName}
-                        onChange={(e) => setSelectedProjectName(e.target.value)}
-                      />
+                      <input className="importProjectsOperationsField" value={selectedProjectName} onChange={e => setSelectedProjectName(e.target.value)} />
                     </div>
                   </div>
                 </div>
@@ -366,7 +330,7 @@ const StackForgeBuildProject = () => {
                           className="rootInput"
                           placeholder="Enter new root directory..."
                           value={rootDirectory}
-                          onChange={(e) => setRootDirectory(e.target.value)}
+                          onChange={e => setRootDirectory(e.target.value)}
                         />
                         <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                       </div>
@@ -384,7 +348,7 @@ const StackForgeBuildProject = () => {
                           className="rootInput"
                           placeholder="Ex. 'public'"
                           value={outputDirectory}
-                          onChange={(e) => setOutputDirectory(e.target.value)}
+                          onChange={e => setOutputDirectory(e.target.value)}
                         />
                         <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                       </div>
@@ -402,7 +366,7 @@ const StackForgeBuildProject = () => {
                           className="rootInput"
                           placeholder="Ex. 'npm run build'"
                           value={buildCommand}
-                          onChange={(e) => setBuildCommand(e.target.value)}
+                          onChange={e => setBuildCommand(e.target.value)}
                         />
                         <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                       </div>
@@ -419,7 +383,7 @@ const StackForgeBuildProject = () => {
                           className="rootInput"
                           placeholder="Ex. 'npm install'"
                           value={installCommand}
-                          onChange={(e) => setInstallCommand(e.target.value)}
+                          onChange={e => setInstallCommand(e.target.value)}
                         />
                         <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                       </div>
@@ -437,14 +401,11 @@ const StackForgeBuildProject = () => {
                             icon={faXmark}
                             className="importProjectsClosePopout"
                             onClick={toggleChangeEnvironmentPopout}
-                            style={{
-                              transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)",
-                              transition: "transform 0.3s ease"
-                            }}
+                            style={{ transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)", transition: "transform 0.3s ease" }}
                           />
                           <div className="importProjectsEnvVarsWrapper">
-                            {envVars.map((envVar, index) => (
-                              <div key={index} className="importProjectsEnvVarsRow">
+                            {envVars.map((envVar, i) => (
+                              <div key={i} className="importProjectsEnvVarsRow">
                                 <div className="importProjectsOperationsContainerWrapperShort">
                                   <div className="importProjectsOperationsField" style={{ backgroundColor: "rgba(30, 30, 30, 0.4)" }}>
                                     <input
@@ -452,7 +413,7 @@ const StackForgeBuildProject = () => {
                                       className="rootInput"
                                       placeholder="Key"
                                       value={envVar.key}
-                                      onChange={(e) => handleEnvVarChange(index, "key", e.target.value)}
+                                      onChange={e => handleEnvVarChange(i, "key", e.target.value)}
                                       style={{ color: "white" }}
                                     />
                                   </div>
@@ -464,12 +425,12 @@ const StackForgeBuildProject = () => {
                                       className="rootInput"
                                       placeholder="Value"
                                       value={envVar.value}
-                                      onChange={(e) => handleEnvVarChange(index, "value", e.target.value)}
+                                      onChange={e => handleEnvVarChange(i, "value", e.target.value)}
                                       style={{ color: "white" }}
                                     />
                                   </div>
                                 </div>
-                                <button className="importProjectsEnvVarsRemoveBtn" onClick={() => handleRemoveEnvVar(index)}>
+                                <button className="importProjectsEnvVarsRemoveBtn" onClick={() => handleRemoveEnvVar(i)}>
                                   -
                                 </button>
                               </div>
@@ -482,17 +443,14 @@ const StackForgeBuildProject = () => {
                           </div>
                         </div>
                       ) : (
-                        <button className="importProjectsOperationsField" onClick={toggleChangeEnvironmentPopout} style={{ transition: "transform 0.3s ease" }}>
+                        <button className="importProjectsOperationsField" onClick={toggleChangeEnvironmentPopout}>
                           <span>
                             <p>Environment Variables</p>
                           </span>
                           <FontAwesomeIcon
                             icon={faCaretDown}
                             className="importNewCaretIcon"
-                            style={{
-                              transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)",
-                              transition: "transform 0.3s ease"
-                            }}
+                            style={{ transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)", transition: "transform 0.3s ease" }}
                           />
                         </button>
                       )}
@@ -500,7 +458,7 @@ const StackForgeBuildProject = () => {
                   </div>
                 </div>
                 <div className="importProjectsOperationsBarSupplement">
-                  <button className="importProjectsDeployButton" onClick={handleDeployProject}>
+                  <button className="importProjectsDeployButton" onClick={handleDeployProject} disabled={isDeploying ? true : false}>
                     Deploy New Project
                   </button>
                 </div>
@@ -508,32 +466,67 @@ const StackForgeBuildProject = () => {
             </div>
 
             <div className="buildProjectsFlexCellTrailing">
-              <div className="consoleLogsHeader"> 
+              <div className="consoleLogsHeader">
                 <span>
                   <h3>Project Build Logs</h3>
-                  <button>
-                    <FontAwesomeIcon icon={faClone}/>
-                  </button> 
+                  <button onClick={handleCopyLogs}>
+                    <FontAwesomeIcon icon={copied ? faSquareCheck : faClone} />
+                  </button>
                 </span>
-                {isDeploying && <div className="loading-circle-supplement"/>}
+                {isDeploying && <div className="loading-circle-supplement" />}
               </div>
-              <div className="importProjectsBuildLogsCell">
-                {typedLogs.length === 0 ? (
+              <div className={successfulDeployment ? "importProjectsBuildLogsCellLong" : "importProjectsBuildLogsCell"} ref={logsContainerRef}>
+                {typedText === "" ? (
                   <div className="noBuildLogsDisplay">
-                    <FontAwesomeIcon icon={faGlobe}/>
+                    <FontAwesomeIcon icon={faGlobe} />
                   </div>
                 ) : (
-                  typedLogs.map((line, idx) => (
-                    <div className="importProjectsBuildLogsCellLogDisplay" key={idx}>
-                      <div style={line.startsWith("ERROR:") ? { color: "#E54B4B" } : undefined}>
-                        {line}
+                  typedText.split("\n").map((line, i) => {
+                    if (line === "Deployment successful!") {
+                      return (
+                        <div className="importProjectsBuildLogsCellLogDisplay" key={i}>
+                          <span className="log-content successLogLine">
+                            Deployment successful!{" "}
+                          </span>
+                        </div>
+                      );
+                    }
+                    const match = line.match(/^(\s*)(.*)$/);
+                    const indent = match[1] || "";
+                    const content = match[2] || "";
+                    const cleanedContent = content.replace(/`+/g, "");
+
+                    let logType = "";
+                    if (content.startsWith("ERROR:")) logType = "errorLogLine";
+                    else if (content.startsWith("WARNING:")) logType = "warningLogLine";
+                    else if (content.startsWith("INFO:")) logType = "infoLogLine";
+                    else if (content.startsWith("DEBUG:")) logType = "debugLogLine";
+
+                    return (
+                      <div className="importProjectsBuildLogsCellLogDisplay" key={i}>
+                        {indent}
+                        <span className={`log-content ${logType}`}>
+                          {cleanedContent}
+                        </span>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
+              {successfulDeployment && typedText.length === buildLogsString.length && (
+                <div className="importProjectsOperationsBarSupplement">
+                  <button
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      navigate("/stackforge");
+                    }}
+                    className="importProjectsDeployButton"
+                  >
+                    Go to project.
+                  </button>
+                </div>
+              )}
             </div>
-
           </div>
         </div>
       )}
@@ -547,7 +540,12 @@ const StackForgeBuildProject = () => {
       )}
       {changeTeamOpen && (
         <div className="importProjectsOperationsDropdownMenu" ref={changeTeamDropdownRef} style={{ top: changeTeamDropdownPosition.top * 1.02, left: changeTeamDropdownPosition.left }}>
-          <button onClick={() => { setSelectedTeamName(teamName); setChangeTeamOpen(false); }}>
+          <button
+            onClick={() => {
+              setSelectedTeamName(teamName);
+              setChangeTeamOpen(false);
+            }}
+          >
             <span>
               <img src={teamImage} alt="Team" />
               <strong>
@@ -558,7 +556,12 @@ const StackForgeBuildProject = () => {
             </span>
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
-          <button onClick={() => { setSelectedTeamName(personalName); setChangeTeamOpen(false); }}>
+          <button
+            onClick={() => {
+              setSelectedTeamName(personalName);
+              setChangeTeamOpen(false);
+            }}
+          >
             <span>
               <img src={personalImage} alt="Personal" />
               <strong>
@@ -574,10 +577,16 @@ const StackForgeBuildProject = () => {
       {branchOpen && (
         <div className="importProjectsBranchesDropdownMenu" ref={branchDropdownRef} style={{ top: branchDropdownPosition.top * 1.02, left: branchDropdownPosition.left }}>
           {branches && branches.length > 0 ? (
-            branches.map(branch => (
-              <button key={branch.name} onClick={() => { setSelectedBranch(branch.name); setBranchOpen(false); }}>
-                <span>{branch.name}</span>
-                {selectedBranch === branch.name && <FontAwesomeIcon icon={faCheckDouble} />}
+            branches.map(b => (
+              <button
+                key={b.name}
+                onClick={() => {
+                  setSelectedBranch(b.name);
+                  setBranchOpen(false);
+                }}
+              >
+                <span>{b.name}</span>
+                {selectedBranch === b.name && <FontAwesomeIcon icon={faCheckDouble} />}
               </button>
             ))
           ) : (
