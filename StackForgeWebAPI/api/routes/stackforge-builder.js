@@ -493,7 +493,7 @@ class DeployManager {
                 projectRoot,
                 { ...process.env, ...envVars },
                 `Building project with ${buildCmd}`
-            );
+            ); 
 
             onData("Starting local server for built artifacts\n");
             spawn("npx", ["serve", "-s", path.join(projectRoot, outputDirectory || "build"), "-l", "3000"], {
@@ -589,6 +589,11 @@ class DeployManager {
             }
 
             await pool.query(
+                "UPDATE deployments SET status = $1, updated_at = $2 WHERE project_id = $3 AND status = $4",
+                ["inactive", timestamp, projectID, "active"]
+            );
+
+            await pool.query(
                 `INSERT INTO deployments 
          (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
@@ -675,9 +680,10 @@ class DeployManager {
                     [organizationID, userID, projectID, projectName, "launch", deploymentId, timestamp, "127.0.0.1"]
                 );
             } else {
+                const now = new Date().toISOString();
                 await pool.query(
-                    "UPDATE deployments SET status = $1, updated_at = $2 WHERE deployment_id = $3",
-                    ["active", new Date().toISOString(), deploymentId]
+                    "UPDATE deployments SET status = $1, updated_at = $2, last_deployed_at = $2 WHERE deployment_id = $3",
+                    ["active", now, deploymentId]
                 );
             }
 
@@ -686,16 +692,17 @@ class DeployManager {
             return { url, deploymentId, logPath };
         } catch (error) {
             if (!isNewProject) {
+                const now = new Date().toISOString();
                 await pool.query(
                     "UPDATE deployments SET status = $1, updated_at = $2 WHERE deployment_id = $3",
-                    ["failed", new Date().toISOString(), deploymentId]
+                    ["failed", now, deploymentId]
                 );
 
                 await pool.query(
                     `INSERT INTO deployment_logs 
            (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                    [organizationID, userID, projectID, projectName, "build_failed", deploymentId, new Date().toISOString(), "127.0.0.1"]
+                    [organizationID, userID, projectID, projectName, "build_failed", deploymentId, now, "127.0.0.1"]
                 );
 
                 await this.recordBuildLogCombined(organizationID, userID, deploymentId, path.dirname(logPath));
@@ -775,6 +782,11 @@ class DeployManager {
                     [organizationID, userID, domainId, domainName, projectID, userID, timestamp, timestamp]
                 );
             }
+
+            await pool.query(
+                "UPDATE deployments SET status = $1, updated_at = $2 WHERE project_id = $3 AND status = $4",
+                ["inactive", timestamp, projectID, "active"]
+            );
 
             await pool.query(
                 `INSERT INTO deployments 
@@ -861,25 +873,27 @@ class DeployManager {
                     [organizationID, userID, projectID, projectName, "launch", deploymentId, timestamp, "127.0.0.1"]
                 );
             } else {
+                const now = new Date().toISOString();
                 await pool.query(
-                    "UPDATE deployments SET status = $1, updated_at = $2 WHERE deployment_id = $3",
-                    ["active", new Date().toISOString(), deploymentId]
+                    "UPDATE deployments SET status = $1, updated_at = $2, last_deployed_at = $2 WHERE deployment_id = $3",
+                    ["active", now, deploymentId]
                 );
             }
 
             await this.recordBuildLogCombined(organizationID, userID, deploymentId, logDir, streamBuffer);
         } catch (error) {
             if (!isNewProject) {
+                const now = new Date().toISOString();
                 await pool.query(
                     "UPDATE deployments SET status = $1, updated_at = $2 WHERE deployment_id = $3",
-                    ["failed", new Date().toISOString(), deploymentId]
+                    ["failed", now, deploymentId]
                 );
 
                 await pool.query(
                     `INSERT INTO deployment_logs 
            (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                    [organizationID, userID, projectID, projectName, "build_failed", deploymentId, new Date().toISOString(), "127.0.0.1"]
+                    [organizationID, userID, projectID, projectName, "build_failed", deploymentId, now, "127.0.0.1"]
                 );
 
                 await this.recordBuildLogCombined(organizationID, userID, deploymentId, logDir, streamBuffer);
@@ -1038,7 +1052,7 @@ router.get("/deploy-project-stream", (req, res, next) => {
         const domainName = projectName.toLowerCase().replace(/\s+/g, "-");
         function sendLine(chunk) {
             let safe = chunk.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
-            while (safe.length > 3500) {
+            while ((safe.length > 3500)) {
                 res.write(`data: ${safe.slice(0, 3500)}\n\n`);
                 safe = safe.slice(3500);
             }

@@ -148,8 +148,12 @@ const StackForgeBuildProject = () => {
   }, [buildLogsString, typedText]);
 
   useEffect(() => {
-    if (logsContainerRef.current) logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
-  }, [typedText]);
+    if (logsContainerRef.current) {
+      const container = logsContainerRef.current;
+      const bottomPadding = successfulDeployment ? 100 : 0;
+      container.scrollTop = container.scrollHeight - bottomPadding;
+    }
+  }, [typedText, successfulDeployment]);
 
   useEffect(() => {
     if (buildFinished && typedText.length === buildLogsString.length) setIsDeploying(false);
