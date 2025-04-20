@@ -267,3 +267,16 @@ CREATE TABLE build_logs (
 );
 DROP INDEX IF EXISTS idx_build_logs;
 CREATE INDEX idx_build_logs ON build_logs (orgid, username, deployment_id);
+
+DROP TABLE IF EXISTS runtime_logs;
+CREATE TABLE runtime_logs (
+    orgid TEXT,
+    username TEXT,
+    deployment_id TEXT,
+    build_log_id TEXT PRIMARY KEY,
+    timestamp TIMESTAMP NOT NULL,
+    runtime_path TEXT NOT NULL,
+    runtime_messages TEXT NOT NULL
+);
+DROP INDEX IF EXISTS idx_runtime_logs;
+CREATE INDEX idx_runtime_logs ON build_logs (orgid, username, deployment_id);
