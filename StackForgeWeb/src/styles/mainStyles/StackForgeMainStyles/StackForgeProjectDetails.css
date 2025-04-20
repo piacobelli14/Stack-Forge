@@ -22,11 +22,12 @@
 }
 
 .projectDetailsCellHeaderContainer {
-    display: flex;
+    display: flex; 
     flex-direction: column;
     justify-content: flex-start;
     align-items: center;
     width: 100vw;
+    height: calc(100vh - 60px) !important;
     min-height: calc(100vh - 60px) !important;
     overflow: visible;
     position: relative;
@@ -480,13 +481,24 @@
     transform: scale(1.05);
 }
 
-.statusDot {
+.statusDot, 
+.statusDotBig {
     border-radius: 50%; 
+    display: inline-block; 
+}
+
+.statusDot {
     min-width: 10px; 
     max-width: 10px; 
     height: 10px; 
-    display: inline-block; 
     margin-right: 5px; 
+}
+
+.statusDotBig {
+    min-width: 15px; 
+    max-width: 15px; 
+    height: 15px; 
+    margin-right: 10px; 
 }
 
 .productionDeploymentMultiCellFlex {
@@ -591,7 +603,7 @@
 .previousCommitItem img {
     width: 20px; 
     height: 20px; 
-    border-radius: 50%; 
+    border-radius: 4px; 
 }
 
 .previousCommitItem span {
@@ -645,22 +657,139 @@
     overflow-y: auto;
 }
 
-.productionAnalyticsListItem {
+.productionAnalyticsListTitleWrapper {
+    padding: 1rem 0.4rem;
+    display: flex; 
+    flex-direction: column;
+}
+
+.productionAnalyticsListTitle {
+    color: #c1c1c1; 
     width: 100%; 
+    text-align: left;
+    display: flex; 
+    justify-content: space-between;
+    align-items: center;
+}
+
+.productionAnalyticsListTitle span {
+    display: flex; 
+    justify-content: flex-start;
+    align-items: center;
+    gap: 1rem;
+}
+
+.productionAnalyticsListTitle span p {
+    font-size: 0.9rem !important;
+    font-weight: 700; 
+    font-style: italic;
+    text-overflow: ellipsis; 
+    overflow: hidden;
+    white-space: nowrap;;
+}
+
+.productionAnalyticsListTitle span img {
+    width: 30px; 
+    height: 30px; 
+    border-radius: 4px; 
+}
+
+.productionAnalyticsListStatusWrapper {
+    padding: 1rem 0.4rem;
+    display: flex; 
+    flex-direction: column;
+}
+
+.productionAnalyticsListStatus {
+    color: #c1c1c1; 
+    width: 100%; 
+    text-align: left;
+    display: flex; 
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+
+
+.performancegErrorDisplay {
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 1rem;
+    height: 100%; 
+}
+
+.performancegErrorDisplay a {
+    font-size: 0.9rem; 
+    font-weight: 900; 
+    font-style: italic; 
+    color: #9B68DD; 
+    margin: 0 0 0 1rem;
+    text-decoration: underline; 
+    cursor: pointer; 
+    transition: transform 0.3s ease, opacity 0.3s ease; 
+}
+
+.performancegErrorDisplay a svg {
+    font-size: 0.7rem;
+    margin-left: 0.4rem;
+}
+
+.performancegErrorDisplay a:hover {
+    opacity: 0.6; 
+    transform: scale(1.05);
+
+}
+
+.productionAnalyticsListStatus i {
+    font-size: 0.7rem; 
+    font-weight: 700;
+    font-style: italic;
+    padding: 0; 
+    margin: 0; 
+}
+
+.productionAnalyticsListStatus span {
+    display: flex; 
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 0.2rem;
+}
+
+.productionAnalyticsListStatus span p {
+    font-size: 1.4rem !important; 
+    font-weight: 800 !important;
+}
+
+
+.productionAnalyticsListItem,
+.productionAnalyticsListItemShort {
     display: flex;
     flex-direction: column; 
     justify-content: center;
     align-items: center;
 }
 
-.productionAnalyticsListItem div {
+.productionAnalyticsListItem {
+    width: 100%; 
+}
+
+.productionAnalyticsListItemShort {
+    width: 50%; 
+}
+
+.productionAnalyticsListItem div,
+.productionAnalyticsListItemShort div {
     display: flex; 
     justify-content: space-between;
     align-items: center;
     width: 100%;
 }
 
-.productionAnalyticsListItem div strong {
+.productionAnalyticsListItem div strong,
+.productionAnalyticsListItemShort div strong {
     font-size: 0.8rem; 
     font-weight: 800; 
     color: #c1c1c1; 
@@ -670,12 +799,20 @@
     white-space: nowrap;
 }
 
-.productionAnalyticsListItem div span {
+.productionAnalyticsListItem div svg,
+.productionAnalyticsListItemShort div svg {
+    margin-right: 1rem;
+}
+
+
+.productionAnalyticsListItem div span, 
+.productionAnalyticsListItemShort div span {
     display: flex;
     align-items: center;
 }
 
-.productionAnalyticsListItem div p {
+.productionAnalyticsListItem div p,
+.productionAnalyticsListItemShort div p {
     font-size: 0.75rem; 
     font-weight: 600; 
     color: #c1c1c1; 
@@ -687,10 +824,20 @@
     white-space: nowrap;
 }
 
-
 .productionAnalyticsListItemDivider {
     width: 100%; 
     height: 0.5px; 
     background-color: rgba(255, 255, 255, 0.4);
     margin: 1rem 0;
+}
+
+
+.productionAnalyticsList .echarts-for-react {
+    background: transparent;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.productionAnalyticsList .echarts-for-react canvas {
+    background: transparent !important;
 }

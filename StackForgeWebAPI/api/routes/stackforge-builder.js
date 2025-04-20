@@ -1532,38 +1532,155 @@ router.post("/git-commit-details", authenticateToken, async (req, res, next) => 
 });
 
 router.post("/git-analytics", authenticateToken, async (req, res, next) => {
-    const { userID, websiteURL, repository, owner } = req.body;
+    const { userID, websiteURL, repository, owner, projectName } = req.body;
     let websiteAnalytics = null;
     let repositoryAnalytics = null;
+
     try {
-        if (websiteURL) {
-            const startTime = Date.now();
-            const websiteResponse = await axios.get(websiteURL, { timeout: 30000 });
-            const responseTime = Date.now() - startTime;
-            let contentLength = websiteResponse.headers["content-length"];
-            if (!contentLength && websiteResponse.data) contentLength = websiteResponse.data.toString().length;
-            websiteAnalytics = { status: websiteResponse.status, responseTime, contentLength };
+        if (!websiteURL && !repository) {
+            return res.status(400).json({ message: "Either websiteURL or repository is required." });
         }
+
+        if (websiteURL) {
+            try {
+                const startTime = Date.now();
+                let websiteResponse;
+                try {
+                    websiteResponse = await axios.get(websiteURL, { timeout: 30000 });
+                } catch (httpErr) {
+                    websiteAnalytics = {
+                        status: httpErr.response?.status || 503,
+                        responseTime: Date.now() - startTime,
+                        contentLength: 0,
+                        headers: httpErr.response?.headers || {},
+                        performance: null,
+                        error: `HTTP request failed: ${httpErr.message}`
+                    };
+                }
+
+                if (websiteResponse) {
+                    const responseTime = Date.now() - startTime;
+                    let contentLength = websiteResponse.headers["content-length"] || (websiteResponse.data ? websiteResponse.data.toString().length : 0);
+
+                    let performanceMetrics = null;
+                    try {
+                        const browser = await puppeteer.launch({ headless: true });
+                        const page = await browser.newPage();
+                        await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 30000 });
+
+                        performanceMetrics = await page.evaluate(() => {
+                            const { loadEventEnd, navigationStart } = performance.timing;
+                            const pageLoadTime = loadEventEnd - navigationStart;
+                            const scripts = document.querySelectorAll("script").length;
+                            const images = document.querySelectorAll("img").length;
+                            const links = document.querySelectorAll("a").length;
+                            return { pageLoadTime, scripts, images, links };
+                        });
+
+                        await browser.close();
+                    } catch (puppeteerErr) {}
+
+                    websiteAnalytics = {
+                        status: websiteResponse.status,
+                        responseTime,
+                        contentLength,
+                        headers: {
+                            server: websiteResponse.headers["server"] || "Unknown",
+                            contentType: websiteResponse.headers["content-type"] || "Unknown",
+                            cacheControl: websiteResponse.headers["cache-control"] || "Unknown"
+                        },
+                        performance: performanceMetrics,
+                        error: null
+                    };
+                }
+            } catch (err) {
+                websiteAnalytics = { error: `Website analytics failed: ${err.message}` };
+            }
+        }
+
         if (repository) {
             let repoName = repository;
             let repoOwner = owner;
             if (repository.includes("/")) {
-                let parts = repository.split("/");
-                repoOwner = parts[0];
-                repoName = parts[1];
+                [repoOwner, repoName] = repository.split("/");
             }
+
             const result = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
-            if (result.rows.length === 0 || !result.rows[0].github_access_token)
+            if (result.rows.length === 0 || !result.rows[0].github_access_token) {
                 return res.status(400).json({ message: "GitHub account not connected." });
+            }
             const githubAccessToken = result.rows[0].github_access_token;
-            const repoResponse = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
-                headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
-            });
-            repositoryAnalytics = repoResponse.data;
+
+            try {
+                const repoResponse = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
+                    headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
+                });
+
+                const ownerResponse = await axios.get(`https://api.github.com/users/${repoOwner}`, {
+                    headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
+                });
+
+                const commitsResponse = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}/commits`, {
+                    headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" },
+                    params: { per_page: 100 }
+                });
+                const commitCount = commitsResponse.data.length;
+
+                const contributorsResponse = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}/contributors`, {
+                    headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
+                });
+                const contributorCount = contributorsResponse.data.length;
+                const topContributors = contributorsResponse.data.slice(0, 5).map(c => ({
+                    login: c.login,
+                    contributions: c.contributions
+                }));
+
+                const branchesResponse = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}/branches`, {
+                    headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
+                });
+                const branchCount = branchesResponse.data.length;
+
+                const pullsResponse = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}/pulls`, {
+                    headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" },
+                    params: { state: "all", per_page: 100 }
+                });
+                const pullRequestCount = pullsResponse.data.length;
+                const openPulls = pullsResponse.data.filter(pr => pr.state === "open").length;
+
+                repositoryAnalytics = {
+                    repoDetails: {
+                        name: repoResponse.data.name,
+                        fullName: repoResponse.data.full_name,
+                        description: repoResponse.data.description,
+                        stars: repoResponse.data.stargazers_count,
+                        forks: repoResponse.data.forks_count,
+                        issues: repoResponse.data.open_issues_count,
+                        createdAt: repoResponse.data.created_at,
+                        lastUpdated: repoResponse.data.updated_at,
+                        ownerAvatar: ownerResponse.data.avatar_url
+                    },
+                    stats: {
+                        commitCount,
+                        contributorCount,
+                        topContributors,
+                        branchCount,
+                        pullRequestCount,
+                        openPulls
+                    }
+                };
+            } catch (err) {
+                repositoryAnalytics = { error: `Repository analytics failed: ${err.message}` };
+            }
         }
-        return res.status(200).json({ websiteAnalytics, repositoryAnalytics });
+
+        return res.status(200).json({
+            websiteAnalytics,
+            repositoryAnalytics
+        });
     } catch (error) {
-        if (!res.headersSent) return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+        if (!res.headersSent) {
+            return res.status(500).json({ message: `Error processing analytics: ${error.message}` });
+        }
         next(error);
     }
 });

@@ -1,9 +1,39 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSearch, faThLarge, faList, faCaretDown, faCheck, faInfo, faKeyboard, faInfoCircle, faCircleInfo, faGrip, faSquare, faSquareArrowUpRight, faArrowUpRightFromSquare, faEllipsisV, faEllipsisH, faCodeBranch, faArrowRightArrowLeft, faArrowRotateLeft, faHammer, faGaugeHigh, faCircleCheck, faCodeCommit, faCaretRight } from "@fortawesome/free-solid-svg-icons";
+import {
+    faSearch,
+    faThLarge,
+    faList,
+    faCaretDown,
+    faCheck,
+    faInfo,
+    faKeyboard,
+    faInfoCircle,
+    faCircleInfo,
+    faGrip,
+    faSquare,
+    faSquareArrowUpRight,
+    faArrowUpRightFromSquare,
+    faEllipsisV,
+    faEllipsisH,
+    faCodeBranch,
+    faArrowRightArrowLeft,
+    faArrowRotateLeft,
+    faHammer,
+    faGaugeHigh,
+    faCircleCheck,
+    faCodeCommit,
+    faCaretRight,
+    faStar,
+    faCodePullRequest,
+    faUsers,
+    faFileCode,
+    faTriangleExclamation
+} from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeProjectDetails.css";
+import "../../styles/helperStyles/Unavailable.css";
 import "../../styles/helperStyles/LoadingSpinner.css";
 import StackForgeNav from "../../helpers/StackForgeNav";
 import { showDialog } from "../../helpers/StackForgeAlert";
@@ -134,7 +164,8 @@ const StackForgeProjectDetails = () => {
                     userID: userID,
                     websiteURL: projectDetails.project.url,
                     repository: projectDetails.project.repository,
-                    owner: projectDetails.project.created_by
+                    owner: projectDetails.project.created_by,
+                    projectName: projectDetails.project.name
                 })
             });
             if (!response.ok) {
@@ -162,7 +193,8 @@ const StackForgeProjectDetails = () => {
             }}
         >
             <StackForgeNav activePage="main" />
-            {isLoaded && (
+
+            {isLoaded && projectDetails?.project && (
                 <div className="projectDetailsCellHeaderContainer">
                     <div className="projectDetailsTopBar">
                         <h1>
@@ -215,7 +247,7 @@ const StackForgeProjectDetails = () => {
                                     ) : (
                                         <div className="productionDeploymentPlaceholder">
                                             <div className="loading-wrapper">
-                                            <div className="loading-circle" />
+                                                <div className="loading-circle" />
                                             </div>
                                         </div>
                                     )}
@@ -244,7 +276,7 @@ const StackForgeProjectDetails = () => {
                                                 ) : (
                                                     <>
                                                         <span className="statusDot" style={{ backgroundColor: "#E54B4B" }}></span>
-                                                        {projectDetails.deployments[0]?.status}
+                                                        {projectDetails.deployments[0]?.status?.charAt(0).toUpperCase() + projectDetails.deployments[0]?.status?.slice(1)}
                                                     </>
                                                 )}
                                             </span>
@@ -287,7 +319,161 @@ const StackForgeProjectDetails = () => {
                                 </div>
                             </div>
                         </div>
+                        
+
                         <div className="productionDeploymentMultiCellFlex">
+                            <div className="productionDeploymentMultiCellFlex">
+                                <div className="productionDeploymentCellShort">
+                                    <div className="productionDeploymentCellShortHeader">
+                                        <h2>Website Analytics</h2>
+                                        <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                    </div>
+
+                                    <div className="productionAnalyticsList">
+                                        {analytics ? (
+                                            analytics.websiteAnalytics && (
+
+                                                    <div className="productionAnalyticsListItem">
+                                                        <div className="productionAnalyticsListStatusWrapper"> 
+                                                            <label className="productionAnalyticsListStatus">
+                                                                <span> 
+                                                                    <div className="statusDotBig" style={{ backgroundColor: analytics.websiteAnalytics.status === 200 ? "#21BF68" : "#E54B4B" }}/>
+                                                                    <p>{analytics.websiteAnalytics.status} </p>
+                                                                </span>
+                                                                <i>{analytics.websiteAnalytics.status === 200 ? "OK" : analytics.websiteAnalytics.error || "Error"}</i>
+                                                            </label>
+                                                            <div className="productionAnalyticsListItemDivider" style={{"margin-bottom": 0}}/>
+                                                        </div>
+                                                        
+                                                        <div>
+                                                            <strong>Response Time:</strong>
+                                                            <p>{analytics.websiteAnalytics.responseTime} ms</p>
+                                                        </div>
+
+                                                        <div>
+                                                            <strong>Page Load Time:</strong>
+                                                            <p>{analytics.websiteAnalytics.performance?.pageLoadTime} ms</p>
+                                                        </div>
+                                                        <div>
+                                                            <strong>Resources:</strong>
+                                                            <p>
+                                                                Scripts: {analytics.websiteAnalytics.performance?.scriptCount} | 
+                                                                Images: {analytics.websiteAnalytics.performance?.imageCount} | 
+                                                                Links: {analytics.websiteAnalytics.performance?.linkCount}
+                                                            </p>
+                                                        </div>
+
+                                                        <div>
+                                                            <strong>Content Length:</strong>
+                                                            <p>{(analytics.websiteAnalytics.contentLength / 1024).toFixed(2)} KB</p>
+                                                        </div>
+
+                                                        <div>
+                                                            <strong>Server:</strong>
+                                                            <p>{analytics.websiteAnalytics.headers?.server}</p>
+                                                        </div>
+
+                                                    </div>
+
+                                            ) 
+                                        ) : (
+                                            <div className="loading-wrapper">
+                                                <div className="loading-circle" />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="productionDeploymentMultiCellFlex">
+                                <div className="productionDeploymentCellShort">
+                                    <div className="productionDeploymentCellShortHeader">
+                                        <h2>Performance</h2>
+                                        <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                    </div>
+
+                                    <div className="productionAnalyticsList" style={{alignItems: "center"}}>
+                                        {/* Line Plot Here */}
+
+                                        <strong className="performancegErrorDisplay">
+                                            <a>Runtime Logs<FontAwesomeIcon icon={faArrowUpRightFromSquare}/></a>
+                                            <a>Build Logs<FontAwesomeIcon icon={faArrowUpRightFromSquare}/></a>
+                                        </strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        
+                        <div className="productionDeploymentMultiCellFlex">
+                            <div className="productionDeploymentCellShort">
+                                <div className="productionDeploymentCellShortHeader">
+                                    <h2>Repository Analytics</h2>
+                                    <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                </div>
+                                <div className="productionAnalyticsList">
+                                    {analytics ? (
+                                        analytics.repositoryAnalytics && (
+                                            <div className="productionAnalyticsListItem">
+                                                <div className="productionAnalyticsListTitleWrapper">
+                                                    <label className="productionAnalyticsListTitle"> 
+                                                        <span>
+                                                            <img
+                                                                src={analytics.repositoryAnalytics.repoDetails?.ownerAvatar}
+                                                                alt=""
+                                                            />
+                                                            <p>{analytics.repositoryAnalytics.repoDetails?.fullName}</p>
+                                                        </span>
+                                                    </label>
+
+                                                    <div className="productionAnalyticsListItemDivider" style={{"margin-bottom": 0}}/>
+                                                </div>
+                                                
+                                                <div>
+                                                    <strong>
+                                                        <FontAwesomeIcon icon={faCodeCommit} /> Commits:
+                                                    </strong>
+                                                    <p>{analytics.repositoryAnalytics.stats?.commitCount}</p>
+                                                </div>
+                                                <div>
+                                                    <strong>
+                                                        <FontAwesomeIcon icon={faUsers} /> Contributors:
+                                                    </strong>
+                                                    <p>{analytics.repositoryAnalytics.stats?.contributorCount}</p>
+                                                </div>
+                                                <div>
+                                                    <strong>
+                                                        <FontAwesomeIcon icon={faCodeBranch} /> Branches:
+                                                    </strong>
+                                                    <p>{analytics.repositoryAnalytics.stats?.branchCount}</p>
+                                                </div>
+
+                                                <div>
+                                                    <strong>
+                                                        <FontAwesomeIcon icon={faCodePullRequest}/> Open Pull Requests:
+                                                    </strong>
+                                                    <p>{analytics.repositoryAnalytics.stats?.openPulls}</p>
+                                                </div>
+
+                                                <div>
+                                                    <strong>
+                                                        <FontAwesomeIcon icon={faTriangleExclamation} /> 
+                                                        Open Issues:
+                                                    </strong>
+                                                    <p>{analytics.repositoryAnalytics.repoDetails?.issues}</p>
+                                                </div>
+                                            </div>
+                                            
+                                        ) 
+                                    ) : (
+                                        <div className="loading-wrapper">
+                                            <div className="loading-circle" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
                             <div className="productionDeploymentCellShort">
                                 <div className="productionDeploymentCellShortHeader">
                                     <h2>Previous Updates</h2>
@@ -295,7 +481,7 @@ const StackForgeProjectDetails = () => {
                                 </div>
                                 <div className="previousDeploymentsList">
                                     {commits && commits.map((commit) => (
-                                        <div key={commit.sha} className="previousCommitItem" onClick={() => { navigate("/update-details", { state: { commitDetails: commit, repository: projectDetails.project.repository, owner: projectDetails.project.created_by } }) }}>
+                                        <div key={commit.sha} className="previousCommitItem" onClick={() => { navigate("/update-details", { state: { commitDetails: commit, repository: projectDetails.project.repository, owner: projectDetails.project.created_by, branchName: projectDetails.project.branch } }) }}>
                                             <span>
                                                 <p>
                                                     <FontAwesomeIcon icon={faCodeCommit} /> {commit.sha.substring(0, 6)} - {commit.commit.message}
@@ -303,68 +489,26 @@ const StackForgeProjectDetails = () => {
                                                 <small>by {commit.commit.author.name} on {new Date(commit.commit.author.date).toLocaleDateString()}</small>
                                             </span>
                                             <div>
-                                                <img src={commit.author?.avatar_url} alt={commit.author?.login} className="commitAvatar" />
+                                                <img src={commit.author?.avatar_url} alt={commit.author?.login} />
                                             </div>
                                         </div>
                                     ))}
-                                </div>
-                            </div>
-                            <div className="productionDeploymentCellShort">
-                                <div className="productionDeploymentCellShortHeader">
-                                    <h2>Analytics</h2>
-                                    <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
-                                </div>
-                                <div className="productionAnalyticsList">
-                                    {analytics ? (
-                                        <>
-                                            {analytics.websiteAnalytics && (
-                                                <div className="productionAnalyticsListItem">
-                                                    <div>
-                                                        <strong>Status:</strong>
-                                                        <span>
-                                                            <i className="statusDot" style={{ backgroundColor: analytics.websiteAnalytics.status === 200 ? "#21BF68" : "#E54B4B" }}></i>
-                                                            <p>{analytics.websiteAnalytics.status === 200 ? "OK" : analytics.websiteAnalytics.status}</p>
-                                                        </span>
-                                                    </div>
-                                                    <div>
-                                                        <strong>Response Time:</strong> 
-                                                        <p>{analytics.websiteAnalytics.responseTime} ms</p>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            <digv className="productionAnalyticsListItemDivider"/>
-                                            {analytics.repositoryAnalytics && (
-                                                <div className="productionAnalyticsListItem">
-                                                    <div>
-                                                        <strong>Name:</strong> 
-                                                        <p>{analytics.repositoryAnalytics.full_name}</p>
-                                                    </div>
-                                                    <div>
-                                                        <strong>Stars:</strong> 
-                                                        <p>{analytics.repositoryAnalytics.stargazers_count}</p>
-                                                    </div>
-                                                    <div>
-                                                        <strong>Forks:</strong> 
-                                                        <p>{analytics.repositoryAnalytics.forks_count}</p>
-                                                    </div>
-                                                    <div>
-                                                        <strong>Open Issues:</strong> 
-                                                        <p>{analytics.repositoryAnalytics.open_issues_count}</p>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <div className="loading-wrapper">
-                                        <div className="loading-circle" />
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
+
+            {isLoaded && !projectDetails?.project && (
+                <div className="projectDetailsCellHeaderContainer" style={{ justifyContent: "center" }}>
+                    <div className="unavailableWrapper">
+                        <img className="unavailableImage" src={"./StackForgeLogo.png"} />
+                        <p className="unavailableText">Unable to connect to database. <br /><span>Please try again later.</span></p>
+                    </div>
+                </div>
+            )}
+
             {!isLoaded && (
                 <div className="projectDetailsCellHeaderContainer" style={{ justifyContent: "center" }}>
                     <div className="loading-wrapper">

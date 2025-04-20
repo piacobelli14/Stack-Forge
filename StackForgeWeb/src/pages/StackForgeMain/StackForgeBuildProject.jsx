@@ -519,15 +519,13 @@ const StackForgeBuildProject = () => {
               </div>
               {successfulDeployment && typedText.length === buildLogsString.length && (
                 <div className="importProjectsOperationsBarSupplement">
-                  <button
+                  <a
                     rel="noopener noreferrer"
-                    onClick={() => {
-                      navigate("/stackforge");
-                    }}
+                    href={`https://${projectName}.stackforgeengine.com`}
                     className="importProjectsDeployButton"
                   >
                     Go to project.
-                  </button>
+                  </a>
                 </div>
               )}
             </div>

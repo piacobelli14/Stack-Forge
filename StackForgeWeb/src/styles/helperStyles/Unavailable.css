@@ -1,0 +1,29 @@
+.unavailableWrapper {
+    padding: 40px 60px; 
+    background-color: rgba(0,0,0,0.2); 
+    box-shadow: 0 0 10px black; 
+    border-radius: 6px;
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.unavailableImage {
+    height: 120px;
+}
+
+.unavailableText {
+    font-size: 1rem; 
+    font-weight: 800; 
+    color: #f5f5f5; 
+    text-align:center;
+}
+
+.unavailableText span {
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    text-align:center;
+    font-style: italic;
+}
