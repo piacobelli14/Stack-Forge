@@ -235,7 +235,8 @@ CREATE TABLE deployments
     template TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
-    last_deployed_at TIMESTAMP
+    last_deployed_at TIMESTAMP, 
+    task_def_arn TEXT
 );
 DROP INDEX IF EXISTS idx_deployments;
 CREATE INDEX idx_deployments ON deployments (orgid, username);

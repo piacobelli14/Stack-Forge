@@ -248,7 +248,7 @@ class DeployManager {
                 logGroupName,
                 logStreamName
             }));
-        } catch (err) {}
+        } catch (err) { }
         const build = await codeBuildClient.send(new StartBuildCommand({
             projectName,
             environmentVariablesOverride: [
@@ -450,15 +450,15 @@ class DeployManager {
             return resp.TargetGroups[0].TargetGroupArn;
         } catch {
             const resp = await this.elbv2.send(new CreateTargetGroupCommand({
-                    Name: projectName,
-                    Protocol: "HTTP",
-                    Port: 3000,
-                    VpcId: process.env.VPC_ID,
-                    TargetType: "ip",
-                    HealthCheckProtocol: "HTTP",
-                    HealthCheckPath: "/health",
-                    Matcher: { HttpCode: "200-399" }
-                }));
+                Name: projectName,
+                Protocol: "HTTP",
+                Port: 3000,
+                VpcId: process.env.VPC_ID,
+                TargetType: "ip",
+                HealthCheckProtocol: "HTTP",
+                HealthCheckPath: "/health",
+                Matcher: { HttpCode: "200-399" }
+            }));
             return resp.TargetGroups[0].TargetGroupArn;
         }
     }
@@ -475,18 +475,18 @@ class DeployManager {
                     r.Conditions.some(
                         c =>
                             c.Field === "host-header" &&
-                            c.HostHeaderConfig.Values.includes(`${domainName}.stackforgeengine.com`) 
+                            c.HostHeaderConfig.Values.includes(`${domainName}.stackforgeengine.com`)
                     )
             );
             if (!hostRule) {
                 await this.elbv2.send(new CreateRuleCommand({
-                        ListenerArn: listenerArn,
-                        Priority: parseInt(process.env.RULE_PRIORITY, 10) || Math.floor(Math.random() * 100) + 1,
-                        Conditions: [
-                            { Field: "host-header", HostHeaderConfig: { Values: [`${domainName}.stackforgeengine.com`] } }
-                        ],
-                        Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
-                    }));
+                    ListenerArn: listenerArn,
+                    Priority: parseInt(process.env.RULE_PRIORITY, 10) || Math.floor(Math.random() * 100) + 1,
+                    Conditions: [
+                        { Field: "host-header", HostHeaderConfig: { Values: [`${domainName}.stackforgeengine.com`] } }
+                    ],
+                    Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
+                }));
             } else {
                 const ruleActions = hostRule.Actions || [];
                 const hasCorrectTargetGroup = ruleActions.some(
@@ -494,12 +494,12 @@ class DeployManager {
                 );
                 if (!hasCorrectTargetGroup) {
                     await this.elbv2.send(new ModifyRuleCommand({
-                            RuleArn: hostRule.RuleArn,
-                            Conditions: [
-                                { Field: "host-header", HostHeaderConfig: { Values: [`${domainName}.stackforgeengine.com`] } }
-                            ],
-                            Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
-                        }));
+                        RuleArn: hostRule.RuleArn,
+                        Conditions: [
+                            { Field: "host-header", HostHeaderConfig: { Values: [`${domainName}.stackforgeengine.com`] } }
+                        ],
+                        Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
+                    }));
                 }
             }
         } catch (err) {
@@ -514,39 +514,39 @@ class DeployManager {
         }
         if (!existing) {
             await this.ecs.send(new CreateServiceCommand({
-                    cluster,
-                    serviceName,
-                    taskDefinition: taskDefArn,
-                    desiredCount: 1,
-                    launchType: "FARGATE",
-                    networkConfiguration: {
-                        awsvpcConfiguration: {
-                            subnets: process.env.SUBNET_IDS.split(","),
-                            securityGroups: process.env.SECURITY_GROUP_IDS.split(","),
-                            assignPublicIp: "ENABLED"
-                        }
-                    },
-                    loadBalancers: [
-                        {
-                            targetGroupArn,
-                            containerName: projectName,
-                            containerPort: 3000
-                        }
-                    ]
-                }));
+                cluster,
+                serviceName,
+                taskDefinition: taskDefArn,
+                desiredCount: 1,
+                launchType: "FARGATE",
+                networkConfiguration: {
+                    awsvpcConfiguration: {
+                        subnets: process.env.SUBNET_IDS.split(","),
+                        securityGroups: process.env.SECURITY_GROUP_IDS.split(","),
+                        assignPublicIp: "ENABLED"
+                    }
+                },
+                loadBalancers: [
+                    {
+                        targetGroupArn,
+                        containerName: projectName,
+                        containerPort: 3000
+                    }
+                ]
+            }));
         } else {
             await this.ecs.send(new UpdateServiceCommand({
-                    cluster,
-                    service: serviceName,
-                    taskDefinition: taskDefArn,
-                    loadBalancers: [
-                        {
-                            targetGroupArn,
-                            containerName: projectName,
-                            containerPort: 3000
-                        }
-                    ]
-                }));
+                cluster,
+                service: serviceName,
+                taskDefinition: taskDefArn,
+                loadBalancers: [
+                    {
+                        targetGroupArn,
+                        containerName: projectName,
+                        containerPort: 3000
+                    }
+                ]
+            }));
         }
     }
 
@@ -584,7 +584,7 @@ class DeployManager {
 
     async recordRuntimeLogs(orgid, username, deploymentId, projectName) {
         const logGroupName = `/ecs/${projectName}`;
-        
+
         let deploymentUrl;
         try {
             const deploymentResult = await pool.query(
@@ -598,28 +598,28 @@ class DeployManager {
         } catch (err) {
             deploymentUrl = `https://${projectName}.stackforgeengine.com`;
         }
-    
+
         let hostname;
         try {
             const urlObj = new URL(deploymentUrl);
             hostname = urlObj.hostname;
         } catch (err) {
-            hostname = `${projectName}.stackforgeengine.com`; 
+            hostname = `${projectName}.stackforgeengine.com`;
         }
-    
+
         let httpStatus = null;
         try {
             const response = await axios.get(deploymentUrl, { timeout: 5000 });
             httpStatus = response.status;
         } catch (err) {
-            httpStatus = err.response?.status || 503; 
+            httpStatus = err.response?.status || 503;
         }
-    
+
         const resp = await cloudWatchLogsClient.send(new DescribeLogStreamsCommand({
             logGroupName,
             logStreamNamePrefix: "ecs"
         }));
-    
+
         for (const ls of resp.logStreams) {
             let nextToken;
             let allMessages = "";
@@ -637,13 +637,13 @@ class DeployManager {
                 }
                 nextToken = eventsResp.nextForwardToken;
             } while (events.length);
-    
+
             const rawPath = `${logGroupName}/${ls.logStreamName}`;
             const sanitizedPath = rawPath
-                .replace(/[^a-zA-Z0-9\/_-]/g, '_') 
-                .replace(/\/+/g, '/')              
-                .replace(/^\/+|\/+$/g, '');       
-    
+                .replace(/[^a-zA-Z0-9\/_-]/g, '_')
+                .replace(/\/+/g, '/')
+                .replace(/^\/+|\/+$/g, '');
+
             await pool.query(
                 `INSERT INTO runtime_logs 
                  (orgid, username, deployment_id, build_log_id, timestamp, runtime_path, runtime_messages, status, hostname) 
@@ -690,7 +690,7 @@ class DeployManager {
         const taskDefArn = await this.registerTaskDef({ projectName, imageUri });
         const targetGroupArn = await this.ensureTargetGroup(projectName);
         await this.createOrUpdateService({ projectName, taskDefArn, domainName, targetGroupArn });
-        return logDir;
+        return taskDefArn;
     }
 
     async cloneAndBuild({
@@ -772,7 +772,9 @@ class DeployManager {
             projectID = existingProjRes.rows[0].project_id;
             await pool.query(
                 `UPDATE projects
-                 SET current_deployment = $1, updated_at = $2
+                 SET previous_deployment = current_deployment,
+                     current_deployment = $1,
+                     updated_at = $2
                  WHERE project_id = $3`,
                 [deploymentId, timestamp, projectID]
             );
@@ -809,16 +811,15 @@ class DeployManager {
             );
             await pool.query(
                 `INSERT INTO deployments 
-                 (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-                [organizationID, userID, deploymentId, projectID, domainId, "building", url, template || "default", timestamp, timestamp, timestamp]
+                 (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                [organizationID, userID, deploymentId, projectID, domainId, "building", url, template || "default", timestamp, timestamp, timestamp, null]
             );
-            const action = isNewProject ? "launch" : "update";
             await pool.query(
                 `INSERT INTO deployment_logs 
                  (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [organizationID, userID, projectID, projectName, action, deploymentId, timestamp, "127.0.0.1"]
+                [organizationID, userID, projectID, projectName, "update", deploymentId, timestamp, "127.0.0.1"]
             );
         }
         try {
@@ -828,7 +829,7 @@ class DeployManager {
             throw error;
         }
         try {
-            await this.launchContainer({
+            const taskDefArn = await this.launchContainer({
                 userID,
                 organizationID,
                 projectName,
@@ -844,8 +845,8 @@ class DeployManager {
             if (isNewProject) {
                 await pool.query(
                     `INSERT INTO projects 
-                     (orgid, username, project_id, name, description, branch, team_name, root_directory, output_directory, build_command, install_command, env_vars, created_by, created_at, updated_at, url, repository, current_deployment, image) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+                     (orgid, username, project_id, name, description, branch, team_name, root_directory, output_directory, build_command, install_command, env_vars, created_by, created_at, updated_at, url, repository, previous_deployment, current_deployment, image) 
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NULL,$17,$18)`,
                     [
                         organizationID,
                         userID,
@@ -876,9 +877,9 @@ class DeployManager {
                 );
                 await pool.query(
                     `INSERT INTO deployments 
-                     (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-                    [organizationID, userID, deploymentId, projectID, domainId, "active", url, template || "default", timestamp, timestamp, timestamp]
+                     (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                    [organizationID, userID, deploymentId, projectID, domainId, "active", url, template || "default", timestamp, timestamp, timestamp, taskDefArn]
                 );
                 await pool.query(
                     `INSERT INTO deployment_logs 
@@ -889,13 +890,13 @@ class DeployManager {
             } else {
                 const now = new Date().toISOString();
                 await pool.query(
-                    "UPDATE deployments SET status = $1, updated_at = $2, last_deployed_at = $2 WHERE deployment_id = $3",
-                    ["active", now, deploymentId]
+                    "UPDATE deployments SET status = $1, updated_at = $2, last_deployed_at = $2, task_def_arn = $3 WHERE deployment_id = $4",
+                    ["active", now, taskDefArn, deploymentId]
                 );
             }
             await this.recordBuildLogCombined(organizationID, userID, deploymentId, logDir);
             await this.recordRuntimeLogs(organizationID, userID, deploymentId, projectName);
-            return { url, deploymentId, logPath: logDir };
+            return { url, deploymentId, logPath: logDir, taskDefArn };
         } catch (error) {
             if (!isNewProject) {
                 const now = new Date().toISOString();
@@ -950,7 +951,9 @@ class DeployManager {
                 onData(`Existing project found, ID: ${projectID}\n`);
                 await pool.query(
                     `UPDATE projects
-                     SET current_deployment = $1, updated_at = $2
+                     SET previous_deployment = current_deployment,
+                         current_deployment = $1,
+                         updated_at = $2
                      WHERE project_id = $3`,
                     [deploymentId, timestamp, projectID]
                 );
@@ -999,19 +1002,18 @@ class DeployManager {
                 onData(`Marked previous deployments as inactive\n`);
                 await pool.query(
                     `INSERT INTO deployments 
-                     (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-                    [organizationID, userID, deploymentId, projectID, domainId, "building", url, template || "default", timestamp, timestamp, timestamp]
+                     (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                    [organizationID, userID, deploymentId, projectID, domainId, "building", url, template || "default", timestamp, timestamp, timestamp, null]
                 );
                 onData(`Inserted new deployment record, ID: ${deploymentId}\n`);
-                const actionStream = isNewProject ? "launch" : "update";
                 await pool.query(
                     `INSERT INTO deployment_logs 
                      (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                    [organizationID, userID, projectID, projectName, actionStream, deploymentId, timestamp, "127.0.0.1"]
+                    [organizationID, userID, projectID, projectName, "update", deploymentId, timestamp, "127.0.0.1"]
                 );
-                onData(`Logged deployment action: ${actionStream}\n`);
+                onData(`Logged deployment action: update\n`);
             } catch (err) {
                 onData(`Error managing domain/deployment records: ${err.message}\n`);
                 throw new Error(`Domain/deployment record management failed: ${err.message}`);
@@ -1022,11 +1024,6 @@ class DeployManager {
             onData(`Updating DNS record for ${domainName}\n`);
             await this.updateDNSRecord(domainName);
             onData("DNS record updated successfully\n");
-        } catch (error) {
-            onData(`DNS update failed: ${error.message}\n`);
-            throw error;
-        }
-        try {
             onData(`Ensuring ECR repository for ${projectName}\n`);
             await this.ensureEcrRepo(projectName);
             onData(`ECR repository ensured for ${projectName}\n`);
@@ -1043,9 +1040,11 @@ class DeployManager {
                 projectName,
                 repository,
                 branch,
-                envVars,
+                rootDirectory,
                 installCommand,
                 buildCommand,
+                outputDirectory,
+                envVars,
                 githubAccessToken: githubAccessToken2
             });
             onData(`CodeBuild project created/updated for ${projectName}\n`);
@@ -1070,8 +1069,11 @@ class DeployManager {
                 onData(`Creating new project record\n`);
                 await pool.query(
                     `INSERT INTO projects 
-                     (orgid, username, project_id, name, description, branch, team_name, root_directory, output_directory, build_command, install_command, env_vars, created_by, created_at, updated_at, url, repository, current_deployment, image) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+                     (orgid, username, project_id, name, description, branch, team_name,
+                      root_directory, output_directory, build_command, install_command,
+                      env_vars, created_by, created_at, updated_at, url, repository,
+                      previous_deployment, current_deployment, image)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NULL,$17,$18)`,
                     [
                         organizationID,
                         userID,
@@ -1104,9 +1106,9 @@ class DeployManager {
                 onData(`Domain record created\n`);
                 await pool.query(
                     `INSERT INTO deployments 
-                     (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-                    [organizationID, userID, deploymentId, projectID, domainId, "active", url, template || "default", timestamp, timestamp, timestamp]
+                     (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+                    [organizationID, userID, deploymentId, projectID, domainId, "active", url, template || "default", timestamp, timestamp, timestamp, taskDefArn2]
                 );
                 onData(`Deployment record created\n`);
                 await pool.query(
@@ -1120,8 +1122,8 @@ class DeployManager {
                 const now2 = new Date().toISOString();
                 onData(`Updating deployment status to active\n`);
                 await pool.query(
-                    "UPDATE deployments SET status = $1, updated_at = $2, last_deployed_at = $2 WHERE deployment_id = $3",
-                    ["active", now2, deploymentId]
+                    "UPDATE deployments SET status = $1, updated_at = $2, last_deployed_at = $2, task_def_arn = $3 WHERE deployment_id = $4",
+                    ["active", now2, taskDefArn2, deploymentId]
                 );
                 onData(`Deployment status updated\n`);
             }
@@ -1131,7 +1133,7 @@ class DeployManager {
             onData(`Recording runtime logs\n`);
             await this.recordRuntimeLogs(organizationID, userID, deploymentId, projectName);
             onData(`Runtime logs recorded\n`);
-            return { url, deploymentId, logPath: logDir };
+            return { url, deploymentId, logPath: logDir, taskDefArn: taskDefArn2 };
         } catch (error) {
             onData(`Deployment failed: ${error.message}\n`);
             if (!isNewProject) {
@@ -1279,6 +1281,107 @@ class DeployManager {
             [organizationID]
         );
         return result.rows;
+    }
+
+    async rollbackDeployment({ organizationID, userID, projectID, deploymentID }) {
+        const timestamp = new Date().toISOString();
+        const deploymentResult = await pool.query(
+            `SELECT d.*, p.name as project_name 
+           FROM deployments d 
+           JOIN projects p ON d.project_id = p.project_id 
+           WHERE d.deployment_id = $1 AND d.orgid = $2 AND d.username = $3`,
+            [deploymentID, organizationID, userID]
+        );
+        if (deploymentResult.rows.length === 0) {
+            throw new Error("Deployment not found or access denied");
+        }
+        const deployment = deploymentResult.rows[0];
+        const projectName = deployment.project_name;
+        const domainName = deployment.url.replace('https://', '').split('.')[0];
+        const currentDeploymentResult = await pool.query(
+            `SELECT deployment_id 
+           FROM deployments 
+           WHERE project_id = $1 AND status = 'active'`,
+            [projectID]
+        );
+        const taskDefArn = await this.getTaskDefinitionArn(projectName, deploymentID);
+        const cluster = process.env.ECS_CLUSTER;
+        const serviceName = projectName;
+        try {
+            const targetGroupArn = await this.ensureTargetGroup(projectName);
+            await this.ecs.send(new UpdateServiceCommand({
+                cluster,
+                service: serviceName,
+                taskDefinition: taskDefArn,
+                forceNewDeployment: true
+            }));
+            if (currentDeploymentResult.rows.length > 0) {
+                await pool.query(
+                    `UPDATE deployments 
+               SET status = 'inactive', updated_at = $1 
+               WHERE deployment_id = $2`,
+                    [timestamp, currentDeploymentResult.rows[0].deployment_id]
+                );
+            }
+            await pool.query(
+                `UPDATE deployments 
+             SET status = 'active', updated_at = $1, last_deployed_at = $1 
+             WHERE deployment_id = $2`,
+                [timestamp, deploymentID]
+            );
+            await pool.query(
+                `UPDATE projects
+             SET previous_deployment = current_deployment,
+                 current_deployment = $1,
+                 updated_at = $2
+             WHERE project_id = $3`,
+                [deploymentID, timestamp, projectID]
+            );
+            await pool.query(
+                `INSERT INTO deployment_logs 
+               (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [organizationID, userID, projectID, projectName, "rollback", deploymentID, timestamp, "127.0.0.1"]
+            );
+            await this.recordRuntimeLogs(organizationID, userID, deploymentID, projectName);
+            return {
+                message: `Successfully rolled back to deployment ${deploymentID}.`,
+                url: deployment.url,
+                deploymentId: deploymentID
+            };
+        } catch (error) {
+            throw new Error(`Rollback failed: ${error.message}`);
+        }
+    }
+
+    async getTaskDefinitionArn(projectName, deploymentID) {
+        try {
+            const deploymentResult = await pool.query(
+                `SELECT task_def_arn 
+                 FROM deployments 
+                 WHERE deployment_id = $1`,
+                [deploymentID]
+            );
+
+            if (deploymentResult.rows.length === 0) {
+                throw new Error(`Deployment ${deploymentID} not found`);
+            }
+
+            const taskDefArn = deploymentResult.rows[0].task_def_arn;
+            if (!taskDefArn) {
+                const taskDefs = await this.ecs.send(new DescribeTaskDefinitionCommand({
+                    taskDefinition: projectName
+                }));
+                if (taskDefs.taskDefinition) {
+                    return taskDefs.taskDefinition.taskDefinitionArn;
+                }
+                return `arn:aws:ecs:${process.env.AWS_REGION}:${process.env.AWS_ACCOUNT_ID}:task-definition/${projectName}:1`;
+            }
+
+            return taskDefArn;
+        } catch (error) {
+            throw new Error(`Failed to retrieve task definition ARN: ${error.message}`);
+        }
     }
 }
 
@@ -1621,7 +1724,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                         });
 
                         await browser.close();
-                    } catch (puppeteerErr) {}
+                    } catch (puppeteerErr) { }
 
                     websiteAnalytics = {
                         status: websiteResponse.status,
@@ -1722,7 +1825,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
         });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: `Error processing analytics: ${error.message}` });
+            return res.status(500).json({ message: `Error processing analytics: ${error.message}.` });
         }
         next(error);
     }
@@ -1732,15 +1835,15 @@ router.post("/runtime-logs", authenticateToken, async (req, res, next) => {
     const { organizationID, userID, projectID, deploymentID, timePeriod } = req.body;
 
     if (!organizationID || !userID || !timePeriod) {
-        return res.status(400).json({ 
-            message: "Missing required parameters: organizationID, userID, and timePeriod are required." 
+        return res.status(400).json({
+            message: "Missing required parameters: organizationID, userID, and timePeriod are required."
         });
     }
 
     const validPeriods = ['past_30_mins', 'past_hour', 'past_day', 'past_week'];
     if (!validPeriods.includes(timePeriod)) {
-        return res.status(400).json({ 
-            message: `Invalid timePeriod. Must be one of: ${validPeriods.join(', ')}` 
+        return res.status(400).json({
+            message: `Invalid timePeriod. Must be one of: ${validPeriods.join(', ')}.`
         });
     }
 
@@ -1862,13 +1965,34 @@ router.post("/build-logs", authenticateToken, async (req, res, next) => {
         );
         res.status(200).json({ logs: splitLogs });
     } catch (error) {
-        if (!res.headersSent) return res.status(500).json({ message: `Error fetching build logs: ${error.message}` });
+        if (!res.headersSent) return res.status(500).json({ message: `Error fetching build logs: ${error.message}.` });
         next(error);
     }
 });
 
+router.post("/rollback-deployment", authenticateToken, async (req, res, next) => {
+    const { organizationID, userID, projectID, deploymentID } = req.body;
 
+    if (!organizationID || !userID || !projectID || !deploymentID) {
+        return res.status(400).json({
+            message: "Missing required parameters: organizationID, userID, projectID, and deploymentID are required."
+        });
+    }
 
-
+    try {
+        const result = await deployManager.rollbackDeployment({
+            organizationID,
+            userID,
+            projectID,
+            deploymentID
+        });
+        res.status(200).json(result);
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: error.message });
+        }
+        next(error);
+    }
+});
 
 module.exports = router;

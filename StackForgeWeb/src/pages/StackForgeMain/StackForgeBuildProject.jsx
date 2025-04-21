@@ -243,7 +243,7 @@ const StackForgeBuildProject = () => {
       .then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-      })
+      });
   };
 
   const handleContainerScroll = () => {
@@ -295,7 +295,7 @@ const StackForgeBuildProject = () => {
                     <button className="importProjectsBranchSelectorButton" ref={branchOpenRef} onClick={toggleBranchDropdown}>
                       <FontAwesomeIcon icon={faCodeBranch} />
                       <span className="importProjectsBranchSelectorButtonText">
-                        {selectedBranch ? selectedBranch : "Select Branch"}
+                        {selectedBranch || "Select Branch"}
                       </span>
                     </button>
                   </div>
@@ -462,7 +462,7 @@ const StackForgeBuildProject = () => {
                   </div>
                 </div>
                 <div className="importProjectsOperationsBarSupplement">
-                  <button className="importProjectsDeployButton" onClick={handleDeployProject} disabled={isDeploying ? true : false}>
+                  <button className="importProjectsDeployButton" onClick={handleDeployProject} disabled={isDeploying}>
                     Deploy New Project
                   </button>
                 </div>
@@ -521,7 +521,7 @@ const StackForgeBuildProject = () => {
                 <div className="importProjectsOperationsBarSupplement">
                   <a
                     rel="noopener noreferrer"
-                    href={`https://${projectName}.stackforgeengine.com`}
+                    href={`https://${selectedProjectName}.stackforgeengine.com`}
                     className="importProjectsDeployButton"
                   >
                     Go to project.

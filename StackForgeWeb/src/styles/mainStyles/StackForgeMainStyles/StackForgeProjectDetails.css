@@ -2,6 +2,7 @@
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -22,7 +23,7 @@
 }
 
 .projectDetailsCellHeaderContainer {
-    display: flex; 
+    display: flex;
     flex-direction: column;
     justify-content: flex-start;
     align-items: center;
@@ -184,9 +185,9 @@
     padding: 20px 20px 60px 20px;
     margin: 0 auto;
     overflow-y: auto;
-    width: 100%; 
-    height: 100%; 
-    display: flex; 
+    width: 100%;
+    height: 100%;
+    display: flex;
     flex-direction: column;
     justify-content: flex-start;
     align-items: center;
@@ -226,8 +227,8 @@
     gap: 1rem;
     animation: projectDetailsCellFadeIn 0.5s ease-out;
     overflow: scroll;
-    max-width: 1100px; 
-    margin-bottom: 30px; 
+    max-width: 1100px;
+    margin-bottom: 30px;
     box-shadow: 0 0 10px black;
 }
 
@@ -244,9 +245,9 @@
     font-size: 1.2rem;
     font-style: italic;
     white-space: nowrap;
-    overflow: hidden; 
+    overflow: hidden;
     text-overflow: ellipsis;
-    padding: 0 0.4rem; 
+    padding: 0 0.4rem;
 }
 
 .deploymentMenuButtons {
@@ -255,7 +256,7 @@
 }
 
 .deploymentMenuButtons button {
-    background-color: rgba(255,255,255, 0.05);
+    background-color: rgba(255, 255, 255, 0.05);
     border: 1px solid #A3A3A3;
     border-radius: 6px;
     box-shadow: 0 0 10px black;
@@ -272,25 +273,25 @@
     font-style: italic;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis; 
+    text-overflow: ellipsis;
     cursor: pointer;
 }
 
 .deploymentMenuButtons button:hover {
     opacity: 0.6;
-    outline: none; 
+    outline: none;
     border: 1px solid #A3A3A3;
 }
 
 .deploymentMenuButtons button:focus {
-    outline: none; 
+    outline: none;
     border: 1px solid #A3A3A3;
 }
 
 
 @media (max-width: 600px) {
     .deploymentMenuButtons button {
-        display: none; 
+        display: none;
     }
 }
 
@@ -320,7 +321,7 @@
 
 @media (max-width: 700px) {
     .productionDeploymentScreenshot {
-        display: none; 
+        display: none;
     }
 }
 
@@ -348,7 +349,7 @@
 }
 
 .deploymentDetailLineFlex {
-    display: flex; 
+    display: flex;
     align-items: center;
     gap: 0.4rem;
 }
@@ -365,49 +366,49 @@
     color: #f1f1f1;
     font-size: 0.8rem;
     font-style: italic;
-    padding: 0; 
+    padding: 0;
     margin-bottom: 0.2rem;
-    overflow: hidden; 
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    width: 100%; 
+    width: 100%;
 }
 
 .deploymentDetailLine span {
     color: #c1c1c1;
     font-size: 0.8rem;
     font-weight: 500;
-    width: 100%; 
-    overflow: hidden; 
+    width: 100%;
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    padding: 0; 
+    padding: 0;
 }
 
 .deploymentDetailLine span p {
-    padding: 0; 
-    margin: 0.2rem 0; 
+    padding: 0;
+    margin: 0.2rem 0;
     font-weight: 900;
-    cursor: pointer; 
+    cursor: pointer;
     transition: transform 0.3s ease, opacity 0.3s ease;
 
 }
 
 .deploymentDetailLine span p:hover {
-    opacity: 0.6; 
+    opacity: 0.6;
     text-decoration: underline;
 }
 
 .deploymentDetailLine span p svg {
-    padding: 0; 
-    margin-right: 0.5rem; 
+    padding: 0;
+    margin-right: 0.5rem;
     font-weight: 800;
-    opacity: 0.8; 
+    opacity: 0.8;
 }
 
 .deploymentDetailLine span p i {
-    padding: 0; 
-    margin-right: 1rem; 
+    padding: 0;
+    margin-right: 1rem;
     font-weight: 500;
     opacity: 0.8;
     margin-left: 0.5rem;
@@ -421,7 +422,7 @@
 }
 
 .productionDeploymentFooter button {
-    background-color: rgba(255,2552,255,0.05);
+    background-color: rgba(255, 2552, 255, 0.05);
     border: 1px solid #A3A3A3;
     border-radius: 6px;
     box-shadow: 0 0 10px black;
@@ -435,32 +436,32 @@
     padding: 0 0.8rem;
     box-sizing: border-box;
     font-style: italic;
-    text-overflow: ellipsis; 
-    overflow: hidden; 
-    white-space: nowrap; 
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
     min-width: 200px;
-    cursor: pointer; 
+    cursor: pointer;
 }
 
 .productionDeploymentFooter button:hover {
     opacity: 0.6;
     border: 1px solid #A3A3A3;
-    outline: none; 
+    outline: none;
 }
 
 .productionDeploymentFooter button:focus {
     border: 1px solid #A3A3A3;
-    outline: none; 
+    outline: none;
 }
 
 .deploymentProtectionToggles {
     display: flex;
     justify-content: flex-start;
     gap: 1.5rem;
-    text-overflow: ellipsis; 
-    overflow: hidden; 
-    white-space: nowrap; 
-    min-width: 0; 
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    min-width: 0;
     overflow: scroll;
     padding: 0 0.4rem;
 }
@@ -472,33 +473,33 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    cursor: pointer; 
+    cursor: pointer;
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 .deploymentProtectionToggles p:hover {
-    opacity: 0.6; 
+    opacity: 0.6;
     transform: scale(1.05);
 }
 
-.statusDot, 
+.statusDot,
 .statusDotBig {
-    border-radius: 50%; 
-    display: inline-block; 
+    border-radius: 50%;
+    display: inline-block;
 }
 
 .statusDot {
-    min-width: 10px; 
-    max-width: 10px; 
-    height: 10px; 
-    margin-right: 5px; 
+    min-width: 10px;
+    max-width: 10px;
+    height: 10px;
+    margin-right: 5px;
 }
 
 .statusDotBig {
-    min-width: 15px; 
-    max-width: 15px; 
-    height: 15px; 
-    margin-right: 10px; 
+    min-width: 15px;
+    max-width: 15px;
+    height: 15px;
+    margin-right: 10px;
 }
 
 .productionDeploymentMultiCellFlex {
@@ -511,8 +512,8 @@
     justify-content: space-between;
     gap: 1.5rem;
     animation: projectDetailsCellFadeIn 0.5s ease-out;
-    max-width: 1100px; 
-    margin-bottom: 20px; 
+    max-width: 1100px;
+    margin-bottom: 20px;
 }
 
 .productionDeploymentCellShort {
@@ -530,21 +531,21 @@
     gap: 0;
     animation: projectDetailsCellFadeIn 0.5s ease-out;
     overflow: scroll;
-    max-width: 1100px; 
+    max-width: 1100px;
     box-shadow: 0 0 10px black;
     overflow: hidden;
 }
 
 .productionDeploymentCellShortHeader {
-    width: 100%; 
-    height: 30px; 
+    width: 100%;
+    height: 30px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 2rem; 
+    padding: 2rem;
     box-sizing: border-box;
-    position: sticky; 
-    top: 0; 
+    position: sticky;
+    top: 0;
     background-color: #25242E;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -556,124 +557,125 @@
     font-size: 1rem;
     font-style: italic;
     white-space: nowrap;
-    overflow: hidden; 
+    overflow: hidden;
     text-overflow: ellipsis;
-    padding: 0 0.4rem; 
+    padding: 0 0.4rem;
     box-sizing: border-box;
 }
 
 .productionDeploymentCellShortHeader svg {
-    font-size: 1rem; 
-    font-weight: 800; 
-    color: #f5f5f5; 
+    font-size: 1rem;
+    font-weight: 800;
+    color: #f5f5f5;
 }
 
 .previousDeploymentsList {
-    display: flex; 
+    display: flex;
     flex-direction: column;
     justify-content: flex-start;
     align-items: flex-start;
-    box-sizing: border-box; 
-    width: 100%; 
-    padding: 0 0 40px 0;  
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0 0 40px 0;
     overflow: scroll;
 }
 
 .previousCommitItem {
-    width: 100%; 
-    display: flex; 
-    justify-content: space-between; 
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    box-sizing: border-box; ;
+    box-sizing: border-box;
+    ;
     padding: 0.5rem 1rem;
-    cursor: pointer; 
+    cursor: pointer;
 }
 
 
-.previousCommitItem div  {
-    min-width: 10%; 
-    max-width: 10%;  
-    height: 100%; 
+.previousCommitItem div {
+    min-width: 10%;
+    max-width: 10%;
+    height: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
-    box-sizing: border-box; 
+    box-sizing: border-box;
 }
 
 .previousCommitItem img {
-    width: 20px; 
-    height: 20px; 
-    border-radius: 4px; 
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
 }
 
 .previousCommitItem span {
-    display: flex; 
+    display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: flex-start;
-    padding: 0; 
+    padding: 0;
     margin: 0;
-    min-width: 90%; 
-    max-width: 90%;  
+    min-width: 90%;
+    max-width: 90%;
 }
 
 .previousCommitItem span p {
-    padding: 0; 
-    margin: 0; 
-    color: #c1c1c1; 
-    font-size: 0.7rem; 
+    padding: 0;
+    margin: 0;
+    color: #c1c1c1;
+    font-size: 0.7rem;
     font-weight: 800;
-    overflow: hidden; 
-    white-space: nowrap; 
+    overflow: hidden;
+    white-space: nowrap;
     text-overflow: ellipsis;
-    max-width: 90%; 
+    max-width: 90%;
 }
 
 .previousCommitItem span small {
-    padding: 0; 
-    margin: 0; 
-    color: #c1c1c1; 
-    font-size: 0.6rem; 
+    padding: 0;
+    margin: 0;
+    color: #c1c1c1;
+    font-size: 0.6rem;
     font-weight: 500;
     font-style: italic;
-    overflow: hidden; 
-    white-space: nowrap; 
+    overflow: hidden;
+    white-space: nowrap;
     text-overflow: ellipsis;
 }
 
 .previousCommitItem:hover {
-    background: rgba(255, 255, 255, 0.1); 
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .productionAnalyticsList {
-    display: flex; 
+    display: flex;
     flex-direction: column;
     justify-content: flex-start;
     align-items: flex-start;
-    box-sizing: border-box; 
-    width: 100%; 
-    height: calc(350px - 30px); 
-    padding: 10px 20px; 
+    box-sizing: border-box;
+    width: 100%;
+    height: calc(350px - 30px);
+    padding: 10px 20px;
     overflow-y: auto;
 }
 
 .productionAnalyticsListTitleWrapper {
     padding: 1rem 0.4rem;
-    display: flex; 
+    display: flex;
     flex-direction: column;
 }
 
 .productionAnalyticsListTitle {
-    color: #c1c1c1; 
-    width: 100%; 
+    color: #c1c1c1;
+    width: 100%;
     text-align: left;
-    display: flex; 
+    display: flex;
     justify-content: space-between;
     align-items: center;
 }
 
 .productionAnalyticsListTitle span {
-    display: flex; 
+    display: flex;
     justify-content: flex-start;
     align-items: center;
     gap: 1rem;
@@ -681,30 +683,31 @@
 
 .productionAnalyticsListTitle span p {
     font-size: 0.9rem !important;
-    font-weight: 700; 
+    font-weight: 700;
     font-style: italic;
-    text-overflow: ellipsis; 
+    text-overflow: ellipsis;
     overflow: hidden;
-    white-space: nowrap;;
+    white-space: nowrap;
+    ;
 }
 
 .productionAnalyticsListTitle span img {
-    width: 30px; 
-    height: 30px; 
-    border-radius: 4px; 
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
 }
 
 .productionAnalyticsListStatusWrapper {
     padding: 1rem 0.4rem;
-    display: flex; 
+    display: flex;
     flex-direction: column;
 }
 
 .productionAnalyticsListStatus {
-    color: #c1c1c1; 
-    width: 100%; 
+    color: #c1c1c1;
+    width: 100%;
     text-align: left;
-    display: flex; 
+    display: flex;
     flex-direction: column;
     justify-content: space-between;
     align-items: flex-start;
@@ -713,23 +716,23 @@
 
 
 .performancegErrorDisplay {
-    display: flex; 
+    display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: flex-start;
     gap: 1rem;
-    height: 100%; 
+    height: 100%;
 }
 
 .performancegErrorDisplay a {
-    font-size: 0.9rem; 
-    font-weight: 900; 
-    font-style: italic; 
-    color: #9B68DD; 
+    font-size: 0.9rem;
+    font-weight: 900;
+    font-style: italic;
+    color: #9B68DD;
     margin: 0 0 0 1rem;
-    text-decoration: underline; 
-    cursor: pointer; 
-    transition: transform 0.3s ease, opacity 0.3s ease; 
+    text-decoration: underline;
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 .performancegErrorDisplay a svg {
@@ -738,28 +741,28 @@
 }
 
 .performancegErrorDisplay a:hover {
-    opacity: 0.6; 
+    opacity: 0.6;
     transform: scale(1.05);
 
 }
 
 .productionAnalyticsListStatus i {
-    font-size: 0.7rem; 
+    font-size: 0.7rem;
     font-weight: 700;
     font-style: italic;
-    padding: 0; 
-    margin: 0; 
+    padding: 0;
+    margin: 0;
 }
 
 .productionAnalyticsListStatus span {
-    display: flex; 
+    display: flex;
     justify-content: flex-start;
     align-items: center;
     margin-bottom: 0.2rem;
 }
 
 .productionAnalyticsListStatus span p {
-    font-size: 1.4rem !important; 
+    font-size: 1.4rem !important;
     font-weight: 800 !important;
 }
 
@@ -767,22 +770,22 @@
 .productionAnalyticsListItem,
 .productionAnalyticsListItemShort {
     display: flex;
-    flex-direction: column; 
+    flex-direction: column;
     justify-content: center;
     align-items: center;
 }
 
 .productionAnalyticsListItem {
-    width: 100%; 
+    width: 100%;
 }
 
 .productionAnalyticsListItemShort {
-    width: 50%; 
+    width: 50%;
 }
 
 .productionAnalyticsListItem div,
 .productionAnalyticsListItemShort div {
-    display: flex; 
+    display: flex;
     justify-content: space-between;
     align-items: center;
     width: 100%;
@@ -790,11 +793,11 @@
 
 .productionAnalyticsListItem div strong,
 .productionAnalyticsListItemShort div strong {
-    font-size: 0.8rem; 
-    font-weight: 800; 
-    color: #c1c1c1; 
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #c1c1c1;
     padding: 0.4rem;
-    overflow: hidden; 
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -805,7 +808,7 @@
 }
 
 
-.productionAnalyticsListItem div span, 
+.productionAnalyticsListItem div span,
 .productionAnalyticsListItemShort div span {
     display: flex;
     align-items: center;
@@ -813,20 +816,20 @@
 
 .productionAnalyticsListItem div p,
 .productionAnalyticsListItemShort div p {
-    font-size: 0.75rem; 
-    font-weight: 600; 
-    color: #c1c1c1; 
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #c1c1c1;
     padding: 0;
     margin: 0;
     font-style: italic;
-    overflow: hidden; 
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .productionAnalyticsListItemDivider {
-    width: 100%; 
-    height: 0.5px; 
+    width: 100%;
+    height: 0.5px;
     background-color: rgba(255, 255, 255, 0.4);
     margin: 1rem 0;
 }
@@ -840,4 +843,242 @@
 
 .productionAnalyticsList .echarts-for-react canvas {
     background: transparent !important;
+}
+
+
+
+
+
+
+
+
+
+.rollbackModalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.rollbackModalContainer {
+    background: #1e1e1e;
+    border-radius: 8px;
+    width: 480px;
+    max-width: 90%;
+    box-shadow: 0 0px 20px black;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.2); 
+}
+
+.rollbackModalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 60px; 
+    width: 100%; 
+    box-sizing: border-box; 
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2); 
+    background-color: #212121;
+    padding: 20px 20px; 
+}
+
+.rollbackModalHeader h2 {
+    margin: 0;
+    font-size: 1rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    font-style: italic; 
+}
+
+.rollbackModalHeader button {
+    background: transparent;
+    border: none;
+    font-size: 1rem;
+    color: #c1c1c1;
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    border: none; 
+    outline: none; 
+    padding: 0;
+}
+
+.rollbackModalHeader button:hover {
+    opacity: 0.6; 
+    transform: scale(1.1); 
+    border: none; 
+    outline: none; 
+}
+
+.rollbackModalHeader button:focus {
+    opacity: 0.6; 
+    border: none; 
+    outline: none; 
+}
+
+.rollbackModalBody {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-start;
+    align-items: center;
+    box-sizing: border-box;
+    overflow: scroll;
+    background-color: #191919; 
+    position: relative; 
+}
+
+.rollbackModalBody p {
+    font-size: 0.9rem;
+    color: #ddd;
+    width: 100%; 
+    background-color: #191919; 
+    position: sticky; 
+    top: 0; 
+    padding: 10px 20px; 
+    box-sizing: border-box;
+    margin: 0; 
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+}
+
+.rollbackModalBody p a {
+    color: #c1c1c1; 
+    text-decoration: underline;
+    font-style: italic;
+    cursor: pointer; 
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    border: none;
+    outline: none; 
+}
+
+.rollbackModalBody p a:hover {
+    opacity: 0.6; 
+    transform: scale(1.02); 
+    border: none; 
+    outline: none; 
+}
+
+.rollbackModalBody p a:focus {
+    border: none; 
+    outline: none; 
+}
+
+.rollbackDeploymentList {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.5rem 0; 
+}
+
+.rollbackDeploymentItem {
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 12px;
+    cursor: pointer;
+    max-width: 400px;  
+}
+
+.rollbackDeploymentItem.selected {
+    border-color: #5c2be2;
+    background: rgba(92, 43, 226, 0.1);
+}
+
+.deploymentTitle {
+    display: flex;
+    justify-content: space-between;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.deploymentTitle strong {
+    padding: 0; 
+    background-color: rgba(255, 255, 255, 0.0); 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+    padding: 0 1rem 0 0;
+}
+
+.currentLabel,
+.previousLabel {
+    font-size: 0.7rem; 
+    font-weight: 600; 
+    padding: 0.4rem 1rem;
+    box-sizing: border-box;
+    border-radius: 6px; 
+    background: #333;
+    color: #f1f1f1; 
+}
+
+.deploymentDetails small {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 600; 
+    color: #bbb;
+    font-style: italic;
+    margin-bottom: 0.4rem;
+    overflow: scroll; 
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.rollbackModalFooter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 60px; 
+    width: 100%; 
+    box-sizing: border-box; 
+    border-top: 1px solid rgba(255, 255, 255, 0.2); 
+    background-color: #212121;
+    padding: 20px 20px; 
+}
+
+.rollbackModalFooter button {
+    padding: 0.4rem 16px;
+    border-radius: 4px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    box-sizing: border-box; 
+    font-size: 0.8rem; 
+    font-weight: 700; 
+    color: #f1f1f1;
+    box-shadow: 0 0 10px solid black;
+    border: 1px solid #c1c1c1;
+    outline: none; 
+}
+
+.rollbackModalFooter button:hover {
+    opacity: 0.6; 
+    border: 1px solid #c1c1c1;
+    outline: none; 
+}
+
+.rollbackModalFooter button:focus {
+    opacity: 0.6; 
+    border: 1px solid #c1c1c1;
+    outline: none; 
+}
+
+.rollbackModalFooter button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.rollbackModalFooter button:first-of-type {
+    background: transparent;
+}
+
+.rollbackModalFooter button:last-of-type {
+    background: rgba(255, 255, 255, 0.2);
 }
