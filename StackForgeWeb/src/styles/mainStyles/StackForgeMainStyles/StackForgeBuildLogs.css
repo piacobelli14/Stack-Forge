@@ -1,0 +1,462 @@
+@keyframes buildLogsCellFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.buildLogsCellFadeIn {
+    animation: projectsCellFadeIn 2s ease-out;
+}
+
+.buildLogsPageWrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    background: linear-gradient(to bottom, #0E0B1B, #29282D);
+}
+
+.buildLogsCellHeaderContainer {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100vw;
+    min-height: calc(100vh - 60px) !important;
+    overflow: hidden;
+    position: relative;
+    box-sizing: border-box;
+    overflow: hidden; 
+}
+
+.buildLogsFlexCellWrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-height: 100%;
+    box-sizing: border-box; 
+    max-width: 900px;
+}
+
+.buildLogsTopBar {
+    position: sticky;
+    top: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    min-height: 80px;
+    max-height: 80px;
+    background-color: rgba(25, 25, 25, 0.7);
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    border-right: 0.2vh solid rgba(255, 255, 255, 0.1);
+    box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 2vw;
+}
+
+.buildLogsTopBarSearchContainer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 92%;
+    height: 40px;
+}
+
+@media (min-width: 1200px) {
+    .buildLogsTopBarSearchContainer {
+        width: 80%;
+    }
+}
+
+@media (max-width: 500px) {
+    .buildLogsTopBarSearchContainer {
+        width: 100%;
+    }
+    .buildLogsIconSupplement {
+        display: none;
+    }
+}
+
+.buildLogsSearchBarWrapper {
+    display: flex;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid #A3A3A3;
+    border-radius: 6px;
+    padding: 0 0.8rem;
+    width: 100%;
+    height: 40px;
+    box-shadow: 0 0 8px black;
+}
+
+.buildLogsSearchIcon,
+.buildLogsSearchIconSupplement {
+    font-size: 0.9rem;
+}
+
+.buildLogsSearchIcon,
+.buildLogsSearchIconSupplement {
+    color: #A3A3A3;
+    margin-right: 0.5rem;
+}
+
+.buildLogsSearchIconSupplement {
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    margin-left: 0.5rem;
+}
+
+.buildLogsSearchIconSupplement:hover {
+    opacity: 0.6;
+    transform: scale(1.1);
+}
+
+.buildLogsSearchInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #A3A3A3;
+}
+
+.buildLogsSearchInput::placeholder {
+    color: #8b8b8b;
+    font-weight: 600;
+}
+
+.buildLogsRefreshButton {
+    padding: 0.4rem 0; 
+    background-color: #A3A3A3;
+    color: #212121; 
+    border: 1px solid #A3A3A3; 
+    border-radius: 6px;
+    box-shadow: 0 0 10px black; 
+    height: 40px;
+    width: 6%;
+    box-sizing: border-box;
+    cursor: pointer; 
+    outline: none; 
+}
+
+.buildLogsRefreshButton:hover {
+    opacity: 0.6;
+    border: none; 
+    outline: none;
+}
+
+.buildLogsRefreshButton:hover {
+    border: none; 
+    outline: none;
+}
+
+@media (max-width: 700px) {
+    .buildLogsTopBarSearchContainer {
+        width: 100%; 
+    }
+
+    .buildLogsRefreshButton {
+        display: none;
+    }
+}
+
+
+.buildLogsCellContentWrapper {
+    display: flex;
+    justify-content: flex-start;
+    align-items: flex-start;
+    background-color: #24242B;
+    width: 100%;
+    height: calc(100% - 80px);
+    flex: 1;
+}
+.buildLogsContentSideBar {
+    width: 220px;
+    height: 100%;
+    background: linear-gradient(to bottom, #1B1526, #29282D);
+    box-sizing: border-box;
+    border-right: 0.5px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    overflow-y: auto; 
+    padding: 10px 0; 
+}
+
+.buildLogsContentCheckboxStack {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    align-items: flex-start; 
+    gap: 0.6rem; 
+    width: 80%; 
+    padding: 0.6rem;
+}
+
+.buildLogsContentCheckboxSubStack {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center; 
+    align-items: flex-start; 
+    gap: 0.6rem; 
+    width: 70%; 
+    padding: 0;
+}
+
+.buildLogsContentCheckboxWrapper, 
+.buildLogsContentCheckboxSubWrapper {
+    display: flex; 
+    justify-content: flex-start; 
+    align-items: center;
+    width: 100%; 
+    min-height: 0; 
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #A3A3A3;
+    font-style: italic; 
+    gap: 1rem;
+}
+ 
+.buildLogsContentCheckboxSubWrapper {
+    padding: 0 0.6rem;
+    gap: 0.4rem;
+    font-size: 0.7rem
+}
+
+.buildLogsContentFilterHeader {
+    width: 80%; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    font-size: 0.8rem; 
+    font-weight: 700; 
+    font-style: italic;
+    color: #A3A3A3;
+    padding: 1rem 0; 
+}
+
+.buildLogsContentFilterHeader span svg {
+    margin-right: 0.6rem;
+    font-size: 0.7rem;
+}
+
+.buildLogsContentFilterSubheader {
+    width: 100%; 
+    display: flex; 
+    justify-content: flex-start; 
+    align-items: center;
+    font-size: 0.8rem; 
+    font-weight: 500; 
+    font-style: italic;
+    color: #A3A3A3;
+    padding: 1rem 0 0.4rem 0; 
+    gap: 0.8rem;
+}
+
+.buildLogsContentFilterHeader span svg {
+    margin-right: 0.6rem;
+    font-size: 0.7rem;
+}
+
+
+.buildLogsContentDivider {
+    width: 90%; 
+    min-height: 0.5px; 
+    max-height: 0.5px; 
+    height: 0.5px; 
+    background-color: rgba(255, 255, 255, 0.4);
+}
+
+.buildLogsContentMainFlex {
+    width: calc(100% - 220px);
+    height: 100%;;
+    background: linear-gradient(to bottom, #322A54, #29282D);
+    display: flex;
+    flex-direction: column;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    position: relative;
+}
+
+.buildLogsContainer {
+    display: flex; 
+    flex-direction: column; 
+    width: 100%; 
+    box-sizing: border-box;
+    padding-bottom: 10vh;
+}
+
+.buildLogsHeader {
+    width: 100%; 
+    height: 40px;
+    display: flex; 
+    justify-content: space-evenly;
+    align-items: center;
+    background-color: #242129; 
+    background: linear-gradient(to right, #1B1526, #29282D);
+    box-sizing: border-box;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
+    position: sticky; 
+    top: 0; 
+    padding: 0 1rem;
+}
+
+.buildLogsHeaderCellMedium, 
+.buildLogsHeaderCellShort, 
+.buildLogsHeaderCellLong {
+    font-size: 0.7rem; 
+    font-weight: 800;
+    font-style: italic;
+    color: #c1c1c1;
+    text-align: left; 
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 1rem;
+    box-sizing: border-box;
+}
+
+.buildLogsHeaderCellMedium {
+    width: 20%; 
+}
+
+.buildLogsHeaderCellShort {
+    width: 10%; 
+}
+
+.buildLogsHeaderCellLong {
+    width: 30%; 
+}
+
+.buildLogsEntry {
+    width: 100%; 
+    height: 40px;
+    display: flex; 
+    justify-content: space-evenly;
+    align-items: center;
+    background-color: rgba(25, 25, 25, 0.6); 
+    box-sizing: border-box;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1); 
+    flex: 1;
+    padding: 0.8rem 1rem; 
+    text-align: left;
+    cursor: pointer; 
+}
+
+.buildLogsEntryCellMedium, 
+.buildLogsEntryCellShort, 
+.buildLogsEntryCellLong {
+    font-size: 0.8rem; 
+    font-weight: 600;
+    font-style: italic;
+    color: #c1c1c1;
+    text-align: left; 
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 1rem;
+    box-sizing: border-box;
+}
+
+.buildLogsEntryCellMedium {
+    width: 20%; 
+}
+
+.buildLogsEntryCellShort {
+    width: 10%; 
+}
+
+.buildLogsEntryCellLong {
+    width: 30%; 
+}
+
+.buildLogsNoResults {
+    width: 100%; 
+    height: calc(100vh - 180px); 
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.buildLogsNoResultsIcon {
+    font-size: 1.6rem; 
+    color: #c1c1c1; 
+    margin-bottom: 1rem; 
+}
+
+.buildLogsNoResultsText {
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    font-style: italic; 
+    margin-bottom: 1rem;;
+    width: 80%; 
+    text-align: center;
+}
+
+.buildLogsNoResultsButtons {
+    display: flex; 
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+}
+
+@media (max-width: 700px) {
+    .buildLogsNoResultsButtons {
+        flex-direction: column;
+    }
+}
+
+.buildLogsNoResultsReset, 
+.buildLogsNoResultsRefresh {
+    background-color: #c1c1c1; 
+    padding: 0.4rem 0.8rem; 
+    border: 1px solid #A3A3A3; 
+    border-radius: 6px; 
+    box-shadow: 0 0 10px black; 
+    font-size: 0.8rem; 
+    font-weight: 700;
+    color: #222222;
+    width: 150px;
+}
+
+.buildLogsNoResultsReset:hover, 
+.buildLogsNoResultsRefresh:hover {
+    opacity: 0.6;
+    border: 1px solid #A3A3A3; 
+    outline: none;
+}
+
+.buildLogsNoResultsReset:focus, 
+.buildLogsNoResultsRefreshfocus {
+    border: 1px solid #A3A3A3; 
+    outline: none;
+}
+
+.buildLogsNoResultCell {
+    background-color: rgba(0,0,0,0.4); 
+    padding: 40px 60px; 
+    box-shadow: 0 0 10px black;
+    border-radius: 6px; 
+    display: flex; 
+    flex-direction: column;
+    align-items: center;
+}
+
+@media (max-width: 700px) {
+    .buildLogsNoResultCell {
+        padding: 20px 5px; 
+    }
+}

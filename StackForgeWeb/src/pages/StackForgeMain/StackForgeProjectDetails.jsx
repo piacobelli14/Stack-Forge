@@ -224,7 +224,16 @@ const StackForgeProjectDetails = () => {
                             <div className="productionDeploymentHeader">
                                 <h2>Production Deployment</h2>
                                 <div className="deploymentMenuButtons">
-                                    <button onClick={()=>{navigate("/build-logs")}}>
+                                    <button 
+                                        onClick={() =>
+                                            navigate("/build-logs", {
+                                            state: {
+                                                projectID,
+                                                deploymentID: projectDetails?.deployments[0]?.deployment_id, // Ensure deploymentID is passed
+                                            },
+                                            })
+                                        }
+                                    >
                                         <FontAwesomeIcon icon={faHammer} />
                                         Build Logs
                                     </button>

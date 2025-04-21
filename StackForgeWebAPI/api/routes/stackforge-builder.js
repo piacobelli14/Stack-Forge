@@ -1805,4 +1805,70 @@ router.post("/runtime-logs", authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post("/build-logs", authenticateToken, async (req, res, next) => {
+    const { organizationID, userID, deploymentID, timePeriod } = req.body;
+    if (!organizationID || !userID || !deploymentID)
+        return res.status(400).json({ message: "Missing required parameters: organizationID, userID, and deploymentID are required." });
+    let timeFilter;
+    const now = new Date();
+    switch (timePeriod) {
+        case 'past_30_mins':
+            timeFilter = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+            break;
+        case 'past_hour':
+            timeFilter = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+            break;
+        case 'past_day':
+            timeFilter = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+            break;
+        case 'past_week':
+            timeFilter = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            break;
+        default:
+            timeFilter = null;
+    }
+    try {
+        const queryParams = [organizationID, userID, deploymentID];
+        let queryText = `
+            SELECT 
+                orgid,
+                username,
+                deployment_id,
+                build_log_id,
+                timestamp,
+                log_path,
+                log_messages
+            FROM build_logs
+            WHERE orgid = $1
+              AND username = $2
+              AND deployment_id = $3
+        `;
+        if (timeFilter) {
+            queryText += ` AND timestamp >= $4`;
+            queryParams.push(timeFilter);
+        }
+        queryText += ` ORDER BY timestamp DESC`;
+        const result = await pool.query(queryText, queryParams);
+        const splitLogs = result.rows.flatMap(row =>
+            row.log_messages
+                .split("\n")
+                .filter(line => line.trim())
+                .map(line => ({
+                    build_log_id: row.build_log_id,
+                    timestamp: row.timestamp,
+                    log_path: row.log_path,
+                    log_messages: line
+                }))
+        );
+        res.status(200).json({ logs: splitLogs });
+    } catch (error) {
+        if (!res.headersSent) return res.status(500).json({ message: `Error fetching build logs: ${error.message}` });
+        next(error);
+    }
+});
+
+
+
+
+
 module.exports = router;

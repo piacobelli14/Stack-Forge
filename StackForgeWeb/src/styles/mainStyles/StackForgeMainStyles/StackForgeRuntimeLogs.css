@@ -164,13 +164,11 @@
     .runtimeLogsTopBarSearchContainer {
         width: 100%; 
     }
-    
+
     .runtimeLogsRefreshButton {
         display: none;
     }
 }
-
-
 
 
 .runtimeLogsCellContentWrapper {
@@ -386,52 +384,82 @@
 }
 
 
-
-
-
-
-.runtime-log-header,
-.runtime-log-entry {
-    display: flex;
+.runtimeLogsNoResults {
+    width: 100%; 
+    height: calc(100vh - 180px); 
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
     align-items: center;
 }
 
-.runtime-log-header {
-    font-weight: bold;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    padding-bottom: 0.5rem;
-    margin-bottom: 0.5rem;
+.runtimeLogsNoResultsIcon {
+    font-size: 1.6rem; 
+    color: #c1c1c1; 
+    margin-bottom: 1rem; 
 }
 
-.runtime-log-entry {
-    padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+.runtimeLogsNoResultsText {
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    font-style: italic; 
+    margin-bottom: 1rem;;
+    width: 80%; 
+    text-align: center;
 }
 
-.runtime-log-cell {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.runtimeLogsNoResultsButtons {
+    display: flex; 
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
 }
 
-/* optionally adjust each column’s relative width */
-.runtime-log-cell.time {
-    flex: 0 0 100px;
+@media (max-width: 700px) {
+    .runtimeLogsNoResultsButtons {
+        flex-direction: column;
+    }
 }
 
-.runtime-log-cell.status {
-    flex: 0 0 60px;
+.runtimeLogsNoResultsReset, 
+.runtimeLogsNoResultsRefresh {
+    background-color: #c1c1c1; 
+    padding: 0.4rem 0.8rem; 
+    border: 1px solid #A3A3A3; 
+    border-radius: 6px; 
+    box-shadow: 0 0 10px black; 
+    font-size: 0.8rem; 
+    font-weight: 700;
+    color: #222222;
+    width: 150px;
 }
 
-.runtime-log-cell.host {
-    flex: 0 0 200px;
+.runtimeLogsNoResultsReset:hover, 
+.runtimeLogsNoResultsRefresh:hover {
+    opacity: 0.6;
+    border: 1px solid #A3A3A3; 
+    outline: none;
 }
 
-.runtime-log-cell.request {
-    flex: 1;
+.runtimeLogsNoResultsReset:focus, 
+.runtimeLogsNoResultsRefreshfocus {
+    border: 1px solid #A3A3A3; 
+    outline: none;
 }
 
-.runtime-log-cell.messages {
-    flex: 2;
+.runtimeLogsNoResultCell {
+    background-color: rgba(0,0,0,0.4); 
+    padding: 40px 60px; 
+    box-shadow: 0 0 10px black;
+    border-radius: 6px; 
+    display: flex; 
+    flex-direction: column;
+    align-items: center;
+}
+
+@media (max-width: 700px) {
+    .runtimeLogsNoResultCell {
+        padding: 20px 5px; 
+    }
 }
