@@ -224,14 +224,23 @@ const StackForgeProjectDetails = () => {
                             <div className="productionDeploymentHeader">
                                 <h2>Production Deployment</h2>
                                 <div className="deploymentMenuButtons">
-                                    <button>
+                                    <button onClick={()=>{navigate("/build-logs")}}>
                                         <FontAwesomeIcon icon={faHammer} />
                                         Build Logs
                                     </button>
-                                    <button>
-                                        <FontAwesomeIcon icon={faGaugeHigh} />
-                                        Runtime Logs
-                                    </button>
+                                    <button
+                                        onClick={() =>
+                                            navigate("/runtime-logs", {
+                                            state: {
+                                                projectID,
+                                                deploymentID: projectDetails?.deployments[0]?.deployment_id, // Ensure deploymentID is passed
+                                            },
+                                            })
+                                        }
+                                        >
+                                        Runtime Logs <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                        </button>
+
                                     <button>
                                         <FontAwesomeIcon icon={faArrowRotateLeft} />
                                         Instant Rollback
@@ -395,10 +404,6 @@ const StackForgeProjectDetails = () => {
                                     <div className="productionAnalyticsList" style={{alignItems: "center"}}>
                                         {/* Line Plot Here */}
 
-                                        <strong className="performancegErrorDisplay">
-                                            <a>Runtime Logs<FontAwesomeIcon icon={faArrowUpRightFromSquare}/></a>
-                                            <a>Build Logs<FontAwesomeIcon icon={faArrowUpRightFromSquare}/></a>
-                                        </strong>
                                     </div>
                                 </div>
                             </div>

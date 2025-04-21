@@ -25,9 +25,9 @@ const StackForgeBuildProject = () => {
   const isTouchDevice = useIsTouchDevice();
   const { token, userID, loading, organizationID } = useAuth();
   const [isLoaded, setIsLoaded] = useState(false);
+  const [screenSize, setScreenSize] = useState(window.innerWidth);
   const [isDeploying, setIsDeploying] = useState(false);
   const [buildFinished, setBuildFinished] = useState(false);
-  const [screenSize, setScreenSize] = useState(window.innerWidth);
   const [buildLogs, setBuildLogs] = useState([]);
   const [typedText, setTypedText] = useState("");
   const [copied, setCopied] = useState(false);

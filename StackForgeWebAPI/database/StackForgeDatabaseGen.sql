@@ -275,6 +275,8 @@ CREATE TABLE runtime_logs (
     deployment_id TEXT,
     build_log_id TEXT PRIMARY KEY,
     timestamp TIMESTAMP NOT NULL,
+    status INTEGER,
+    hostname VARCHAR(255),
     runtime_path TEXT NOT NULL,
     runtime_messages TEXT NOT NULL
 );

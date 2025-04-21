@@ -9,6 +9,8 @@ import StackForgeProjectDetails from "./pages/StackForgeMain/StackForgeProjectDe
 import StackForgeUpdateDetails from "./pages/StackForgeMain/StackForgeUpdateDetails";
 import StackForgeAddProject from "./pages/StackForgeMain/StackForgeAddProject";
 import StackForgeBuildProject from "./pages/StackForgeMain/StackForgeBuildProject";
+import StackForgeBuildLogs from "./pages/StackForgeMain/StackForgeBuildLogs";
+import StackForgeRuntimeLogs from "./pages/StackForgeMain/StackForgeRuntimeLogs";
 import StackForgeAddDomains from "./pages/StackForgeMain/StackForgeAddDomains";
 import StackForgeProfile from "./pages/StackForgeProfile/StackForgeProfile";
 import { useEffect, useState } from "react";
@@ -46,6 +48,8 @@ function App() {
           <Route path="/update-details" element={<StackForgeUpdateDetails/>}/>
           <Route path="/add-new-project" element={<StackForgeAddProject/>}/>
           <Route path="/import-new-project" element={<StackForgeBuildProject/>}/>
+          <Route path="/build-logs" element={<StackForgeBuildLogs/>}/>
+          <Route path="/runtime-logs" element={<StackForgeRuntimeLogs/>}/>
           <Route path="/add-new-domain" element={<StackForgeAddDomains/>}/>
           <Route path="/profile" element={<StackForgeProfile/>}/>
           <Route index element={<Navigate to="/login" replace />} />

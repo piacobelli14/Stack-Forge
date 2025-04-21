@@ -181,7 +181,6 @@
     opacity: 0.6;
 }
 
-
 .updateCellContentWrapper {
     display: flex;
     justify-content: flex-start;
@@ -189,15 +188,6 @@
     background-color: #24242B;
     width: 100%;
     height: calc(100% - 80px);
-    flex: 1;
-}
-
-.updateCellContentWrapper {
-    display: flex;
-    justify-content: flex-start;
-    align-items: flex-start;
-    background-color: #24242B;
-    width: 100%;
     flex: 1;
 }
 

@@ -584,10 +584,42 @@ class DeployManager {
 
     async recordRuntimeLogs(orgid, username, deploymentId, projectName) {
         const logGroupName = `/ecs/${projectName}`;
+        
+        let deploymentUrl;
+        try {
+            const deploymentResult = await pool.query(
+                `SELECT url FROM deployments WHERE deployment_id = $1 AND orgid = $2 AND username = $3`,
+                [deploymentId, orgid, username]
+            );
+            if (deploymentResult.rows.length === 0) {
+                throw new Error("Deployment not found");
+            }
+            deploymentUrl = deploymentResult.rows[0].url;
+        } catch (err) {
+            deploymentUrl = `https://${projectName}.stackforgeengine.com`;
+        }
+    
+        let hostname;
+        try {
+            const urlObj = new URL(deploymentUrl);
+            hostname = urlObj.hostname;
+        } catch (err) {
+            hostname = `${projectName}.stackforgeengine.com`; 
+        }
+    
+        let httpStatus = null;
+        try {
+            const response = await axios.get(deploymentUrl, { timeout: 5000 });
+            httpStatus = response.status;
+        } catch (err) {
+            httpStatus = err.response?.status || 503; 
+        }
+    
         const resp = await cloudWatchLogsClient.send(new DescribeLogStreamsCommand({
             logGroupName,
             logStreamNamePrefix: "ecs"
         }));
+    
         for (const ls of resp.logStreams) {
             let nextToken;
             let allMessages = "";
@@ -605,16 +637,27 @@ class DeployManager {
                 }
                 nextToken = eventsResp.nextForwardToken;
             } while (events.length);
+    
+            const rawPath = `${logGroupName}/${ls.logStreamName}`;
+            const sanitizedPath = rawPath
+                .replace(/[^a-zA-Z0-9\/_-]/g, '_') 
+                .replace(/\/+/g, '/')              
+                .replace(/^\/+|\/+$/g, '');       
+    
             await pool.query(
-                `INSERT INTO runtime_logs (orgid, username, deployment_id, build_log_id, timestamp, runtime_path, runtime_messages) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+                `INSERT INTO runtime_logs 
+                 (orgid, username, deployment_id, build_log_id, timestamp, runtime_path, runtime_messages, status, hostname) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
                 [
                     orgid,
                     username,
                     deploymentId,
                     uuidv4(),
                     new Date().toISOString(),
-                    `${logGroupName}/${ls.logStreamName}`,
-                    allMessages
+                    sanitizedPath,
+                    allMessages,
+                    httpStatus,
+                    hostname
                 ]
             );
         }
@@ -1680,6 +1723,83 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
     } catch (error) {
         if (!res.headersSent) {
             return res.status(500).json({ message: `Error processing analytics: ${error.message}` });
+        }
+        next(error);
+    }
+});
+
+router.post("/runtime-logs", authenticateToken, async (req, res, next) => {
+    const { organizationID, userID, projectID, deploymentID, timePeriod } = req.body;
+
+    if (!organizationID || !userID || !timePeriod) {
+        return res.status(400).json({ 
+            message: "Missing required parameters: organizationID, userID, and timePeriod are required." 
+        });
+    }
+
+    const validPeriods = ['past_30_mins', 'past_hour', 'past_day', 'past_week'];
+    if (!validPeriods.includes(timePeriod)) {
+        return res.status(400).json({ 
+            message: `Invalid timePeriod. Must be one of: ${validPeriods.join(', ')}` 
+        });
+    }
+
+    try {
+        let timeFilter;
+        const now = new Date();
+        switch (timePeriod) {
+            case 'past_30_mins':
+                timeFilter = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+                break;
+            case 'past_hour':
+                timeFilter = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+                break;
+            case 'past_day':
+                timeFilter = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+                break;
+            case 'past_week':
+                timeFilter = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                break;
+        }
+
+        let queryText = `
+            SELECT 
+                rl.build_log_id,
+                rl.timestamp,
+                rl.status,
+                rl.hostname as host, 
+                rl.runtime_path,
+                rl.runtime_messages,
+                p.name AS project_name,
+                d.deployment_id
+            FROM runtime_logs rl
+            LEFT JOIN deployments d ON rl.deployment_id = d.deployment_id
+            LEFT JOIN projects p ON d.project_id = p.project_id
+            WHERE rl.orgid = $1 
+            AND rl.username = $2
+            AND rl.timestamp >= $3
+        `;
+        const queryParams = [organizationID, userID, timeFilter];
+        if (projectID) {
+            queryText += ` AND d.project_id = $${queryParams.length + 1}`;
+            queryParams.push(projectID);
+        }
+        if (deploymentID) {
+            queryText += ` AND rl.deployment_id = $${queryParams.length + 1}`;
+            queryParams.push(deploymentID);
+        }
+        queryText += ` ORDER BY rl.timestamp DESC`;
+
+        const result = await pool.query(queryText, queryParams);
+        res.status(200).json({
+            projectId: projectID || null,
+            deploymentId: deploymentID || null,
+            timePeriod,
+            logs: result.rows
+        });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: `Error fetching runtime logs: ${error.message}.` });
         }
         next(error);
     }
