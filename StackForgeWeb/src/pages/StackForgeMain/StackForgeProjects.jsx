@@ -278,7 +278,7 @@ const StackForgeProjects = () => {
                   key={project.project_id}
                   className="deploymentCell"
                   onClick={() => {
-                    navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository  } });
+                    navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository } });
                   }}
                 >
                   <div className="deploymentCellHeaderTop">
@@ -325,10 +325,22 @@ const StackForgeProjects = () => {
                         </button>
                         {openMenuId === project.project_id && (
                           <div className="threeDotDropdownMenu">
-                            <button>Add Favorite</button>
-                            <button>Visit Project</button>
-                            <button>View Project Details</button>
-                            <button>Manage Repository</button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(project.url, "_blank");
+                              }}
+                            >
+                              Visit Website
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository } });
+                              }}
+                            >
+                              View Project Details
+                            </button>
                             <button>Transfer Project</button>
                             <button>Settings</button>
                           </div>

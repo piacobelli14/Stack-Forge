@@ -25,7 +25,12 @@ const {
     RegisterTaskDefinitionCommand,
     DescribeServicesCommand,
     CreateServiceCommand,
-    UpdateServiceCommand
+    UpdateServiceCommand,
+    DeleteServiceCommand,
+    DeleteRepositoryCommand,
+    DeleteProjectCommand,
+    DeleteLogGroupCommand,
+    DeleteTargetGroupCommand
 } = require("@aws-sdk/client-ecs");
 const {
     ElasticLoadBalancingV2Client,
@@ -1574,6 +1579,139 @@ class DeployManager {
             throw new Error(`Failed to retrieve task definition ARN: ${error.message}`);
         }
     }
+
+    async deleteProject({ organizationID, userID, projectID, projectName, domainName }) {
+        const timestamp = new Date().toISOString();
+        
+        try {
+            const projectResult = await pool.query(
+                "SELECT * FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
+                [projectID, organizationID, userID]
+            );
+            if (projectResult.rows.length === 0) {
+                throw new Error("Project not found or access denied");
+            }
+    
+            try {
+                await this.ecs.send(new DeleteServiceCommand({
+                    cluster: process.env.ECS_CLUSTER,
+                    service: projectName,
+                    force: true
+                }));
+            } catch (err) {
+                if (err.name !== "ServiceNotFoundException") {}
+            }
+    
+            try {
+                await this.ecr.send(new DeleteRepositoryCommand({
+                    repositoryName: projectName,
+                    force: true
+                }));
+            } catch (err) {
+                if (err.name !== "RepositoryNotFoundException") {}
+            }
+    
+            try {
+                const recordName = `${domainName}.stackforgeengine.com`;
+                const listResp = await route53Client.send(new ListResourceRecordSetsCommand({
+                    HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+                    StartRecordName: recordName,
+                    StartRecordType: "A",
+                    MaxItems: "1"
+                }));
+                const existing = listResp.ResourceRecordSets && listResp.ResourceRecordSets[0];
+                if (existing && existing.Name.replace(/\.$/, "") === recordName) {
+                    await route53Client.send(new ChangeResourceRecordSetsCommand({
+                        HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+                        ChangeBatch: {
+                            Changes: [{
+                                Action: "DELETE",
+                                ResourceRecordSet: existing
+                            }]
+                        }
+                    }));
+                }
+            } catch (err) {}
+    
+            try {
+                await codeBuildClient.send(new DeleteProjectCommand({
+                    name: projectName
+                }));
+            } catch (err) {
+                if (err.name !== "ResourceNotFoundException") {}
+            }
+    
+            try {
+                const logGroups = [
+                    `/ecs/${projectName}`,
+                    `/aws/codebuild/${projectName}`
+                ];
+                for (const logGroup of logGroups) {
+                    try {
+                        await cloudWatchLogsClient.send(new DeleteLogGroupCommand({
+                            logGroupName: logGroup
+                        }));
+                    } catch (logErr) {
+                        if (logErr.name !== "ResourceNotFoundException") {}
+                    }
+                }
+            } catch (err) {}
+    
+            try {
+                const targetGroupResp = await this.elbv2.send(new DescribeTargetGroupsCommand({
+                    Names: [projectName]
+                }));
+                if (targetGroupResp.TargetGroups?.length > 0) {
+                    const targetGroupArn = targetGroupResp.TargetGroups[0].TargetGroupArn;
+                    await this.elbv2.send(new DeleteTargetGroupCommand({
+                        TargetGroupArn: targetGroupArn
+                    }));
+                }
+            } catch (err) {
+                if (err.name !== "TargetGroupNotFoundException") {}
+            }
+    
+            try {
+                await pool.query(
+                    "DELETE FROM deployment_logs WHERE project_id = $1 AND orgid = $2",
+                    [projectID, organizationID]
+                );
+                await pool.query(
+                    "DELETE FROM build_logs WHERE orgid = $1 AND deployment_id IN (SELECT deployment_id FROM deployments WHERE project_id = $2)",
+                    [organizationID, projectID]
+                );
+                await pool.query(
+                    "DELETE FROM runtime_logs WHERE orgid = $1 AND deployment_id IN (SELECT deployment_id FROM deployments WHERE project_id = $2)",
+                    [organizationID, projectID]
+                );
+                await pool.query(
+                    "DELETE FROM deployments WHERE project_id = $1 AND orgid = $2",
+                    [projectID, organizationID]
+                );
+                await pool.query(
+                    "DELETE FROM domains WHERE project_id = $1 AND orgid = $2",
+                    [projectID, organizationID]
+                );
+                await pool.query(
+                    "DELETE FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
+                    [projectID, organizationID, userID]
+                );
+            } catch (err) {
+                throw new Error(`Failed to delete database records: ${err.message}`);
+            }
+    
+            await pool.query(
+                `INSERT INTO deployment_logs 
+                 (orgid, username, project_id, project_name, action, timestamp, ip_address) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                [organizationID, userID, projectID, projectName, "delete", timestamp, "127.0.0.1"]
+            );
+    
+            return { message: `Project ${projectName} and all associated resources deleted successfully` };
+        } catch (error) {
+            throw new Error(`Failed to delete project: ${error.message}`);
+        }
+    }
 }
 
 const deployManager = new DeployManager();
@@ -1711,6 +1849,32 @@ router.post("/deploy-project", authenticateToken, async (req, res, next) => {
         }
     } catch (error) {
         if (!res.headersSent) return res.status(500).json({ message: error.message });
+        next(error);
+    }
+});
+
+router.post("/delete-project", authenticateToken, async (req, res, next) => {
+    const { organizationID, userID, projectID, projectName, domainName } = req.body;
+
+    if (!organizationID || !userID || !projectID || !projectName || !domainName) {
+        return res.status(400).json({
+            message: "Missing required parameters: organizationID, userID, projectID, projectName, and domainName are required."
+        });
+    }
+
+    try {
+        const result = await deployManager.deleteProject({
+            organizationID,
+            userID,
+            projectID,
+            projectName,
+            domainName
+        });
+        res.status(200).json(result);
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: error.message });
+        }
         next(error);
     }
 });
@@ -1885,7 +2049,6 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                 try {
                     websiteResponse = await axios.get(websiteURL, { timeout: 30000 });
                 } catch (httpErr) {
-                    console.error(`HTTP request failed for ${websiteURL}: ${httpErr.message}`);
                     websiteAnalytics = {
                         status: httpErr.response?.status || 503,
                         responseTime: Date.now() - startTime,
@@ -1919,9 +2082,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                         const browser = await puppeteer.launch({ headless: true });
                         const page = await browser.newPage();
                         await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 30000 });
-        
-                        // Wait for dynamic content using setTimeout (compatible with older Puppeteer versions)
-                        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds for JavaScript to load
+                        await new Promise(resolve => setTimeout(resolve, 2000)); 
         
                         performanceMetrics = await page.evaluate(() => {
                             const { loadEventEnd, navigationStart } = performance.timing;
@@ -1935,12 +2096,10 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                         // Verify page content
                         const pageContent = await page.content();
                         if (!pageContent.includes("<html")) {
-                            console.warn(`Warning: ${websiteURL} may not be a valid HTML page`);
                         }
         
                         await browser.close();
                     } catch (puppeteerErr) {
-                        console.error(`Puppeteer failed for ${websiteURL}: ${puppeteerErr.message}`);
                         performanceMetrics = {
                             pageLoadTime: 0,
                             scripts: 0,
@@ -1963,7 +2122,6 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                     };
                 }
             } catch (err) {
-                console.error(`Website analytics failed for ${websiteURL}: ${err.message}`);
                 websiteAnalytics = {
                     status: 500,
                     responseTime: 0,
@@ -2059,7 +2217,6 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
             }
         }
 
-        console.log(websiteAnalytics);
         return res.status(200).json({
             websiteAnalytics,
             repositoryAnalytics
