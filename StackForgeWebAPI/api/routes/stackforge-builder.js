@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
@@ -32,7 +33,10 @@ const {
     CreateRuleCommand,
     ModifyRuleCommand,
     DescribeTargetGroupsCommand,
-    CreateTargetGroupCommand
+    CreateTargetGroupCommand,
+    DescribeLoadBalancersCommand, 
+    DescribeListenersCommand,
+    DescribeTargetHealthCommand
 } = require("@aws-sdk/client-elastic-load-balancing-v2");
 const {
     CodeBuildClient,
@@ -101,14 +105,12 @@ class DeployManager {
         }
     }
 
-    async createCodeBuildProject({ projectName, repository, branch, rootDirectory, installCommand, buildCommand, outputDirectory, envVars, githubAccessToken }) {
+    async createCodeBuildProject({ projectName, repository, branch, rootDirectory, installCommand, buildCommand, outputDirectory, githubAccessToken }) {
         if (!repository || typeof repository !== "string" || repository.trim() === "") {
-            const errorMsg = "Invalid repository: repository parameter is required and must be a non-empty string";
-            throw new Error(errorMsg);
+            throw new Error("Invalid repository: repository parameter is required and must be a non-empty string");
         }
         if (!githubAccessToken || typeof githubAccessToken !== "string" || githubAccessToken.trim() === "") {
-            const errorMsg = "Invalid GitHub access token: token is required and must be a non-empty string";
-            throw new Error(errorMsg);
+            throw new Error("Invalid GitHub access token: token is required and must be a non-empty string");
         }
         await this.validateGitHubToken(githubAccessToken, repository);
         let repoUrl;
@@ -183,15 +185,8 @@ class DeployManager {
                 "discard-paths": "yes"
             }
         };
-        const envVariables = [];
-        if (envVars && typeof envVars === "object") {
-            for (const [name, value] of Object.entries(envVars)) {
-                if (value != null) {
-                    envVariables.push({ name, value: value.toString(), type: "PLAINTEXT" });
-                }
-            }
-        }
-        envVariables.push(
+
+        const envVariables = [
             { name: "ROOT_DIRECTORY", value: rootDir, type: "PLAINTEXT" },
             { name: "INSTALL_COMMAND", value: installCommand || "npm install", type: "PLAINTEXT" },
             { name: "BUILD_COMMAND", value: buildCommand || "", type: "PLAINTEXT" },
@@ -201,7 +196,7 @@ class DeployManager {
             { name: "GITHUB_TOKEN", value: githubAccessToken, type: "PLAINTEXT" },
             { name: "REPO_URL", value: repoUrl, type: "PLAINTEXT" },
             { name: "REPO_BRANCH", value: branch, type: "PLAINTEXT" }
-        );
+        ];
         const projectParams = {
             name: projectName,
             source: { type: "NO_SOURCE", buildspec: JSON.stringify(buildspec) },
@@ -239,8 +234,7 @@ class DeployManager {
             ? repository
             : `https://github.com/${repository}.git`;
         if (!githubAccessToken) {
-            const errorMsg = 'GitHub access token is required for CodeBuild';
-            throw new Error(errorMsg);
+            throw new Error("GitHub access token is required for CodeBuild");
         }
         await this.validateGitHubToken(githubAccessToken, repository);
         try {
@@ -281,8 +275,7 @@ class DeployManager {
         }
         if (buildStatus !== "SUCCEEDED") {
             const finalLogs = fs.readFileSync(logFile, "utf-8");
-            const errorMsg = `Build failed: ${finalLogs}`;
-            throw new Error(errorMsg);
+            throw new Error(`Build failed: ${finalLogs}`);
         }
         const imageUri = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}:latest`;
         return { imageUri, logFile };
@@ -290,13 +283,11 @@ class DeployManager {
 
     async streamCodeBuild({ projectName, repository, branch, githubAccessToken }, onChunk) {
         if (typeof onChunk !== "function") {
-            const errorMsg = `streamCodeBuild: onChunk is not a function, received: ${typeof onChunk}`;
-            throw new Error(errorMsg);
+            throw new Error(`streamCodeBuild: onChunk is not a function, received: ${typeof onChunk}`);
         }
         if (!githubAccessToken) {
-            const errorMsg = 'GitHub access token is required for CodeBuild';
-            onChunk(`${errorMsg}\n`);
-            throw new Error(errorMsg);
+            onChunk("GitHub access token is required for CodeBuild\n");
+            throw new Error("GitHub access token is required for CodeBuild");
         }
         await this.validateGitHubToken(githubAccessToken, repository);
         const logGroupName = `/aws/codebuild/${projectName}`;
@@ -399,16 +390,24 @@ class DeployManager {
         return imageUri;
     }
 
-    async registerTaskDef({ projectName, imageUri }) {
+    async registerTaskDef({ projectName, imageUri, envVars }) {
         const logGroupName = `/ecs/${projectName}`;
         try {
             await cloudWatchLogsClient.send(new CreateLogGroupCommand({ logGroupName }));
         } catch (err) {
-            if (err.name === "ResourceAlreadyExistsException") {
-            } else {
+            if (err.name !== "ResourceAlreadyExistsException") {
                 throw new Error(`Failed to create CloudWatch log group: ${err.message}`);
             }
         }
+
+        const containerEnvVars = Array.isArray(envVars)
+            ? envVars
+                .filter(envVar => envVar.key && envVar.key.trim() && envVar.value != null)
+                .map(envVar => ({
+                    name: envVar.key.trim(),
+                    value: envVar.value.toString()
+                }))
+            : [];
         const params = {
             family: projectName,
             networkMode: "awsvpc",
@@ -422,6 +421,7 @@ class DeployManager {
                     image: imageUri,
                     portMappings: [{ containerPort: 3000, protocol: "tcp" }],
                     essential: true,
+                    environment: containerEnvVars,
                     logConfiguration: {
                         logDriver: "awslogs",
                         options: {
@@ -446,107 +446,219 @@ class DeployManager {
 
     async ensureTargetGroup(projectName) {
         try {
-            const resp = await this.elbv2.send(new DescribeTargetGroupsCommand({ Names: [projectName] }));
-            return resp.TargetGroups[0].TargetGroupArn;
-        } catch {
-            const resp = await this.elbv2.send(new CreateTargetGroupCommand({
+            let targetGroupArn;
+            try {
+                const existingTgResp = await this.elbv2.send(new DescribeTargetGroupsCommand({
+                    Names: [projectName]
+                }));
+                if (existingTgResp.TargetGroups?.length > 0) {
+                    targetGroupArn = existingTgResp.TargetGroups[0].TargetGroupArn;
+                    return targetGroupArn;
+                }
+            } catch (err) {
+                if (err.name !== "TargetGroupNotFoundException") {
+                    throw err;
+                }
+            }
+    
+            let vpcId;
+            try {
+                const albResp = await this.elbv2.send(new DescribeLoadBalancersCommand({
+                    LoadBalancerArns: [process.env.LOAD_BALANCER_ARN]
+                }));
+                if (albResp.LoadBalancers?.length === 0) {
+                    throw new Error(`Load balancer not found: ${process.env.LOAD_BALANCER_ARN}`);
+                }
+                vpcId = albResp.LoadBalancers[0].VpcId;
+            } catch (err) {
+                throw new Error(`Failed to fetch ALB VPC ID: ${err.message}`);
+            }
+    
+            const tgResp = await this.elbv2.send(new CreateTargetGroupCommand({
                 Name: projectName,
                 Protocol: "HTTP",
                 Port: 3000,
-                VpcId: process.env.VPC_ID,
+                VpcId: vpcId, 
                 TargetType: "ip",
                 HealthCheckProtocol: "HTTP",
-                HealthCheckPath: "/health",
+                HealthCheckPath: "/",
+                HealthCheckIntervalSeconds: 30,
+                HealthCheckTimeoutSeconds: 5,
+                HealthyThresholdCount: 5,
+                UnhealthyThresholdCount: 2,
                 Matcher: { HttpCode: "200-399" }
             }));
-            return resp.TargetGroups[0].TargetGroupArn;
+    
+            targetGroupArn = tgResp.TargetGroups[0].TargetGroupArn;
+
+            const tgAttributes = await this.elbv2.send(new DescribeTargetGroupsCommand({
+                TargetGroupArns: [targetGroupArn]
+            }));
+            return targetGroupArn;
+        } catch (err) {
+            throw new Error(`Failed to ensure target group: ${err.message}`);
         }
     }
 
     async createOrUpdateService({ projectName, taskDefArn, domainName, targetGroupArn }) {
-        const cluster = process.env.ECS_CLUSTER;
-        const serviceName = projectName;
-        const listenerArn = process.env.ALB_LISTENER_ARN;
+        const serviceParams = {
+            cluster: process.env.ECS_CLUSTER,
+            serviceName: projectName,
+            taskDefinition: taskDefArn,
+            desiredCount: 1,
+            launchType: "FARGATE",
+            networkConfiguration: {
+                awsvpcConfiguration: {
+                    subnets: process.env.SUBNET_IDS.split(","),
+                    securityGroups: [process.env.ECS_SECURITY_GROUP],
+                    assignPublicIp: "ENABLED"
+                }
+            },
+            loadBalancers: [{
+                targetGroupArn: targetGroupArn,
+                containerName: projectName,
+                containerPort: 3000
+            }],
+            deploymentConfiguration: {
+                maximumPercent: 200,
+                minimumHealthyPercent: 100
+            }
+        };
+    
         try {
-            const rules = await this.elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
-            const hostRule = rules.Rules.find(
-                r =>
-                    r.Conditions &&
-                    r.Conditions.some(
-                        c =>
-                            c.Field === "host-header" &&
-                            c.HostHeaderConfig.Values.includes(`${domainName}.stackforgeengine.com`)
-                    )
-            );
-            if (!hostRule) {
-                await this.elbv2.send(new CreateRuleCommand({
-                    ListenerArn: listenerArn,
-                    Priority: parseInt(process.env.RULE_PRIORITY, 10) || Math.floor(Math.random() * 100) + 1,
-                    Conditions: [
-                        { Field: "host-header", HostHeaderConfig: { Values: [`${domainName}.stackforgeengine.com`] } }
-                    ],
-                    Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
+            const tgDetails = await this.elbv2.send(new DescribeTargetGroupsCommand({
+                TargetGroupArns: [targetGroupArn]
+            }));
+            const associatedLoadBalancers = tgDetails.TargetGroups[0].LoadBalancerArns || [];
+            let httpsRuleArn;
+            try {
+                const httpsRulesResp = await this.elbv2.send(new DescribeRulesCommand({
+                    ListenerArn: process.env.ALB_LISTENER_ARN_HTTPS
                 }));
-            } else {
-                const ruleActions = hostRule.Actions || [];
-                const hasCorrectTargetGroup = ruleActions.some(
-                    action => action.Type === "forward" && action.TargetGroupArn === targetGroupArn
+                const existingHttpsRule = httpsRulesResp.Rules.find(rule =>
+                    rule.Conditions.some(cond =>
+                        cond.Field === "host-header" && cond.Values.includes(`${domainName}.stackforgeengine.com`)
+                    )
                 );
-                if (!hasCorrectTargetGroup) {
+    
+                if (existingHttpsRule) {
+                    const modifyResp = await this.elbv2.send(new ModifyRuleCommand({
+                        RuleArn: existingHttpsRule.RuleArn,
+                        Conditions: [{
+                            Field: "host-header",
+                            Values: [`${domainName}.stackforgeengine.com`]
+                        }],
+                        Actions: [{
+                            Type: "forward",
+                            TargetGroupArn: targetGroupArn
+                        }]
+                    }));
+                    httpsRuleArn = existingHttpsRule.RuleArn;
+                } else {
+                    const httpsPriorities = httpsRulesResp.Rules.map(rule => parseInt(rule.Priority)).filter(p => !isNaN(p));
+                    const httpsPriority = httpsPriorities.length > 0 ? Math.max(...httpsPriorities) + 1 : 1;
+    
+                    const httpsRuleResp = await this.elbv2.send(new CreateRuleCommand({
+                        ListenerArn: process.env.ALB_LISTENER_ARN_HTTPS,
+                        Conditions: [{
+                            Field: "host-header",
+                            Values: [`${domainName}.stackforgeengine.com`]
+                        }],
+                        Priority: httpsPriority,
+                        Actions: [{
+                            Type: "forward",
+                            TargetGroupArn: targetGroupArn
+                        }]
+                    }));
+                    httpsRuleArn = httpsRuleResp.Rules[0].RuleArn;
+                }
+            } catch (err) {
+                throw err;
+            }
+    
+            try {
+                const httpRulesResp = await this.elbv2.send(new DescribeRulesCommand({
+                    ListenerArn: process.env.ALB_LISTENER_ARN_HTTP
+                }));
+                const existingHttpRule = httpRulesResp.Rules.find(rule =>
+                    rule.Conditions.some(cond =>
+                        cond.Field === "host-header" && cond.Values.includes(`${domainName}.stackforgeengine.com`)
+                    )
+                );
+    
+                if (existingHttpRule) {
                     await this.elbv2.send(new ModifyRuleCommand({
-                        RuleArn: hostRule.RuleArn,
-                        Conditions: [
-                            { Field: "host-header", HostHeaderConfig: { Values: [`${domainName}.stackforgeengine.com`] } }
-                        ],
-                        Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
+                        RuleArn: existingHttpRule.RuleArn,
+                        Conditions: [{
+                            Field: "host-header",
+                            Values: [`${domainName}.stackforgeengine.com`]
+                        }],
+                        Actions: [{
+                            Type: "redirect",
+                            RedirectConfig: {
+                                Protocol: "HTTPS",
+                                Port: "443",
+                                StatusCode: "HTTP_301",
+                                Host: "#{host}",
+                                Path: "/#{path}",
+                                Query: "#{query}"
+                            }
+                        }]
+                    }));
+                } else {
+                    const httpPriorities = httpRulesResp.Rules.map(rule => parseInt(rule.Priority)).filter(p => !isNaN(p));
+                    const httpPriority = httpPriorities.length > 0 ? Math.max(...httpPriorities) + 1 : 1;
+    
+                    const httpRuleResp = await this.elbv2.send(new CreateRuleCommand({
+                        ListenerArn: process.env.ALB_LISTENER_ARN_HTTP,
+                        Conditions: [{
+                            Field: "host-header",
+                            Values: [`${domainName}.stackforgeengine.com`]
+                        }],
+                        Priority: httpPriority,
+                        Actions: [{
+                            Type: "redirect",
+                            RedirectConfig: {
+                                Protocol: "HTTPS",
+                                Port: "443",
+                                StatusCode: "HTTP_301",
+                                Host: "#{host}",
+                                Path: "/#{path}",
+                                Query: "#{query}"
+                            }
+                        }]
                     }));
                 }
+            } catch (err) {}
+    
+            const tgDetailsAfter = await this.elbv2.send(new DescribeTargetGroupsCommand({
+                TargetGroupArns: [targetGroupArn]
+            }));
+            const associatedLoadBalancersAfter = tgDetailsAfter.TargetGroups[0].LoadBalancerArns || [];
+            if (associatedLoadBalancersAfter.length === 0) {
+                throw new Error(`Target group ${targetGroupArn} is still not associated with any load balancer after creating listener rules`);
+            }
+    
+            const describeResp = await this.ecs.send(new DescribeServicesCommand({
+                cluster: process.env.ECS_CLUSTER,
+                services: [projectName]
+            }));
+            const serviceExists = describeResp.services?.length > 0 && describeResp.services[0].status !== "INACTIVE";
+    
+            if (serviceExists) {
+                await this.ecs.send(new UpdateServiceCommand({
+                    ...serviceParams,
+                    service: projectName,
+                    forceNewDeployment: true
+                }));
+            } else {
+                await this.ecs.send(new CreateServiceCommand({
+                    ...serviceParams,
+                    serviceName: projectName
+                }));
             }
         } catch (err) {
-            throw new Error(`Failed to configure ALB listener rule: ${err.message}`);
-        }
-        let existing;
-        try {
-            const desc = await this.ecs.send(new DescribeServicesCommand({ cluster, services: [serviceName] }));
-            existing = desc.services && desc.services[0] && desc.services[0].status !== "INACTIVE";
-        } catch (err) {
-            existing = false;
-        }
-        if (!existing) {
-            await this.ecs.send(new CreateServiceCommand({
-                cluster,
-                serviceName,
-                taskDefinition: taskDefArn,
-                desiredCount: 1,
-                launchType: "FARGATE",
-                networkConfiguration: {
-                    awsvpcConfiguration: {
-                        subnets: process.env.SUBNET_IDS.split(","),
-                        securityGroups: process.env.SECURITY_GROUP_IDS.split(","),
-                        assignPublicIp: "ENABLED"
-                    }
-                },
-                loadBalancers: [
-                    {
-                        targetGroupArn,
-                        containerName: projectName,
-                        containerPort: 3000
-                    }
-                ]
-            }));
-        } else {
-            await this.ecs.send(new UpdateServiceCommand({
-                cluster,
-                service: serviceName,
-                taskDefinition: taskDefArn,
-                loadBalancers: [
-                    {
-                        targetGroupArn,
-                        containerName: projectName,
-                        containerPort: 3000
-                    }
-                ]
-            }));
+            throw new Error(`Failed to create/update ECS service: ${err.message}`);
         }
     }
 
@@ -662,7 +774,7 @@ class DeployManager {
             );
         }
     }
-
+    
     async launchContainer({
         userID,
         organizationID,
@@ -681,13 +793,12 @@ class DeployManager {
         await this.ensureEcrRepo(projectName);
         const tokenResult = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
         if (tokenResult.rows.length === 0 || !tokenResult.rows[0].github_access_token) {
-            const errorMsg = "GitHub account not connected";
-            throw new Error(errorMsg);
+            throw new Error("GitHub account not connected");
         }
         const githubAccessToken = tokenResult.rows[0].github_access_token;
-        await this.createCodeBuildProject({ projectName, repository, branch, envVars, installCommand, buildCommand, githubAccessToken });
+        await this.createCodeBuildProject({ projectName, repository, branch, rootDirectory, installCommand, buildCommand, githubAccessToken });
         const { imageUri, logFile } = await this.startCodeBuild({ projectName, repository, branch, logDir, githubAccessToken });
-        const taskDefArn = await this.registerTaskDef({ projectName, imageUri });
+        const taskDefArn = await this.registerTaskDef({ projectName, imageUri, envVars });
         const targetGroupArn = await this.ensureTargetGroup(projectName);
         await this.createOrUpdateService({ projectName, taskDefArn, domainName, targetGroupArn });
         return taskDefArn;
@@ -707,11 +818,10 @@ class DeployManager {
         fs.mkdirSync(logDir, { recursive: true });
         const tokenResult = await pool.query("SELECT github_access_token FROM users WHERE username = $1", ["piacobelli"]);
         if (tokenResult.rows.length === 0 || !tokenResult.rows[0].github_access_token) {
-            const errorMsg = "GitHub account not connected";
-            throw new Error(errorMsg);
+            throw new Error("GitHub account not connected");
         }
         const githubAccessToken = tokenResult.rows[0].github_access_token;
-        await this.createCodeBuildProject({ projectName, repository, branch, envVars, installCommand, buildCommand, githubAccessToken });
+        await this.createCodeBuildProject({ projectName, repository, branch, rootDirectory, installCommand, buildCommand, githubAccessToken });
         const { logFile } = await this.startCodeBuild({ projectName, repository, branch, logDir, githubAccessToken });
         return logDir;
     }
@@ -730,7 +840,7 @@ class DeployManager {
         }
         const githubAccessToken = tokenResult.rows[0].github_access_token;
         try {
-            await this.createCodeBuildProject({ projectName, repository, branch, envVars, installCommand, buildCommand, githubAccessToken });
+            await this.createCodeBuildProject({ projectName, repository, branch, rootDirectory, installCommand, buildCommand, githubAccessToken });
             onData(`CodeBuild project configured for ${projectName}\n`);
             const imageUri = await this.streamCodeBuild({ projectName, repository, branch, githubAccessToken }, onData);
             onData(`Build completed successfully. Image pushed to ${imageUri}\n`);
@@ -922,8 +1032,7 @@ class DeployManager {
         onData
     ) {
         if (typeof onData !== "function") {
-            const errorMsg = `launchWebsiteStream: onData is not a function, received: ${typeof onData}`;
-            throw new Error(errorMsg);
+            throw new Error(`launchWebsiteStream: onData is not a function, received: ${typeof onData}`);
         }
         onData(`Starting deployment for project: ${projectName}\n`);
         const deploymentId = uuidv4();
@@ -1044,7 +1153,6 @@ class DeployManager {
                 installCommand,
                 buildCommand,
                 outputDirectory,
-                envVars,
                 githubAccessToken: githubAccessToken2
             });
             onData(`CodeBuild project created/updated for ${projectName}\n`);
@@ -1057,7 +1165,7 @@ class DeployManager {
             const imageUri = await this.streamCodeBuild({ projectName, repository, branch, githubAccessToken: githubAccessToken2 }, capturingOnData);
             onData(`Docker image pushed to ${imageUri}\n`);
             onData(`Registering ECS task definition\n`);
-            const taskDefArn2 = await this.registerTaskDef({ projectName, imageUri });
+            const taskDefArn2 = await this.registerTaskDef({ projectName, imageUri, envVars });
             onData(`ECS task definition registered: ${taskDefArn2}\n`);
             onData(`Ensuring target group\n`);
             const targetGroupArn2 = await this.ensureTargetGroup(projectName);
@@ -1065,15 +1173,108 @@ class DeployManager {
             onData(`Creating/updating ECS service\n`);
             await this.createOrUpdateService({ projectName, taskDefArn: taskDefArn2, domainName, targetGroupArn: targetGroupArn2 });
             onData(`ECS service created/updated for ${projectName}\n`);
+    
+            onData(`Checking ECS service status\n`);
+            try {
+                const serviceDesc = await this.ecs.send(new DescribeServicesCommand({
+                    cluster: process.env.ECS_CLUSTER,
+                    services: [projectName]
+                }));
+                const service = serviceDesc.services?.[0];
+                if (service) {
+                    onData(`Service Status: ${service.status}, Desired Count: ${service.desiredCount}, Running Count: ${service.runningCount}\n`);
+                    if (service.runningCount === 0) {
+                        onData(`Warning: No tasks are running for service ${projectName}\n`);
+                    }
+                    if (service.events?.length > 0) {
+                        onData(`Recent Service Events:\n`);
+                        service.events.slice(0, 5).forEach(event => {
+                            onData(`${event.createdAt}: ${event.message}\n`);
+                        });
+                    }
+                } else {
+                    onData(`Error: Service ${projectName} not found\n`);
+                }
+            } catch (err) {
+                onData(`Error checking ECS service status: ${err.message}\n`);
+            }
+    
+            onData(`Checking load balancer listener rules\n`);
+            try {
+                const listeners = await this.elbv2.send(new DescribeListenersCommand({
+                    LoadBalancerArn: process.env.LOAD_BALANCER_ARN
+                }));
+                const listenerArns = [
+                    { arn: process.env.ALB_LISTENER_ARN_HTTP, protocol: "HTTP", port: "80" },
+                    { arn: process.env.ALB_LISTENER_ARN_HTTPS, protocol: "HTTPS", port: "443" }
+                ];
+    
+                for (const listener of listenerArns) {
+                    const rules = await this.elbv2.send(new DescribeRulesCommand({
+                        ListenerArn: listener.arn
+                    }));
+                    const relevantRules = rules.Rules?.filter(rule => 
+                        rule.Conditions.some(cond => 
+                            cond.Field === "host-header" && 
+                            cond.Values.includes(`${projectName}.stackforgeengine.com`)
+                        )
+                    );
+                    if (relevantRules?.length > 0) {
+                        onData(`Listener ${listener.protocol}:${listener.port} rules for ${projectName}.stackforgeengine.com:\n`);
+                        relevantRules.forEach(rule => {
+                            onData(`Rule Priority: ${rule.Priority}, Actions: ${JSON.stringify(rule.Actions)}\n`);
+                        });
+                    } else {
+                        onData(`No listener rules found for ${projectName}.stackforgeengine.com on ${listener.protocol}:${listener.port}\n`);
+                    }
+                }
+            } catch (err) {
+                onData(`Error checking listener rules: ${err.message}\n`);
+            }
+    
+            onData(`Checking target group health and task network interfaces\n`);
+            try {
+                const targetGroupResp = await this.elbv2.send(new DescribeTargetGroupsCommand({ Names: [projectName] }));
+                const targetGroupArn = targetGroupResp.TargetGroups?.[0]?.TargetGroupArn;
+                if (targetGroupArn) {
+                    const healthResp = await this.elbv2.send(new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn }));
+                    if (healthResp.TargetHealthDescriptions?.length > 0) {
+                        healthResp.TargetHealthDescriptions.forEach(th => {
+                            onData(`Target: ${th.Target.Id}:${th.Target.Port}, Health: ${th.TargetHealth.State}, Reason: ${th.TargetHealth.Reason || 'N/A'}, Description: ${th.TargetHealth.Description || 'N/A'}\n`);
+                        });
+                    } else {
+                        onData(`No registered targets found for target group ${projectName}\n`);
+                    }
+                } else {
+                    onData(`Target group for ${projectName} not found\n`);
+                }
+    
+                const serviceDesc = await this.ecs.send(new DescribeServicesCommand({
+                    cluster: process.env.ECS_CLUSTER,
+                    services: [projectName]
+                }));
+                const service = serviceDesc.services?.[0];
+                if (service?.tasks?.length > 0) {
+                    const taskResp = await this.ecs.send(new DescribeTasksCommand({
+                        cluster: process.env.ECS_CLUSTER,
+                        tasks: [service.tasks[0].taskArn]
+                    }));
+                    const task = taskResp.tasks?.[0];
+                    if (task) {
+                        const networkInterface = task.attachments?.find(a => a.type === "ElasticNetworkInterface")?.details?.find(d => d.name === "privateIPv4Address");
+                        onData(`Task Network Interface: Private IP ${networkInterface?.value || 'N/A'}\n`);
+                    }
+                }
+            } catch (err) {
+                onData(`Error checking target group health or task network interfaces: ${err.message}\n`);
+            }
+    
             if (isNewProject) {
                 onData(`Creating new project record\n`);
                 await pool.query(
                     `INSERT INTO projects 
-                     (orgid, username, project_id, name, description, branch, team_name,
-                      root_directory, output_directory, build_command, install_command,
-                      env_vars, created_by, created_at, updated_at, url, repository,
-                      previous_deployment, current_deployment, image)
-                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NULL,$17,$18)`,
+                     (orgid, username, project_id, name, description, branch, team_name, root_directory, output_directory, build_command, install_command, env_vars, created_by, created_at, updated_at, url, repository, previous_deployment, current_deployment, image)
+                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
                     [
                         organizationID,
                         userID,
@@ -1092,6 +1293,7 @@ class DeployManager {
                         timestamp,
                         url,
                         repository,
+                        null,
                         deploymentId,
                         null
                     ]
@@ -1162,15 +1364,13 @@ class DeployManager {
 
     async updateDNSRecord(subdomain) {
         if (!subdomain || subdomain.trim() === "") {
-            const errorMsg = "Subdomain cannot be empty";
-            throw new Error(errorMsg);
+            throw new Error("Subdomain cannot be empty");
         }
         const hostedZoneId = process.env.ROUTE53_HOSTED_ZONE_ID;
         const albZoneId = process.env.LOAD_BALANCER_ZONE_ID;
         const loadBalancerDNS = process.env.LOAD_BALANCER_DNS;
         if (!hostedZoneId || !albZoneId || !loadBalancerDNS) {
-            const errorMsg = "Route53 DNS configuration missing";
-            throw new Error(errorMsg);
+            throw new Error("Route53 DNS configuration missing");
         }
         const recordName = `${subdomain}.stackforgeengine.com`;
         let changes = [];
@@ -1225,7 +1425,7 @@ class DeployManager {
              LEFT JOIN projects p ON d.project_id = p.project_id
              LEFT JOIN domains dm ON d.domain_id = dm.domain_id
              JOIN organizations o ON d.orgid = o.orgid
-             WHERE d.deployment_id = $1 AND d.orgid = $2 AND d.username = $3;`,
+             WHERE d.deployment_id = $1 AND d.orgid = $2 AND d.username = $3`,
             [deploymentId, organizationID, userID]
         );
         if (result.rows.length === 0) {
@@ -1248,7 +1448,7 @@ class DeployManager {
              d.last_deployed_at
              FROM deployments d
              WHERE d.orgid = $1
-             ORDER BY d.created_at DESC;`,
+             ORDER BY d.created_at DESC`,
             [organizationID]
         );
         return result.rows;
@@ -1258,7 +1458,7 @@ class DeployManager {
         const result = await pool.query(
             `SELECT * FROM projects
              WHERE orgid = $1
-             ORDER BY created_at DESC;`,
+             ORDER BY created_at DESC`,
             [organizationID]
         );
         return result.rows;
@@ -1277,7 +1477,7 @@ class DeployManager {
              updated_at
              FROM domains
              WHERE orgid = $1
-             ORDER BY created_at DESC;`,
+             ORDER BY created_at DESC`,
             [organizationID]
         );
         return result.rows;
@@ -1362,22 +1562,13 @@ class DeployManager {
                  WHERE deployment_id = $1`,
                 [deploymentID]
             );
-
             if (deploymentResult.rows.length === 0) {
                 throw new Error(`Deployment ${deploymentID} not found`);
             }
-
             const taskDefArn = deploymentResult.rows[0].task_def_arn;
             if (!taskDefArn) {
-                const taskDefs = await this.ecs.send(new DescribeTaskDefinitionCommand({
-                    taskDefinition: projectName
-                }));
-                if (taskDefs.taskDefinition) {
-                    return taskDefs.taskDefinition.taskDefinitionArn;
-                }
                 return `arn:aws:ecs:${process.env.AWS_REGION}:${process.env.AWS_ACCOUNT_ID}:task-definition/${projectName}:1`;
             }
-
             return taskDefArn;
         } catch (error) {
             throw new Error(`Failed to retrieve task definition ARN: ${error.message}`);
@@ -1473,50 +1664,6 @@ router.get("/deploy-project-stream", (req, res, next) => {
     });
 });
 
-router.post("/status", authenticateToken, async (req, res, next) => {
-    const { organizationID, userID, deploymentId } = req.body;
-    try {
-        const status = await deployManager.getDeploymentStatus(deploymentId, organizationID, userID);
-        res.status(200).json(status);
-    } catch (error) {
-        if (!res.headersSent) return res.status(500).json({ message: error.message });
-        next(error);
-    }
-});
-
-router.post("/list-projects", authenticateToken, async (req, res, next) => {
-    const organizationID = req.body.organizationID;
-    try {
-        const projects = await deployManager.listProjects(organizationID);
-        res.status(200).json(projects);
-    } catch (error) {
-        if (!res.headersSent) return res.status(500).json({ message: error.message });
-        next(error);
-    }
-});
-
-router.post("/list-deployments", authenticateToken, async (req, res, next) => {
-    const organizationID = req.body.organizationID;
-    try {
-        const deployments = await deployManager.listDeployments(organizationID);
-        res.status(200).json(deployments);
-    } catch (error) {
-        if (!res.headersSent) return res.status(500).json({ message: error.message });
-        next(error);
-    }
-});
-
-router.post("/list-domains", authenticateToken, async (req, res, next) => {
-    const organizationID = req.body.organizationID;
-    try {
-        const domains = await deployManager.listDomains(organizationID);
-        res.status(200).json(domains);
-    } catch (error) {
-        if (!res.headersSent) return res.status(500).json({ message: error.message });
-        next(error);
-    }
-});
-
 router.post("/deploy-project", authenticateToken, async (req, res, next) => {
     const {
         userID,
@@ -1562,6 +1709,50 @@ router.post("/deploy-project", authenticateToken, async (req, res, next) => {
         } catch (err) {
             return res.status(500).json({ message: err.message, buildLog: err.logPath });
         }
+    } catch (error) {
+        if (!res.headersSent) return res.status(500).json({ message: error.message });
+        next(error);
+    }
+});
+
+router.post("/status", authenticateToken, async (req, res, next) => {
+    const { organizationID, userID, deploymentId } = req.body;
+    try {
+        const status = await deployManager.getDeploymentStatus(deploymentId, organizationID, userID);
+        res.status(200).json(status);
+    } catch (error) {
+        if (!res.headersSent) return res.status(500).json({ message: error.message });
+        next(error);
+    }
+});
+
+router.post("/list-projects", authenticateToken, async (req, res, next) => {
+    const organizationID = req.body.organizationID;
+    try {
+        const projects = await deployManager.listProjects(organizationID);
+        res.status(200).json(projects);
+    } catch (error) {
+        if (!res.headersSent) return res.status(500).json({ message: error.message });
+        next(error);
+    }
+});
+
+router.post("/list-deployments", authenticateToken, async (req, res, next) => {
+    const organizationID = req.body.organizationID;
+    try {
+        const deployments = await deployManager.listDeployments(organizationID);
+        res.status(200).json(deployments);
+    } catch (error) {
+        if (!res.headersSent) return res.status(500).json({ message: error.message });
+        next(error);
+    }
+});
+
+router.post("/list-domains", authenticateToken, async (req, res, next) => {
+    const organizationID = req.body.organizationID;
+    try {
+        const domains = await deployManager.listDomains(organizationID);
+        res.status(200).json(domains);
     } catch (error) {
         if (!res.headersSent) return res.status(500).json({ message: error.message });
         next(error);

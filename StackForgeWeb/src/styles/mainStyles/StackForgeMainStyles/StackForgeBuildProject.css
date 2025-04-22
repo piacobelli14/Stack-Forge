@@ -361,6 +361,10 @@
   position: relative; 
 }
 
+.importProjectsOperationsField input {
+  text-align: left; 
+}
+
 .importProjectsOperationsField span {
   display: flex; 
   align-items: center;

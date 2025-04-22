@@ -203,6 +203,7 @@ CREATE TABLE projects
     url TEXT, 
     repository TEXT,
     current_deployment TEXT, 
+    previous_deployment TEXT,
     image TEXT
 );
 DROP INDEX IF EXISTS idx_projects;

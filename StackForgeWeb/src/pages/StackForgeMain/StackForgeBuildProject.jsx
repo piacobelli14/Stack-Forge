@@ -60,6 +60,30 @@ const StackForgeBuildProject = () => {
   const buildLogsString = buildLogs.join("\n");
   const [successfulDeployment, setSuccessfulDeployment] = useState(false);
 
+  // Handles pasting a full .env file into any env-var input (key OR value)
+  const handleEnvVarsPaste = (index, e) => {
+    const text = e.clipboardData.getData("text");
+    if (text.includes("\n") && text.includes("=")) {
+      e.preventDefault();
+      const lines = text
+        .split(/\r?\n/)
+        .map(l => l.trim())
+        .filter(l => l && l.includes("="));
+      const parsed = lines.map(line => {
+        const idx = line.indexOf("=");
+        return {
+          key: line.slice(0, idx),
+          value: line.slice(idx + 1)
+        };
+      });
+      setEnvVars(prev => {
+        const before = prev.slice(0, index);
+        const after = prev.slice(index + 1);
+        return [...before, ...parsed, ...after];
+      });
+    }
+  };
+
   useEffect(() => {
     if (!loading && !token) navigate("/login");
   }, [token, loading, navigate]);
@@ -292,7 +316,7 @@ const StackForgeBuildProject = () => {
                     </strong>
                   </span>
                   <div className="importProjectsBranchSelector">
-                    <button className="importProjectsBranchSelectorButton" ref={branchOpenRef} onClick={toggleBranchDropdown}>
+                    <button className="importProjectsBranchSelectorButton" ref={branchOpenRef} onClick={toggleBranchDropdown} disabled={isDeploying}>
                       <FontAwesomeIcon icon={faCodeBranch} />
                       <span className="importProjectsBranchSelectorButtonText">
                         {selectedBranch || "Select Branch"}
@@ -304,7 +328,7 @@ const StackForgeBuildProject = () => {
                   <div className="importProjectsOperationsFlex">
                     <div className="importProjectsOperationsContainerWrapper">
                       <p>Stack Forge Team</p>
-                      <button className="importProjectsOperationsField" ref={changeTeamOpenRef} onClick={toggleChangeTeamDropdown}>
+                      <button className="importProjectsOperationsField" ref={changeTeamOpenRef} onClick={toggleChangeTeamDropdown} disabled={isDeploying}>
                         <span>
                           <FontAwesomeIcon icon={faGithub} />
                           <p>{teamName}</p>
@@ -318,7 +342,12 @@ const StackForgeBuildProject = () => {
                     </div>
                     <div className="importProjectsOperationsContainerWrapper">
                       <p>Project Name</p>
-                      <input className="importProjectsOperationsField" value={selectedProjectName} onChange={e => setSelectedProjectName(e.target.value)} />
+                      <input
+                        className="importProjectsOperationsField"
+                        value={selectedProjectName}
+                        onChange={e => setSelectedProjectName(e.target.value)}
+                        disabled={isDeploying}
+                      />
                     </div>
                   </div>
                 </div>
@@ -335,6 +364,7 @@ const StackForgeBuildProject = () => {
                           placeholder="Enter new root directory..."
                           value={rootDirectory}
                           onChange={e => setRootDirectory(e.target.value)}
+                          disabled={isDeploying}
                         />
                         <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                       </div>
@@ -353,6 +383,7 @@ const StackForgeBuildProject = () => {
                           placeholder="Ex. 'public'"
                           value={outputDirectory}
                           onChange={e => setOutputDirectory(e.target.value)}
+                          disabled={isDeploying}
                         />
                         <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                       </div>
@@ -371,6 +402,7 @@ const StackForgeBuildProject = () => {
                           placeholder="Ex. 'npm run build'"
                           value={buildCommand}
                           onChange={e => setBuildCommand(e.target.value)}
+                          disabled={isDeploying}
                         />
                         <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                       </div>
@@ -388,6 +420,7 @@ const StackForgeBuildProject = () => {
                           placeholder="Ex. 'npm install'"
                           value={installCommand}
                           onChange={e => setInstallCommand(e.target.value)}
+                          disabled={isDeploying}
                         />
                         <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
                       </div>
@@ -406,6 +439,7 @@ const StackForgeBuildProject = () => {
                             className="importProjectsClosePopout"
                             onClick={toggleChangeEnvironmentPopout}
                             style={{ transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)", transition: "transform 0.3s ease" }}
+                            disabled={isDeploying}
                           />
                           <div className="importProjectsEnvVarsWrapper">
                             {envVars.map((envVar, i) => (
@@ -418,7 +452,9 @@ const StackForgeBuildProject = () => {
                                       placeholder="Key"
                                       value={envVar.key}
                                       onChange={e => handleEnvVarChange(i, "key", e.target.value)}
+                                      onPaste={e => handleEnvVarsPaste(i, e)}
                                       style={{ color: "white" }}
+                                      disabled={isDeploying}
                                     />
                                   </div>
                                 </div>
@@ -430,24 +466,26 @@ const StackForgeBuildProject = () => {
                                       placeholder="Value"
                                       value={envVar.value}
                                       onChange={e => handleEnvVarChange(i, "value", e.target.value)}
+                                      onPaste={e => handleEnvVarsPaste(i, e)}
                                       style={{ color: "white" }}
+                                      disabled={isDeploying}
                                     />
                                   </div>
                                 </div>
-                                <button className="importProjectsEnvVarsRemoveBtn" onClick={() => handleRemoveEnvVar(i)}>
+                                <button className="importProjectsEnvVarsRemoveBtn" onClick={() => handleRemoveEnvVar(i)} disabled={isDeploying}>
                                   -
                                 </button>
                               </div>
                             ))}
                             <div className="importProjectsEnvVarsRow">
-                              <button className="importProjectsEnvVarsAddBtn" onClick={handleAddEnvVar}>
+                              <button className="importProjectsEnvVarsAddBtn" onClick={handleAddEnvVar} disabled={isDeploying}>
                                 Add More
                               </button>
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <button className="importProjectsOperationsField" onClick={toggleChangeEnvironmentPopout}>
+                        <button className="importProjectsOperationsField" onClick={toggleChangeEnvironmentPopout} disabled={isDeploying}>
                           <span>
                             <p>Environment Variables</p>
                           </span>
@@ -473,7 +511,7 @@ const StackForgeBuildProject = () => {
               <div className="consoleLogsHeader">
                 <span>
                   <h3>Project Build Logs</h3>
-                  <button onClick={handleCopyLogs}>
+                  <button onClick={handleCopyLogs} disabled={isDeploying}>
                     <FontAwesomeIcon icon={copied ? faSquareCheck : faClone} />
                   </button>
                 </span>
@@ -523,6 +561,7 @@ const StackForgeBuildProject = () => {
                     rel="noopener noreferrer"
                     href={`https://${selectedProjectName}.stackforgeengine.com`}
                     className="importProjectsDeployButton"
+                    disabled={isDeploying}
                   >
                     Go to project.
                   </a>
@@ -547,6 +586,7 @@ const StackForgeBuildProject = () => {
               setSelectedTeamName(teamName);
               setChangeTeamOpen(false);
             }}
+            disabled={isDeploying}
           >
             <span>
               <img src={teamImage} alt="Team" />
@@ -563,6 +603,7 @@ const StackForgeBuildProject = () => {
               setSelectedTeamName(personalName);
               setChangeTeamOpen(false);
             }}
+            disabled={isDeploying}
           >
             <span>
               <img src={personalImage} alt="Personal" />
@@ -586,13 +627,14 @@ const StackForgeBuildProject = () => {
                   setSelectedBranch(b.name);
                   setBranchOpen(false);
                 }}
+                disabled={isDeploying}
               >
                 <span>{b.name}</span>
                 {selectedBranch === b.name && <FontAwesomeIcon icon={faCheckDouble} />}
               </button>
             ))
           ) : (
-            <button>
+            <button disabled={isDeploying}>
               <span>No branches available.</span>
             </button>
           )}
