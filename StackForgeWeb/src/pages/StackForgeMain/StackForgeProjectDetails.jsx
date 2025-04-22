@@ -90,7 +90,7 @@ const StackForgeProjectDetails = () => {
     }, [projectDetails]);
 
     useEffect(() => {
-        const handleRejection = (event) => {};
+        const handleRejection = (event) => { };
         window.addEventListener('unhandledrejection', handleRejection);
         return () => window.removeEventListener('unhandledrejection', handleRejection);
     }, []);
@@ -114,7 +114,7 @@ const StackForgeProjectDetails = () => {
             }
             const data = await response.json();
             setProjectDetails(data);
-        } catch (error) {}
+        } catch (error) { }
     };
 
     const fetchSnapshot = async () => {
@@ -487,164 +487,107 @@ const StackForgeProjectDetails = () => {
                         </div>
 
                         <div className="productionDeploymentMultiCellFlex">
-                            <div className="productionDeploymentMultiCellFlex">
-                                <div className="productionDeploymentCellShort">
-                                    <div className="productionDeploymentCellShortHeader">
-                                        <h2>Website Analytics</h2>
-                                        <FontAwesomeIcon
-                                            icon={faArrowUpRightFromSquare}
-                                        />
-                                    </div>
+                            <div className="productionDeploymentCellShort">
+                                <div className="productionDeploymentCellShortHeader">
+                                    <h2>Website Analytics</h2>
+                                    <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                </div>
 
-                                    <div className="productionAnalyticsList">
-                                        {analytics ? (
-                                            analytics.websiteAnalytics && (
-                                                <div className="productionAnalyticsListItem">
-                                                    <div className="productionAnalyticsListStatusWrapper">
-                                                        <label className="productionAnalyticsListStatus">
-                                                            <span>
-                                                                <div
-                                                                    className="statusDotBig"
-                                                                    style={{
-                                                                        backgroundColor:
-                                                                            analytics.websiteAnalytics.status ===
-                                                                                200
-                                                                                ? "#21BF68"
-                                                                                : "#E54B4B"
-                                                                    }}
-                                                                />
-                                                                <p>
-                                                                    {
-                                                                        analytics
-                                                                            .websiteAnalytics
-                                                                            .status
-                                                                    }{" "}
-                                                                </p>
-                                                            </span>
-                                                            <i>
-                                                                {analytics.websiteAnalytics.status ===
-                                                                    200
-                                                                    ? "OK"
-                                                                    : analytics.websiteAnalytics.error ||
-                                                                    "Error"}
-                                                            </i>
-                                                        </label>
-                                                        <div
-                                                            className="productionAnalyticsListItemDivider"
-                                                            style={{
-                                                                marginBottom: 0
-                                                            }}
-                                                        />
-                                                    </div>
-
-                                                    <div>
-                                                        <strong>
-                                                            Response Time:
-                                                        </strong>
-                                                        <p>
-                                                            {
-                                                                analytics
-                                                                    .websiteAnalytics
-                                                                    .responseTime
-                                                            }{" "}
-                                                            ms
-                                                        </p>
-                                                    </div>
-
-                                                    <div>
-                                                        <strong>
-                                                            Page Load Time:
-                                                        </strong>
-                                                        <p>
-                                                            {
-                                                                analytics
-                                                                    .websiteAnalytics
-                                                                    .performance
-                                                                    ?.pageLoadTime
-                                                            }{" "}
-                                                            ms
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <strong>
-                                                            Resources:
-                                                        </strong>
-                                                        <p>
-                                                            Scripts:{" "}
-                                                            {
-                                                                analytics
-                                                                    .websiteAnalytics
-                                                                    .performance
-                                                                    ?.scriptCount
-                                                            }{" "}
-                                                            | Images:{" "}
-                                                            {
-                                                                analytics
-                                                                    .websiteAnalytics
-                                                                    .performance
-                                                                    ?.imageCount
-                                                            }{" "}
-                                                            | Links:{" "}
-                                                            {
-                                                                analytics
-                                                                    .websiteAnalytics
-                                                                    .performance
-                                                                    ?.linkCount
-                                                            }
-                                                        </p>
-                                                    </div>
-
-                                                    <div>
-                                                        <strong>
-                                                            Content Length:
-                                                        </strong>
-                                                        <p>
-                                                            {(
-                                                                analytics
-                                                                    .websiteAnalytics
-                                                                    .contentLength /
-                                                                1024
-                                                            ).toFixed(2)}{" "}
-                                                            KB
-                                                        </p>
-                                                    </div>
-
-                                                    <div>
-                                                        <strong>Server:</strong>
-                                                        <p>
-                                                            {
-                                                                analytics
-                                                                    .websiteAnalytics
-                                                                    .headers
-                                                                    ?.server
-                                                            }
-                                                        </p>
-                                                    </div>
+                                <div className="productionAnalyticsList">
+                                    {analytics ? (
+                                        analytics.websiteAnalytics ? (
+                                            <div className="productionAnalyticsListItem">
+                                                <div className="productionAnalyticsListStatusWrapper">
+                                                    <label className="productionAnalyticsListStatus">
+                                                        <span>
+                                                            <div
+                                                                className="statusDotBig"
+                                                                style={{
+                                                                    backgroundColor:
+                                                                        analytics.websiteAnalytics.status === 200
+                                                                            ? "#21BF68"
+                                                                            : "#E54B4B",
+                                                                }}
+                                                            />
+                                                            <p>{analytics.websiteAnalytics.status}</p>
+                                                        </span>
+                                                        <i>
+                                                            {analytics.websiteAnalytics.status === 200
+                                                                ? "OK"
+                                                                : analytics.websiteAnalytics.error || "Error"}
+                                                        </i>
+                                                    </label>
+                                                    <div
+                                                        className="productionAnalyticsListItemDivider"
+                                                        style={{ marginBottom: 0 }}
+                                                    />
                                                 </div>
-                                            )
-                                        ) : (
-                                            <div className="loading-wrapper">
-                                                <div className="loading-circle" />
+
+                                                <div>
+                                                    <strong>Response Time:</strong>
+                                                    <p>{analytics.websiteAnalytics.responseTime} ms</p>
+                                                </div>
+
+                                                <div>
+                                                    <strong>Page Load Time:</strong>
+                                                    <p>
+                                                        {analytics.websiteAnalytics.performance?.pageLoadTime ?? 0} ms
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <strong>Content Length:</strong>
+                                                    <p>
+                                                        {(analytics.websiteAnalytics.contentLength / 1024).toFixed(2)} KB
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <strong>Scripts:</strong>
+                                                    <p>
+                                                        {analytics.websiteAnalytics.performance?.scripts ?? 0}
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <strong>Links:</strong>
+                                                    <p>
+                                                        {analytics.websiteAnalytics.performance?.links ?? 0}
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <strong>Images:</strong>
+                                                    <p>
+                                                        {analytics.websiteAnalytics.performance?.images ?? 0}
+                                                    </p>
+                                                </div>
+
+                                                
                                             </div>
-                                        )}
-                                    </div>
+                                        ) : (
+                                            <p>No website analytics available</p>
+                                        )
+                                    ) : (
+                                        <div className="loading-wrapper">
+                                            <div className="loading-circle" />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="productionDeploymentMultiCellFlex">
-                                <div className="productionDeploymentCellShort">
-                                    <div className="productionDeploymentCellShortHeader">
-                                        <h2>Performance</h2>
-                                        <FontAwesomeIcon
-                                            icon={faArrowUpRightFromSquare}
-                                        />
-                                    </div>
-
-                                    <div
-                                        className="productionAnalyticsList"
-                                        style={{ alignItems: "center" }}
+                            <div className="productionDeploymentCellShort">
+                                <div className="productionDeploymentCellShortHeader">
+                                    <h2>Performance</h2>
+                                    <FontAwesomeIcon
+                                        icon={faArrowUpRightFromSquare}
                                     />
                                 </div>
+
+                                <div
+                                    className="productionAnalyticsList"
+                                    style={{ alignItems: "center" }}
+                                />
                             </div>
                         </div>
 

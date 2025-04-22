@@ -774,7 +774,7 @@ class DeployManager {
             );
         }
     }
-    
+
     async launchContainer({
         userID,
         organizationID,
@@ -1885,38 +1885,70 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                 try {
                     websiteResponse = await axios.get(websiteURL, { timeout: 30000 });
                 } catch (httpErr) {
+                    console.error(`HTTP request failed for ${websiteURL}: ${httpErr.message}`);
                     websiteAnalytics = {
                         status: httpErr.response?.status || 503,
                         responseTime: Date.now() - startTime,
                         contentLength: 0,
-                        headers: httpErr.response?.headers || {},
-                        performance: null,
+                        headers: {
+                            server: httpErr.response?.headers?.server || "Unknown",
+                            contentType: httpErr.response?.headers?.["content-type"] || "Unknown",
+                            cacheControl: httpErr.response?.headers?.["cache-control"] || "Unknown"
+                        },
+                        performance: {
+                            pageLoadTime: 0,
+                            scripts: 0,
+                            images: 0,
+                            links: 0
+                        },
                         error: `HTTP request failed: ${httpErr.message}`
                     };
                 }
-
+        
                 if (websiteResponse) {
                     const responseTime = Date.now() - startTime;
                     let contentLength = websiteResponse.headers["content-length"] || (websiteResponse.data ? websiteResponse.data.toString().length : 0);
-
-                    let performanceMetrics = null;
+        
+                    let performanceMetrics = {
+                        pageLoadTime: 0,
+                        scripts: 0,
+                        images: 0,
+                        links: 0
+                    };
                     try {
                         const browser = await puppeteer.launch({ headless: true });
                         const page = await browser.newPage();
                         await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 30000 });
-
+        
+                        // Wait for dynamic content using setTimeout (compatible with older Puppeteer versions)
+                        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds for JavaScript to load
+        
                         performanceMetrics = await page.evaluate(() => {
                             const { loadEventEnd, navigationStart } = performance.timing;
-                            const pageLoadTime = loadEventEnd - navigationStart;
-                            const scripts = document.querySelectorAll("script").length;
-                            const images = document.querySelectorAll("img").length;
-                            const links = document.querySelectorAll("a").length;
+                            const pageLoadTime = loadEventEnd - navigationStart || 0;
+                            const scripts = document.querySelectorAll("script").length || 0;
+                            const images = document.querySelectorAll("img").length || 0;
+                            const links = document.querySelectorAll("a").length || 0;
                             return { pageLoadTime, scripts, images, links };
                         });
-
+        
+                        // Verify page content
+                        const pageContent = await page.content();
+                        if (!pageContent.includes("<html")) {
+                            console.warn(`Warning: ${websiteURL} may not be a valid HTML page`);
+                        }
+        
                         await browser.close();
-                    } catch (puppeteerErr) { }
-
+                    } catch (puppeteerErr) {
+                        console.error(`Puppeteer failed for ${websiteURL}: ${puppeteerErr.message}`);
+                        performanceMetrics = {
+                            pageLoadTime: 0,
+                            scripts: 0,
+                            images: 0,
+                            links: 0
+                        };
+                    }
+        
                     websiteAnalytics = {
                         status: websiteResponse.status,
                         responseTime,
@@ -1931,7 +1963,24 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                     };
                 }
             } catch (err) {
-                websiteAnalytics = { error: `Website analytics failed: ${err.message}` };
+                console.error(`Website analytics failed for ${websiteURL}: ${err.message}`);
+                websiteAnalytics = {
+                    status: 500,
+                    responseTime: 0,
+                    contentLength: 0,
+                    headers: {
+                        server: "Unknown",
+                        contentType: "Unknown",
+                        cacheControl: "Unknown"
+                    },
+                    performance: {
+                        pageLoadTime: 0,
+                        scripts: 0,
+                        images: 0,
+                        links: 0
+                    },
+                    error: `Website analytics failed: ${err.message}`
+                };
             }
         }
 
@@ -2010,6 +2059,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
             }
         }
 
+        console.log(websiteAnalytics);
         return res.status(200).json({
             websiteAnalytics,
             repositoryAnalytics
