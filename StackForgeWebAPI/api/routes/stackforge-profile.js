@@ -31,7 +31,6 @@ router.post('/user-info', authenticateToken, async (req, res, next) => {
             FROM users u
             LEFT JOIN organizations o ON u.orgid = o.orgid
             WHERE u.username = $1 AND ((u.orgid = $2) OR ($2 IS NULL AND u.orgid IS NULL))
-            ; 
         `;
         const gatherUserInfoInfo = await pool.query(gatherUserInfoQuery, [userID, organizationID]);
 
@@ -100,7 +99,6 @@ router.post('/usage-info', authenticateToken, async (req, res, next) => {
             ON d.day = a.timestamp::date AND a.username = $1 AND a.orgid = $2
             GROUP BY d.day
             ORDER BY d.day ASC
-            ;
         `;
 
         const usageLanguagesQuery = `
@@ -111,7 +109,6 @@ router.post('/usage-info', authenticateToken, async (req, res, next) => {
               AND a.orgid = $2
             GROUP BY a.language
             ORDER BY language_count DESC
-            ;
         `;
 
         const [personalUsagePerDay, usageLanguages] = await Promise.all([
@@ -144,7 +141,6 @@ router.post('/update-user-show-values', authenticateToken, async (req, res, next
            UPDATE users
            SET ${showColumn} = $3
            WHERE username = $1 AND orgid = $2
-           ; 
         `;
 
         await pool.query(updateShowColumnsQuery, [userID, organizationID, showColumnValue]);
@@ -180,7 +176,7 @@ router.post('/edit-user-image', authenticateToken, async (req, res, next) => {
         const imageName = `${crypto.randomBytes(16).toString('hex')}.${extension}`;
 
         const uploadParams = {
-            Bucket: process.env.S3_BUCKET_NAME,
+            Bucket: process.env.S3_IMAGE_BUCKET_NAME,
             Key: `uploads/${imageName}`,
             Body: imageBuffer,
             ContentType: mimeType,
@@ -193,7 +189,6 @@ router.post('/edit-user-image', authenticateToken, async (req, res, next) => {
             UPDATE users
             SET image = $1
             WHERE username = $2
-            ;
         `;
 
         const updateImageInfo = await pool.query(updateImageQuery, [imageUrl, userID]);
@@ -234,7 +229,7 @@ router.post('/edit-team-image', authenticateToken, async (req, res, next) => {
         const imageName = `${crypto.randomBytes(16).toString('hex')}.${extension}`;
 
         const uploadParams = {
-            Bucket: process.env.S3_BUCKET_NAME,
+            Bucket: process.env.S3_IMAGE_BUCKET_NAME,
             Key: `uploads/${imageName}`,
             Body: imageBuffer,
             ContentType: mimeType,
@@ -247,7 +242,6 @@ router.post('/edit-team-image', authenticateToken, async (req, res, next) => {
             UPDATE organizations
             SET orgimage = $1
             WHERE orgid = $2
-            ;
         `;
 
         const updateImageInfo = await pool.query(updateImageQuery, [imageUrl, organizationID]);
@@ -277,7 +271,6 @@ router.post('/edit-user-first-name', authenticateToken, async (req, res, next) =
             UPDATE users
             SET first_name = $1
             WHERE username = $2
-            ;
         `;
 
         const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [firstName, userID]);
@@ -308,7 +301,6 @@ router.post('/edit-user-last-name', authenticateToken, async (req, res, next) =>
             UPDATE users
             SET last_name = $1
             WHERE username = $2
-            ;
         `;
 
         const updateLastNameInfo = await pool.query(updateLastNameQuery, [lastName, userID]);
@@ -338,7 +330,6 @@ router.post('/edit-team-name', authenticateToken, async (req, res, next) => {
             UPDATE organizations
             SET orgname = $1
             WHERE orgid = $2
-            ;
         `;
 
         const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [orgName, organizationID]);
@@ -368,7 +359,6 @@ router.post('/edit-user-email', authenticateToken, async (req, res, next) => {
             UPDATE users
             SET email = $1
             WHERE username = $2
-            ;
         `;
 
         const updateEmailInfo = await pool.query(updateEmailQuery, [email, userID]);
@@ -397,7 +387,6 @@ router.post('/edit-team-email', authenticateToken, async (req, res, next) => {
             UPDATE organizations
             SET orgemail = $1
             WHERE orgid = $2
-            ;
         `;
 
         const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [orgEmail, organizationID]);
@@ -427,7 +416,6 @@ router.post('/edit-user-phone', authenticateToken, async (req, res, next) => {
             UPDATE users
             SET phone = $1
             WHERE username = $2
-            ;
         `;
 
         const updatePhoneInfo = await pool.query(updatePhoneQuery, [phone, userID]);
@@ -456,7 +444,6 @@ router.post('/edit-team-phone', authenticateToken, async (req, res, next) => {
             UPDATE organizations
             SET orgphone = $1
             WHERE orgid = $2
-            ;
         `;
 
         const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [orgPhone, organizationID]);
@@ -486,7 +473,6 @@ router.post('/edit-user-role', authenticateToken, async (req, res, next) => {
             UPDATE users
             SET role = $1
             WHERE username = $2
-            ;
         `;
 
         const updateRoleInfo = await pool.query(updateRoleQuery, [role, userID]);
@@ -514,7 +500,6 @@ router.post('/delete-account', authenticateToken, async (req, res, next) => {
         const deleteAccountQuery = `
             DELETE FROM users 
             WHERE username = $1
-            ;
         `;
 
         const deleteAccountInfo = await pool.query(deleteAccountQuery, [userID]);
@@ -541,13 +526,13 @@ router.post('/delete-team', authenticateToken, async (req, res, next) => {
     try {
         const deleteAccountQuery = `
             DELETE FROM organizations 
-            WHERE orgid = $1;
+            WHERE orgid = $1
         `;
 
         const updateIDQuery = `
             UPDATE users 
             SET orgid = NULL 
-            WHERE orgid = $1;
+            WHERE orgid = $1
         `;
 
         const deleteAccountInfo = await pool.query(deleteAccountQuery, [organizationID]);
@@ -577,7 +562,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
             SELECT orgname 
             FROM organizations 
             WHERE orgid = $1
-            ;
         `;
         pool.query(codeVerificationQuery, [teamCode], (error, codeVerificationInfo) => {
             if (error) {
@@ -606,7 +590,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
                     SELECT email 
                     FROM users 
                     WHERE orgid = $1 AND is_admin = 'admin'
-                    ;
                 `;
                 pool.query(adminEmailQuery, [teamCode], (error, adminEmailInfo) => {
                     if (error) {
@@ -622,7 +605,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
                         SELECT * 
                         FROM access_requests 
                         WHERE request_username = $1 AND request_status = 'Current'
-                        ;
                     `;
 
                     pool.query(checkActiveRequestQuery, [userID], (error, checkActiveRequestInfo) => {
@@ -638,7 +620,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
                                 UPDATE access_requests
                                 SET request_timestamp = NOW()
                                 WHERE request_username = $1 AND request_orgid = $2 AND request_status = 'Current'
-                                ;
                             `;
 
                             pool.query(updateActiveRequestQuery, [userID, teamCode], (error, info) => {
@@ -658,7 +639,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
                                 INSERT INTO access_requests 
                                 (request_username, request_orgid, request_timestamp, request_status)
                                 VALUES ($1, $2, NOW(), 'Current')
-                                ;
                             `;
 
                             pool.query(requestLogQuery, [userID, teamCode], (error, requestLogInfo) => {
@@ -706,7 +686,6 @@ router.post('/create-team', authenticateToken, async (req, res, next) => {
                 SELECT COUNT(*) 
                 FROM organizations 
                 WHERE orgid = $1
-                ;
             `;
             const organizationidVerificationInfo = await pool.query(organizationidVerificationQuery, [organizationID]);
             const isUnique = parseInt(organizationidVerificationInfo.rows[0].count) === 0;
@@ -718,7 +697,6 @@ router.post('/create-team', authenticateToken, async (req, res, next) => {
                 SELECT COUNT(*) 
                 FROM organizations 
                 WHERE orgname = $1
-                ;
             `;
             const teamNameVerificationInfo = await pool.query(teamNameVerificationQuery, [teamName]);
             const isUnique = parseInt(teamNameVerificationInfo.rows[0].count) === 0;
@@ -730,7 +708,6 @@ router.post('/create-team', authenticateToken, async (req, res, next) => {
                 INSERT INTO organizations
                 (orgname, orgid, created_at)
                 VALUES ($1, $2, NOW())
-                ;
             `;
             await pool.query(teamCreationQuery, [teamName, organizationID]);
 
@@ -738,7 +715,6 @@ router.post('/create-team', authenticateToken, async (req, res, next) => {
                 UPDATE users
                 SET orgid = $1, is_admin = 'admin'
                 WHERE username = $2
-                ;
             `;
             await pool.query(teamUpdateQuery, [organizationID, userID]);
 
@@ -750,7 +726,6 @@ router.post('/create-team', authenticateToken, async (req, res, next) => {
                 SELECT email 
                 FROM users 
                 WHERE username = $1
-                ;
             `;
             const userEmailInfo = await pool.query(userEmailQuery, [userID]);
             if (userEmailInfo.rows.length > 0) {

@@ -153,10 +153,10 @@ const StackForgeProfile = () => {
 
     const fetchUserInfo = async id => {
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             const res = await fetch("http://localhost:3000/user-info", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID: id, organizationID })
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
@@ -198,11 +198,11 @@ const StackForgeProfile = () => {
                 const base64Data = reader.result;
                 setUserDetails(prev => ({ ...prev, image: base64Data }));
                 try {
-                    const t = localStorage.getItem("token");
+                    const token = localStorage.getItem("token");
                     if (!t) return;
                     const res = await fetch("http://localhost:3000/edit-user-image", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                         body: JSON.stringify({ userID, image: base64Data })
                     });
                     if (!res.ok) return await showDialog({ title: "Alert", message: `Error uploading image: ${res.status} - ${await res.text()}` });
@@ -226,11 +226,11 @@ const StackForgeProfile = () => {
                 const base64Data = reader.result;
                 setUserDetails(prev => ({ ...prev, orgImage: base64Data }));
                 try {
-                    const t = localStorage.getItem("token");
+                    const token = localStorage.getItem("token");
                     if (!t) return;
                     const res = await fetch("http://localhost:3000/edit-team-image", {
                         method: "POST",
-                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+                        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                         body: JSON.stringify({ userID, organizationID, image: base64Data })
                     });
                     if (!res.ok) return await showDialog({ title: "Alert", message: `Error uploading image: ${res.status} - ${await res.text()}` });
@@ -257,10 +257,10 @@ const StackForgeProfile = () => {
             return;
         }
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             const res = await fetch("http://localhost:3000/" + endpoints[fieldKey], {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, [fieldKey]: value })
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
@@ -278,10 +278,10 @@ const StackForgeProfile = () => {
             return;
         }
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             const res = await fetch("http://localhost:3000/" + endpoints[fieldKey], {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID, [fieldKey]: value })
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
@@ -301,12 +301,12 @@ const StackForgeProfile = () => {
             return;
         }
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             const response = await fetch("http://localhost:3000/delete-account", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${t}`
+                    Authorization: `Bearer ${token}`
                 },
                 body: JSON.stringify({ userID })
             });
@@ -331,12 +331,12 @@ const StackForgeProfile = () => {
             return;
         }
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             const response = await fetch("http://localhost:3000/delete-team", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${t}`
+                    Authorization: `Bearer ${token}`
                 },
                 body: JSON.stringify({ userID, organizationID })
             });
@@ -358,12 +358,12 @@ const StackForgeProfile = () => {
             return;
         }
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             const response = await fetch("http://localhost:3000/create-team", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${t}`
+                    Authorization: `Bearer ${token}`
                 },
                 body: JSON.stringify({ userID, teamName })
             });
@@ -392,12 +392,12 @@ const StackForgeProfile = () => {
             return;
         }
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             const response = await fetch("http://localhost:3000/join-team", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${t}`
+                    Authorization: `Bearer ${token}`
                 },
                 body: JSON.stringify({
                     userID,
@@ -423,7 +423,7 @@ const StackForgeProfile = () => {
 
     const handleGithubConnect = async () => {
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             if (!t) {
                 return;
             }
@@ -435,11 +435,11 @@ const StackForgeProfile = () => {
 
     const handleGithubDisconnect = async () => {
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             if (!t) return;
             const res = await fetch("http://localhost:3000/delete-github", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
             });
             if (res.ok) {
                 await fetchUserInfo(userID);
@@ -893,7 +893,7 @@ const StackForgeProfile = () => {
                                                         <label className="profileUserImageWrapper" htmlFor="teamImageUpload" style={{ background: userDetails.gitImage && userDetails.gitImage !== "" ? "none" : "", "box-shadow": userDetails.gitImage && userDetails.gitImage !== "" ? "none" : "" }}>
                                                             <img src={userDetails.gitImage} className="profileUserImage" alt="" />
                                                         </label>
-                                                        <input style={{ display: "none", padding: 0 }} disabled={true} type="file" id="teamImageUpload" accept="image/*" onChange={handleTeamImageChange} />
+                                                        <input style={{ display: "none", padding: 0 }} disabled={true} type="file" id="teamImageUpload" accept="image/*"/>
                                                     </div>
                                                 </div>
                                                 <div className="profileContentFlexCellBottom">

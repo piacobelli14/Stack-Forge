@@ -110,9 +110,9 @@ const StackForgeProjects = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ organizationID })
+        body: JSON.stringify({ organizationID }),
       });
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -341,8 +341,14 @@ const StackForgeProjects = () => {
                             >
                               View Project Details
                             </button>
-                            <button>Transfer Project</button>
-                            <button>Settings</button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate("/project-settings", { state: { project } });
+                              }}
+                            >
+                              Settings
+                            </button>
                           </div>
                         )}
                       </div>
@@ -393,10 +399,6 @@ const StackForgeProjects = () => {
           </button>
           <button onClick={() => navigate("/add-new-domain")}>
             Domain
-            <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
-          </button>
-          <button onClick={() => handleAddNewItem("Store")}>
-            Store
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
           <button onClick={() => handleAddNewItem("Team Member")}>

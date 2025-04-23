@@ -192,10 +192,10 @@ const StackForgeBuildProject = () => {
   const fetchBranches = async () => {
     try {
       const [owner, repoName] = repository.split("/");
-      const t = localStorage.getItem("token");
+      const token = localStorage.getItem("token");
       const r = await fetch("http://localhost:3000/git-branches", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userID, owner, repo: repoName })
       });
       if (!r.ok) throw new Error("Error fetching branches");

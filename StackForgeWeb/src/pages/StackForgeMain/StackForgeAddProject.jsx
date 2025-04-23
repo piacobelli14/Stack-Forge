@@ -86,10 +86,10 @@ const StackForgeAddProject = () => {
 
     const fetchUserInfo = async id => {
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             const res = await fetch("http://localhost:3000/user-info", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` },
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID })
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
@@ -124,9 +124,9 @@ const StackForgeAddProject = () => {
 
     const fetchRepos = async () => {
         try {
-            const t = localStorage.getItem("token");
+            const token = localStorage.getItem("token");
             const res = await fetch("http://localhost:3000/git-repos", {
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${t}` }
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
             });
             if (res.status !== 200) throw new Error("Error fetching git repos");
             const data = await res.json();

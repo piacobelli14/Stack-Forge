@@ -8,6 +8,7 @@ const errorLogger = require('./middleware/errorLogger');
 const authenticationRoutes = require('./routes/stackforge-authentication');
 const profileRoutes = require('./routes/stackforge-profile');
 const builderRoutes = require('./routes/stackforge-builder');
+const projectRoutes = require('./routes/stackforge-project');
 
 require('dotenv').config();
 
@@ -24,6 +25,7 @@ app.use(errorLogger);
 app.use(authenticationRoutes);
 app.use(profileRoutes);
 app.use(builderRoutes);
+app.use(projectRoutes);
 
 app.set('trust proxy', 1);
 
