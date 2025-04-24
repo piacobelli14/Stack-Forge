@@ -9,7 +9,10 @@ import {
   faGrip,
   faArrowUpRightFromSquare,
   faEllipsisH,
-  faCodeBranch
+  faCodeBranch,
+  faGlobe,
+  faXmark,
+  faFolderOpen
 } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeProjects.css";
@@ -26,15 +29,21 @@ const StackForgeProjects = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [screenSize, setScreenSize] = useState(window.innerWidth);
   const [resizeTrigger, setResizeTrigger] = useState(false);
+  const [projects, setProjects] = useState([]);
   const [projectsPage, setProjectsPage] = useState("projects");
-  const [searchText, setSearchText] = useState("");
   const [displayMode, setDisplayMode] = useState("grid");
+  const [searchText, setSearchText] = useState("");
   const addNewRef = useRef(null);
   const [addNewOpen, setAddNewOpen] = useState(false);
   const dropdownRef = useRef(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-  const [projects, setProjects] = useState([]);
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [domainSearchModal, setDomainSearchModal] = useState(false);
+  const [domainModalStep, setDomainModalStep] = useState(0);
+  const [domainSearchTerm, setDomainSearchTerm] = useState("");
+  const [selectedDomainProject, setSelectedDomainProject] = useState(null);
+  const [domainName, setDomainName] = useState("");
+
 
   useEffect(() => {
     if (!loading && !token) navigate("/login");
@@ -45,7 +54,7 @@ const StackForgeProjects = () => {
       try {
         getProjects();
         setIsLoaded(true);
-      } catch (error) {}
+      } catch (error) { }
     };
     if (!loading && token) fetchData();
   }, [userID, loading, token]);
@@ -141,6 +150,42 @@ const StackForgeProjects = () => {
     setOpenMenuId((prev) => (prev === projectId ? null : projectId));
   };
 
+  const confirmDomainEntry = async () => {
+    const token = localStorage.getItem("token");
+    const response = await fetch("http://localhost:3000/validate-domain", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        userID,
+        organizationID,
+        projectID: selectedDomainProject.project_id,
+        domain: domainName
+      }),
+    });
+    closeDomainSearchModal();
+    const displayName = selectedDomainProject.project_name ?? selectedDomainProject.name;
+    await showDialog({
+      title: "Domain Added",
+      message: `Project ${displayName} added with domain ${domainName}`,
+      showCancel: false
+    });
+  };
+
+  const closeDomainSearchModal = () => {
+    setDomainSearchModal(false);
+    setDomainSearchTerm("");
+    setSelectedDomainProject(null);
+    setDomainName("");
+    setDomainModalStep(0);
+  };
+
+  const confirmDomainSearch = () => {
+    setDomainModalStep(1);
+  };
+
   const filteredProjects = projects.filter((project) => {
     if (!project) return false;
     const search = searchText.toLowerCase();
@@ -149,6 +194,7 @@ const StackForgeProjects = () => {
       (project.project_id && project.project_id.toLowerCase().includes(search))
     );
   });
+
 
   return (
     <div
@@ -218,6 +264,7 @@ const StackForgeProjects = () => {
               Monitoring
             </button>
           </div>
+
           {projectsPage === "projects" && (
             <div className="projectsTopBar">
               <div className="projectsTopBarSearchContainer">
@@ -268,6 +315,7 @@ const StackForgeProjects = () => {
               </div>
             </div>
           )}
+
           {projectsPage === "projects" && (
             <div
               className={`deploymentsContainer ${displayMode}`}
@@ -374,11 +422,28 @@ const StackForgeProjects = () => {
               ))}
             </div>
           )}
+
+          {projectsPage === "domains" && (
+            <div className="addDomainsFlexCellWrapper">
+              <div className="addDomainsFlexCell">
+                <div className="addDomainsStack">
+                  <div className="addDomainsIcon">
+                    <FontAwesomeIcon icon={faGlobe} />
+                  </div>
+                  <strong>Add a domain.</strong>
+                  <p>Add a domain that you can connect to your team's projects.</p>
+                </div>
+                <button className="addDomainButton" onClick={() => setDomainSearchModal(true)}>
+                  Add existing domain.
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
       {!isLoaded && (
         <div
-          className="projevctsCellHeaderContainer"
+          className="projectsCellHeaderContainer"
           style={{ justifyContent: "center", alignItems: "center", height: "100%" }}
         >
           <div className="loading-wrapper">
@@ -397,7 +462,7 @@ const StackForgeProjects = () => {
             Project
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
-          <button onClick={() => navigate("/add-new-domain")}>
+          <button onClick={() => {setProjectsPage("domains"); setAddNewOpen(false);}}>
             Domain
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
@@ -405,6 +470,107 @@ const StackForgeProjects = () => {
             Team Member
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
+        </div>
+      )}
+      {domainSearchModal && domainModalStep === 0 && (
+        <div className="domainSearchModalOverlay">
+          <div className="domainSearchModalContainer">
+            <div className="domainSearchModalHeader">
+              <h2>Add Domain</h2>
+              <button onClick={closeDomainSearchModal}>
+                <FontAwesomeIcon icon={faXmark} />
+              </button>
+            </div>
+            <div className="domainSearchModalBody">
+              <p>Select a project to add your domain to:</p>
+              <div className="domainSearchDeploymentList">
+                <div className="domainSearchInputWrapper">
+                  <FontAwesomeIcon icon={faSearch} className="domainSearchIcon" />
+                  <input
+                    type="text"
+                    className="domainSearchInput"
+                    placeholder="Search your projects..."
+                    value={domainSearchTerm}
+                    onChange={(e) => setDomainSearchTerm(e.target.value)}
+                  />
+                  <FontAwesomeIcon icon={faCircleInfo} className="domainSearchIconSupplement" />
+                </div>
+                {projects
+                  .filter((project) => {
+                    const name = project.project_name ?? project.name;
+                    return name.toLowerCase().includes(domainSearchTerm.toLowerCase());
+                  })
+                  .map((project) => {
+                    const name = project.project_name ?? project.name;
+                    return (
+                      <div key={project.project_id} className="domainSearchDeploymentItem">
+                        <span>
+                          <FontAwesomeIcon icon={faFolderOpen} />
+                          {name}
+                        </span>
+                        <button
+                          onClick={() => setSelectedDomainProject(project)}
+                          style={
+                            selectedDomainProject?.project_id === project.project_id
+                              ? { backgroundColor: "#5c2be2", color: "#f1f1f1" }
+                              : {}
+                          }
+                        >
+                          Select
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+            <div className="domainSearchModalFooter">
+              <button onClick={closeDomainSearchModal}>Cancel</button>
+              <button
+                disabled={!selectedDomainProject}
+                onClick={confirmDomainSearch}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {domainSearchModal && domainModalStep === 1 && (
+        <div className="domainSearchModalOverlay">
+          <div className="domainSearchModalContainer">
+            <div className="domainSearchModalHeader">
+              <h2>Enter Domain</h2>
+              <button onClick={closeDomainSearchModal}>
+                <FontAwesomeIcon icon={faXmark} />
+              </button>
+            </div>
+            <div className="domainSearchModalBody">
+              <p>Project: <strong>{selectedDomainProject.project_name ?? selectedDomainProject.name}</strong></p>
+              <p>Enter the domain that you would like to add: </p>
+              <div className="domainSearchDeploymentContent">
+                <div className="domainSearchInputWrapperRounded">
+                  <FontAwesomeIcon icon={faGlobe} className="domainSearchIcon" />
+                  <input
+                    type="text"
+                    className="domainSearchInput"
+                    placeholder="example.com"
+                    value={domainName}
+                    onChange={(e) => setDomainName(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="domainSearchModalFooter">
+              <button onClick={closeDomainSearchModal}>Cancel</button>
+              <button
+                disabled={!domainName}
+                onClick={confirmDomainEntry}
+              >
+                Add Domain
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

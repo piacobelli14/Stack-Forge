@@ -219,8 +219,15 @@ CREATE TABLE domains
     project_id TEXT,  
     created_by TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL
+    updated_at TIMESTAMP NOT NULL,
+    is_accessible BOOLEAN DEFAULT FALSE,
+    status_code INT,
+    dns_records JSONB,
+    checked_at TIMESTAMP,
+    is_primary BOOLEAN DEFAULT FALSE,
+    redirect_target TEXT
 );
+DROP INDEX IF EXISTS idx_domains_orgid;
 CREATE INDEX idx_domains_orgid ON domains (orgid, username);
 
 DROP TABLE IF EXISTS deployments;

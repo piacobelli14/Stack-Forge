@@ -9,6 +9,7 @@ const authenticationRoutes = require('./routes/stackforge-authentication');
 const profileRoutes = require('./routes/stackforge-profile');
 const builderRoutes = require('./routes/stackforge-builder');
 const projectRoutes = require('./routes/stackforge-project');
+const domainRoutes = require('./routes/stackforge-domains');
 
 require('dotenv').config();
 
@@ -26,6 +27,7 @@ app.use(authenticationRoutes);
 app.use(profileRoutes);
 app.use(builderRoutes);
 app.use(projectRoutes);
+app.use(domainRoutes);
 
 app.set('trust proxy', 1);
 

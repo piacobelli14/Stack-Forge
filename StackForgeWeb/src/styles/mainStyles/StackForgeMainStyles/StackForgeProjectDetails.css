@@ -844,14 +844,6 @@
     background: transparent !important;
 }
 
-
-
-
-
-
-
-
-
 .rollbackModalOverlay {
     position: fixed;
     top: 0;
@@ -944,6 +936,9 @@
     font-size: 0.8rem; 
     font-weight: 600; 
     color: #c1c1c1; 
+    text-overflow: ellipsis; 
+    overflow: hidden; 
+    white-space: nowrap; 
 }
 
 .rollbackModalBody p a {
@@ -973,6 +968,7 @@
     flex-direction: column;
     gap: 1rem;
     padding: 1.5rem 0; 
+    box-sizing: border-box; 
 }
 
 .rollbackDeploymentItem {
@@ -981,6 +977,7 @@
     padding: 12px;
     cursor: pointer;
     max-width: 400px;  
+    box-sizing: border-box; 
 }
 
 .rollbackDeploymentItem.selected {

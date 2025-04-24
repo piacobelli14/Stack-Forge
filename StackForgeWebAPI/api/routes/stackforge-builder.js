@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 const express = require("express");
 const axios = require("axios");
@@ -9,6 +8,9 @@ const { v4: uuidv4 } = require("uuid");
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
+const dns = require('dns').promises; 
+const https = require('https');
+const http = require('http');
 const {
     Route53Client,
     ChangeResourceRecordSetsCommand,
@@ -1367,9 +1369,9 @@ class DeployManager {
         }
     }
 
-    async updateDNSRecord(subdomain) {
-        if (!subdomain || subdomain.trim() === "") {
-            throw new Error("Subdomain cannot be empty");
+    async updateDNSRecord(projectId, domains) {
+        if (!domains || !Array.isArray(domains) || domains.length === 0) {
+            throw new Error("At least one domain must be provided");
         }
         const hostedZoneId = process.env.ROUTE53_HOSTED_ZONE_ID;
         const albZoneId = process.env.LOAD_BALANCER_ZONE_ID;
@@ -1377,37 +1379,41 @@ class DeployManager {
         if (!hostedZoneId || !albZoneId || !loadBalancerDNS) {
             throw new Error("Route53 DNS configuration missing");
         }
-        const recordName = `${subdomain}.stackforgeengine.com`;
-        let changes = [];
-        try {
-            const listResp = await route53Client.send(new ListResourceRecordSetsCommand({
-                HostedZoneId: hostedZoneId,
-                StartRecordName: recordName,
-                StartRecordType: "CNAME",
-                MaxItems: "1"
-            }));
-            const existing = listResp.ResourceRecordSets && listResp.ResourceRecordSets[0];
-            if (existing && existing.Name.replace(/\.$/, "") === recordName) {
-                changes.push({
-                    Action: "DELETE",
-                    ResourceRecordSet: existing
-                });
-            }
-        } catch (err) {
-            throw new Error(`Failed to list existing DNS records: ${err.message}`);
-        }
-        changes.push({
-            Action: "UPSERT",
-            ResourceRecordSet: {
-                Name: recordName,
-                Type: "A",
-                AliasTarget: {
-                    HostedZoneId: albZoneId,
-                    DNSName: loadBalancerDNS,
-                    EvaluateTargetHealth: false
+    
+        const changes = [];
+        for (const domain of domains) {
+            const recordName = `${domain}.stackforgeengine.com`;
+            try {
+                const listResp = await route53Client.send(new ListResourceRecordSetsCommand({
+                    HostedZoneId: hostedZoneId,
+                    StartRecordName: recordName,
+                    StartRecordType: "A",
+                    MaxItems: "1"
+                }));
+                const existing = listResp.ResourceRecordSets && listResp.ResourceRecordSets[0];
+                if (existing && existing.Name.replace(/\.$/, "") === recordName) {
+                    changes.push({
+                        Action: "DELETE",
+                        ResourceRecordSet: existing
+                    });
                 }
+            } catch (err) {
+                throw new Error(`Failed to list existing DNS records for ${recordName}: ${err.message}`);
             }
-        });
+            changes.push({
+                Action: "UPSERT",
+                ResourceRecordSet: {
+                    Name: recordName,
+                    Type: "A",
+                    AliasTarget: {
+                        HostedZoneId: albZoneId,
+                        DNSName: loadBalancerDNS,
+                        EvaluateTargetHealth: false
+                    }
+                }
+            });
+        }
+    
         const params = {
             HostedZoneId: hostedZoneId,
             ChangeBatch: { Changes: changes }
@@ -1415,10 +1421,9 @@ class DeployManager {
         try {
             await route53Client.send(new ChangeResourceRecordSetsCommand(params));
         } catch (err) {
-            throw new Error(`Failed to update DNS record: ${err.message}`);
+            throw new Error(`Failed to update DNS records: ${err.message}`);
         }
     }
-
     async getDeploymentStatus(deploymentId, organizationID, userID) {
         const result = await pool.query(
             `SELECT 
@@ -1908,6 +1913,7 @@ router.post("/list-projects", authenticateToken, async (req, res, next) => {
     const organizationID = req.body.organizationID;
     try {
         const projects = await deployManager.listProjects(organizationID);
+        console.log(projects);
         res.status(200).json(projects);
     } catch (error) {
         if (!res.headersSent) return res.status(500).json({ message: error.message });
@@ -1971,6 +1977,113 @@ router.post("/project-details", authenticateToken, async (req, res, next) => {
         if (!res.headersSent) return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         next(error);
     }
+});
+
+router.post("/validate-domain", authenticateToken, async (req, res, next) => {
+  const { userID, organizationID, projectID, domain } = req.body;
+
+  if (!domain) {
+    return res.status(400).json({ message: "Domain is required" });
+  }
+
+  const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+  const fqdnRegex = /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+  if (!(hostnameRegex.test(domain) || fqdnRegex.test(domain))) {
+    return res.status(400).json({ message: "Invalid domain format" });
+  }
+
+  try {
+    const result = {
+      domain,
+      isAccessible: false,
+      statusCode: null,
+      dnsRecords: [],
+      checkedAt: new Date().toISOString()
+    };
+
+    try {
+      const a = await dns.resolve4(domain);
+      if (a.length) result.dnsRecords.push({ type: "A", values: a });
+
+      const c = await dns.resolveCname(domain);
+      if (c.length) result.dnsRecords.push({ type: "CNAME", values: c });
+
+      const m = await dns.resolveMx(domain);
+      if (m.length) {
+        result.dnsRecords.push({
+          type: "MX",
+          values: m.map(r => `${r.priority} ${r.exchange}`)
+        });
+      }
+    } catch (e) {}
+
+    try {
+      const r = await axios.head(`https://${domain}`, { timeout: 5000, validateStatus: null });
+      result.isAccessible = true;
+      result.statusCode = r.status;
+    } catch {
+      try {
+        const r2 = await axios.head(`http://${domain}`, { timeout: 5000, validateStatus: null });
+        result.isAccessible = true;
+        result.statusCode = r2.status;
+      } catch (e2) {}
+    }
+
+    const domainID = uuidv4();
+
+    await pool.query(
+        `DELETE FROM domains
+            WHERE orgid = $1
+            AND username = $2
+            AND project_id = $3
+            AND domain_name = $4`,
+        [organizationID, userID, projectID, domain]
+    );
+
+    await pool.query(
+    `INSERT INTO domains (
+            orgid,
+            username,
+            domain_id,
+            domain_name,
+            project_id,
+            created_by,
+            created_at,
+            updated_at,
+            is_accessible,
+            dns_records,
+            checked_at,
+            is_primary,
+            redirect_target
+    ) VALUES (
+        $1, $2, $3, $4,
+        $5, $6, NOW(), NOW(),
+        $7, $8, $9,
+        $10, $11
+    )`,
+    [
+        organizationID,
+        userID,
+        domainID,
+        domain,
+        projectID,
+        userID,
+        result.isAccessible,
+        result.statusCode,
+        JSON.stringify(result.dnsRecords),
+        result.checkedAt,
+        false,
+        null
+    ]
+    );
+
+    res.status(200).json(result);
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).json({ message: `Failed to validate domain: ${err.message}` });
+    }
+    next(err);
+  }
 });
 
 
