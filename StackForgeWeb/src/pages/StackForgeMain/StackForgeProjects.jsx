@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSearch,
@@ -152,26 +152,42 @@ const StackForgeProjects = () => {
 
   const confirmDomainEntry = async () => {
     const token = localStorage.getItem("token");
-    const response = await fetch("http://localhost:3000/validate-domain", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        userID,
-        organizationID,
-        projectID: selectedDomainProject.project_id,
-        domain: domainName
-      }),
-    });
-    closeDomainSearchModal();
-    const displayName = selectedDomainProject.project_name ?? selectedDomainProject.name;
-    await showDialog({
-      title: "Domain Added",
-      message: `Project ${displayName} added with domain ${domainName}`,
-      showCancel: false
-    });
+    try {
+      const response = await fetch("http://localhost:3000/validate-domain", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userID,
+          organizationID,
+          projectID: selectedDomainProject.project_id,
+          domain: domainName,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      closeDomainSearchModal();
+      const displayName = selectedDomainProject.project_name ?? selectedDomainProject.name;
+      await showDialog({
+        title: "Domain Added",
+        message: `Project ${displayName} added with domain ${domainName}`,
+        showCancel: false,
+      });
+
+      navigate("/project-settings", { state: { project: selectedDomainProject, settingsState: "domains" } });
+    } catch (error) {
+      closeDomainSearchModal();
+      await showDialog({
+        title: "Error",
+        message: "Failed to add domain. Please try again.",
+        showCancel: false,
+      });
+    }
   };
 
   const closeDomainSearchModal = () => {
@@ -459,15 +475,15 @@ const StackForgeProjects = () => {
           style={{ top: dropdownPosition.top * 1.02, left: dropdownPosition.left }}
         >
           <button onClick={() => navigate("/add-new-project")}>
-            Project
+            <i>Project</i>
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
-          <button onClick={() => {setProjectsPage("domains"); setAddNewOpen(false);}}>
-            Domain
+          <button onClick={() => { setProjectsPage("domains"); setAddNewOpen(false); }}>
+            <i>Domain</i>
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
           <button onClick={() => handleAddNewItem("Team Member")}>
-            Team Member
+            <i>Team Member</i>
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
         </div>

@@ -225,7 +225,8 @@ CREATE TABLE domains
     dns_records JSONB,
     checked_at TIMESTAMP,
     is_primary BOOLEAN DEFAULT FALSE,
-    redirect_target TEXT
+    redirect_target TEXT, 
+    environment TEXT
 );
 DROP INDEX IF EXISTS idx_domains_orgid;
 CREATE INDEX idx_domains_orgid ON domains (orgid, username);

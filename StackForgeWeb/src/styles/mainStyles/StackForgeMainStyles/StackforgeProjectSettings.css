@@ -176,6 +176,19 @@
     }
 }
 
+.projectSettingsDomainHeader {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    min-height: 40%; 
+    max-height: 40%; 
+    background-color: rgba(0,0,0,0.2);
+    border-bottom: 1px solid #c1c1c1; 
+    border-radius: 0; 
+    padding: 10px 15px; 
+    width: 100%; 
+}
+
 .projectSettingsContentFlexCellTop {
     min-height: 80%; 
     max-height: 80%;
@@ -460,5 +473,402 @@
 
 .projectSettingsDeleteButton:focus {
     outline: none; 
+}
+
+.projectSettingsContentFlexCellStack {
+    display: flex;
+    flex-direction: column; 
+    justify-content: flex-start;
+    align-items: center;
+    min-height: 300px;
+    max-height: 300px;
+    max-width: 1200px; 
+    width: 90%;
+    background-color: rgba(255,255,255,0.1);
+    border-radius: 6px;
+    margin: 1vw 0 2vw 0;
+    border: 0px solid #363636; 
+    box-shadow: 0 0 20px #191919;
+    box-sizing: border-box;
+}
+
+.projectSettingsDomainHeader {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    box-sizing: border-box;
+    width: 100%; 
+    min-height: 100px; 
+    max-height: 100px; 
+    background-color: rgba(0,0,0,0.2);
+    border-bottom: 1px solid rgba(255,255,255,0.4); 
+    border-radius: 0; 
+    padding: 10px 15px; 
+    width: 100%; 
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    overflow: hidden;
+}
+.projectSettingsDomainHeader span {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+    margin-right: 2rem;
+    min-width: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.projectSettingsDomainHeader span strong {
+    font-size: 1rem;
+    font-weight: 600;
+    font-style: italic;
+    color: #f1f1f1;
+    margin: 0;
+    display: block;     
+    flex: 0 1 auto;       
+    max-width: 100%;      
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.projectSettingsDomainHeader span p {
+    font-size: 0.7rem;
+    font-weight: 500;
+    font-style: italic;
+    color: #c1c1c1;
+    margin: 0;
+    display: block;       
+    flex: 0 1 auto;       
+    max-width: 100%;     
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.projectSettingsDomainHeader div {
+    display: flex; 
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+    box-sizing: border-box;;
+}
+
+@media (max-width: 600px) {
+    .projectSettingsDomainHeader div {
+        display: none; 
+    }
+}
+
+.projectSettingsDomainHeader div button {
+    padding: 0.4rem 16px;
+    border-radius: 4px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    box-sizing: border-box; 
+    font-size: 0.8rem; 
+    font-weight: 700; 
+    color: #f1f1f1;
+    box-shadow: 0 0 10px solid black;
+    border: 1px solid #c1c1c1;
+    outline: none;
+    width: 100px;  
+}
+
+.projectSettingsDomainHeader div button:hover {
+    opacity: 0.6; 
+    border: 1px solid #c1c1c1;
+    outline: none; 
+}
+
+.projectSettingsDomainHeader div button:focus {
+    opacity: 0.6; 
+    border: 1px solid #c1c1c1;
+    outline: none; 
+}
+
+.projectSettingsDomainContent {
+    min-height: calc(100% - 100px); 
+    max-height: calc(100% - 100px); 
+    overflow: scroll; 
+    width: 100%; 
+    padding: 10px 15px; 
+    display: flex; 
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    position: relative; 
+}
+
+.projectSettingsRecordStatusBar {
+    position: sticky; 
+    top: 0; 
+    width: 90%; 
+    height: 30px; 
+    border-bottom: 1px solid rgba(255,255,255,0.4); 
+    gap: 1rem; 
+    display: flex; 
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0;
+    overflow: scroll;
+}
+
+.projectSettingsRecordStatusBar button {
+    background-color: rgba(255,255,255,0.0);
+    padding: 0; 
+    margin: 0;
+    font-size: 0.7rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    height: 100%; 
+    border: none; 
+    border-radius: 0; 
+    cursor: pointer; 
+}
+
+.projectSettingsRecordStatusBar button:hover {
+    opacity: 1.0;
+    outline: none;
+}
+
+.projectSettingsRecordStatusBar button:focus {
+    outline: none;
+}
+
+.projectSettingsRecordInfo {
+    background-color: rgba(255,255,255,0.05); 
+    width: 90%; 
+    height: 80px;
+    border: 1px solid #c1c1c1; 
+    border-radius: 6px;
+    box-shadow: 0 0 4px black;
+    display: flex; 
+    justify-content: flex-start;
+    align-items: center;
+    box-sizing: border-box;
+    overflow: hidden;
+    padding: 0 20px; 
+    gap: 20px;
+    overflow: scroll;
+}
+
+.projectSettingsRecordInfo p {
+    font-size: 0.7rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+}
+
+.projectSettingsRecordInfo p i {
+    font-size: 1.1rem; 
+    font-weight: 700; 
+    color: #f1f1f1; 
+}
+
+.projectSettingsDomainContent label {
+    font-size: 0.7rem; 
+    font-weight: 800; 
+    color: #c1c1c1; 
+    font-style: italic; 
+    margin: 15px 0; 
+    width: 90%; 
+    text-align: left;
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+}
+
+.projectSettingsDomainEditLine {
+    display: flex;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid #A3A3A3;
+    border-radius: 6px; 
+    width: 90%;
+    height: 40px;
+    box-sizing: border-box;
+    overflow: hidden;
+    margin: 10px 20px;
+}
+
+.projectSettingsDomainEditLine label {
+    font-size: 0.8rem; 
+    font-weight: 700; 
+    color: #c1c1c1; 
+    width: 25%; 
+    height: 100%; 
+    text-align: center; 
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-right: 1px solid #A3A3A3;
+    padding: 0 1rem;
+    box-sizing: border-box;;
+}
+
+.projectSettingsDomainEditLine label p {
+    width: 100%; 
+    text-overflow: ellipsis; 
+    white-space: nowrap; 
+    overflow: hidden;
+}
+
+.projectSettingsDomainSearchWrapper {
+    display: flex;
+    align-items: center;
+    width: 75%;
+    height: 100%;
+    padding: 0 0.8rem;
+}
+
+.projectSettingsDomainSearchIcon,
+.projectSettingsDomainSearchIconSupplement {
+    font-size: 0.9rem;
+}
+
+.projectSettingsDomainSearchIcon,
+.projectSettingsDomainSearchIconSupplement {
+    color: #A3A3A3;
+    margin-right: 0.5rem;
+}
+
+.projectSettingsDomainSearchIconSupplement {
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    margin-left: 0.5rem;
+}
+
+.projectSettingsDomainSearchIconSupplement:hover {
+    opacity: 0.6;
+    transform: scale(1.1);
+}
+
+.projectSettingsDomainSearchInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #A3A3A3;
+}
+
+.projectSettingsDomainSearchInput::placeholder {
+    color: #8b8b8b;
+    font-weight: 600;
+}
+
+
+.projectSettingsDropdownWrapper {
+    box-sizing: border-box;
+    position: relative;
+    min-height: 40px;
+    max-height: 40px;
+    width: 80%;
+    border-radius: 0 !important; 
+    display: flex;
+    justify-content: space-between;
+    overflow: hidden;
+}
+
+@media (max-width: 800px) {
+    .projectSettingsDropdownWrapper {
+        width: 90%;
+    }
+}
+
+.projectSettingsDomainButton {
+    box-sizing: border-box;
+    background: rgba(0,0,0,0.0);
+    border-radius: 0;
+    color: #f1f1f1;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+    min-height: 40px;
+    max-height: 40px;
+    width: 100%;
+    padding: 0 1rem; 
+}
+
+.projectSettingsDomainButton:hover {
+    opacity: 0.6;
+    border: 1px solid #222222;
+    outline: none;
+}
+
+.projectSettingsDomainButton:focus {
+    border: 1px solid #222222;
+    outline: none;
+}
+
+.projectSettingsDomainCaretIcon svg {
+    font-size: 1rem;
+    color: #222222;
+}
+
+.projectSettingsDomainDropdownMenu {
+    position: fixed;
+    background: #222222;
+    border: 2px solid #414141;
+    border-radius: 0.3rem;
+    display: flex;
+    flex-direction: column;
+    z-index: 999;
+    min-width: 300px;
+    padding: 0.4rem 0;
+    box-shadow: 0 0 20px black;
+}
+
+.projectSettingsDomainDropdownMenu button {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0.4rem 1rem;
+    color: #A3A3A3;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-style: italic;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.projectSettingsDomainDropdownMenu button i {
+    padding: 0 0.4rem; 
+    text-overflow: ellipsis; 
+    overflow: hidden; 
+    white-space: nowrap;
+
+}
+
+.projectSettingsDomainDropdownMenu button svg {
+    font-size: 0.7rem;
+}
+
+.projectSettingsDomainDropdownMenu button:hover {
+    background: #2a2a2a;
+    border: none;
+    outline: none;
+}
+
+.projectSettingsDomainDropdownMenu button:focus {
+    background: #2a2a2a;
+    border: none;
+    outline: none;
 }
 

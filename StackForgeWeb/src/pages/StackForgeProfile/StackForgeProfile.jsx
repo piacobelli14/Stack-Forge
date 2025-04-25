@@ -199,7 +199,7 @@ const StackForgeProfile = () => {
                 setUserDetails(prev => ({ ...prev, image: base64Data }));
                 try {
                     const token = localStorage.getItem("token");
-                    if (!t) return;
+                    if (!token) return;
                     const res = await fetch("http://localhost:3000/edit-user-image", {
                         method: "POST",
                         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -227,7 +227,7 @@ const StackForgeProfile = () => {
                 setUserDetails(prev => ({ ...prev, orgImage: base64Data }));
                 try {
                     const token = localStorage.getItem("token");
-                    if (!t) return;
+                    if (!token) return;
                     const res = await fetch("http://localhost:3000/edit-team-image", {
                         method: "POST",
                         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -424,7 +424,7 @@ const StackForgeProfile = () => {
     const handleGithubConnect = async () => {
         try {
             const token = localStorage.getItem("token");
-            if (!t) {
+            if (!token) {
                 return;
             }
             window.open(`http://localhost:3000/connect-github?token=${t}&userID=${userID}`, "_self");
@@ -436,7 +436,7 @@ const StackForgeProfile = () => {
     const handleGithubDisconnect = async () => {
         try {
             const token = localStorage.getItem("token");
-            if (!t) return;
+            if (!token) return;
             const res = await fetch("http://localhost:3000/delete-github", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }

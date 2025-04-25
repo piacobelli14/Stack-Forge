@@ -385,6 +385,18 @@
     padding: 0;
 }
 
+.deploymentDetailLineDomainsSpan {
+    font-weight: 700; 
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease; 
+    text-decoration: underline;
+    font-style: italic;
+}
+
+.deploymentDetailLineDomainsSpan:hover {
+    opacity: 0.6; 
+}
+
 .deploymentDetailLine span p {
     padding: 0;
     margin: 0.2rem 0;

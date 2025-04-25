@@ -285,7 +285,7 @@ const StackForgeProjectDetails = () => {
                             <button>
                                 <p>Usage</p>
                             </button>
-                            <button>
+                            <button onClick={()=>{navigate("/project-settings", { state: { project: projectDetails.project, settingsState: "domains" } });}}>
                                 <p>Domains</p>
                             </button>
                         </span>
@@ -362,7 +362,7 @@ const StackForgeProjectDetails = () => {
 
                                     <div className="deploymentDetailLine">
                                         <strong>Domains</strong>
-                                        <span>
+                                        <span className="deploymentDetailLineDomainsSpan" onClick={()=>{navigate("/project-settings", { state: { project: projectDetails.project, settingsState: "domains" } });}}>
                                             {
                                                 projectDetails.domains[0]
                                                     ?.domain_name
