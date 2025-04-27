@@ -43,6 +43,7 @@ const StackForgeProjects = () => {
   const [domainSearchTerm, setDomainSearchTerm] = useState("");
   const [selectedDomainProject, setSelectedDomainProject] = useState(null);
   const [domainName, setDomainName] = useState("");
+  const [isAddingDomain, setIsAddingDomain] = useState(false);
 
 
   useEffect(() => {
@@ -151,7 +152,9 @@ const StackForgeProjects = () => {
   };
 
   const confirmDomainEntry = async () => {
+    setIsAddingDomain(true);
     const token = localStorage.getItem("token");
+  
     try {
       const response = await fetch("http://localhost:3000/validate-domain", {
         method: "POST",
@@ -166,20 +169,23 @@ const StackForgeProjects = () => {
           domain: domainName,
         }),
       });
-
+  
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-
+  
       closeDomainSearchModal();
-      const displayName = selectedDomainProject.project_name ?? selectedDomainProject.name;
+      const displayName =
+        selectedDomainProject.project_name ?? selectedDomainProject.name;
       await showDialog({
         title: "Domain Added",
         message: `Project ${displayName} added with domain ${domainName}`,
         showCancel: false,
       });
-
-      navigate("/project-settings", { state: { project: selectedDomainProject, settingsState: "domains" } });
+  
+      navigate("/project-settings", {
+        state: { project: selectedDomainProject, settingsState: "domains" },
+      });
     } catch (error) {
       closeDomainSearchModal();
       await showDialog({
@@ -187,8 +193,11 @@ const StackForgeProjects = () => {
         message: "Failed to add domain. Please try again.",
         showCancel: false,
       });
+    } finally {
+      setIsAddingDomain(false);
     }
   };
+  
 
   const closeDomainSearchModal = () => {
     setDomainSearchModal(false);
@@ -446,8 +455,8 @@ const StackForgeProjects = () => {
                   <div className="addDomainsIcon">
                     <FontAwesomeIcon icon={faGlobe} />
                   </div>
-                  <strong>Add a domain.</strong>
-                  <p>Add a domain that you can connect to your team's projects.</p>
+                  <strong>Add a new subdomain.</strong>
+                  <p>Add a new subdomain for one of your projects.</p>
                 </div>
                 <button className="addDomainButton" onClick={() => setDomainSearchModal(true)}>
                   Add existing domain.
@@ -552,43 +561,69 @@ const StackForgeProjects = () => {
         </div>
       )}
 
-      {domainSearchModal && domainModalStep === 1 && (
-        <div className="domainSearchModalOverlay">
-          <div className="domainSearchModalContainer">
-            <div className="domainSearchModalHeader">
-              <h2>Enter Domain</h2>
-              <button onClick={closeDomainSearchModal}>
-                <FontAwesomeIcon icon={faXmark} />
-              </button>
+    {domainSearchModal && domainModalStep === 1 && (
+      <div className="domainSearchModalOverlay">
+        <div
+          className="domainSearchModalContainer"
+          style={{ position: "relative" }}
+        >
+          {isAddingDomain && (
+              <div
+              className="loading-wrapper"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: "rgba(0, 0, 0, 0.5)",
+                zIndex: 10,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <div className="loading-circle" />
             </div>
-            <div className="domainSearchModalBody">
-              <p>Project: <strong>{selectedDomainProject.project_name ?? selectedDomainProject.name}</strong></p>
-              <p>Enter the domain that you would like to add: </p>
-              <div className="domainSearchDeploymentContent">
-                <div className="domainSearchInputWrapperRounded">
-                  <FontAwesomeIcon icon={faGlobe} className="domainSearchIcon" />
-                  <input
-                    type="text"
-                    className="domainSearchInput"
-                    placeholder="example.com"
-                    value={domainName}
-                    onChange={(e) => setDomainName(e.target.value)}
-                  />
-                </div>
+          )}
+
+          <div className="domainSearchModalHeader">
+            <h2>Enter Domain</h2>
+            <button onClick={closeDomainSearchModal}>
+              <FontAwesomeIcon icon={faXmark} />
+            </button>
+          </div>
+          <div className="domainSearchModalBody">
+            <p>
+              Project:{" "}
+              <strong>
+                {selectedDomainProject.project_name ??
+                  selectedDomainProject.name}
+              </strong>
+            </p>
+            <p>Enter the domain that you would like to add: </p>
+            <div className="domainSearchDeploymentContent">
+              <div className="domainSearchInputWrapperRounded">
+                <FontAwesomeIcon icon={faGlobe} className="domainSearchIcon" />
+                <input
+                  type="text"
+                  className="domainSearchInput"
+                  placeholder="example.com"
+                  value={domainName}
+                  onChange={(e) => setDomainName(e.target.value)}
+                />
               </div>
             </div>
-            <div className="domainSearchModalFooter">
-              <button onClick={closeDomainSearchModal}>Cancel</button>
-              <button
-                disabled={!domainName}
-                onClick={confirmDomainEntry}
-              >
-                Add Domain
-              </button>
-            </div>
+          </div>
+          <div className="domainSearchModalFooter">
+            <button onClick={closeDomainSearchModal}>Cancel</button>
+            <button disabled={!domainName} onClick={confirmDomainEntry}>
+              Add Domain
+            </button>
           </div>
         </div>
-      )}
+      </div>
+    )}
     </div>
   );
 };

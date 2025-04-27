@@ -666,9 +666,12 @@
 }
 
 .projectSettingsRecordInfo p i {
-    font-size: 1.1rem; 
+    font-size: 1rem; 
     font-weight: 700; 
     color: #f1f1f1; 
+    white-space: nowrap;
+    overflow: hidden; 
+    text-overflow: ellipsis;
 }
 
 .projectSettingsDomainContent label {
@@ -853,7 +856,6 @@
     text-overflow: ellipsis; 
     overflow: hidden; 
     white-space: nowrap;
-
 }
 
 .projectSettingsDomainDropdownMenu button svg {

@@ -226,7 +226,8 @@ CREATE TABLE domains
     checked_at TIMESTAMP,
     is_primary BOOLEAN DEFAULT FALSE,
     redirect_target TEXT, 
-    environment TEXT
+    environment TEXT, 
+    certificate_arn TEXT
 );
 DROP INDEX IF EXISTS idx_domains_orgid;
 CREATE INDEX idx_domains_orgid ON domains (orgid, username);
