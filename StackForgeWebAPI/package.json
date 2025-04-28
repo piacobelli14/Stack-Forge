@@ -11,6 +11,7 @@
   "description": "",
   "dependencies": {
     "@aws-sdk/client-acm": "^3.797.0",
+    "@aws-sdk/client-cloudfront": "^3.797.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.787.0",
     "@aws-sdk/client-codebuild": "^3.787.0",
     "@aws-sdk/client-ecr": "^3.787.0",
@@ -20,6 +21,7 @@
     "@aws-sdk/client-s3": "^3.782.0",
     "@aws-sdk/client-ssm": "^3.787.0",
     "@aws-sdk/client-sts": "^3.787.0",
+    "@aws-sdk/client-wafv2": "^3.797.0",
     "@supabase/supabase-js": "^2.49.4",
     "archiver": "^7.0.1",
     "aws-sdk": "^2.1692.0",

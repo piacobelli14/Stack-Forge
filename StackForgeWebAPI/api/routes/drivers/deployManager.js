@@ -181,7 +181,7 @@ class DeployManager {
                 }
             } catch (error) {
                 if (error.name !== "TargetGroupNotFoundException") {
-                    throw err;
+                    throw error;
                 }
             }
 
@@ -313,9 +313,9 @@ class DeployManager {
             return result.taskDefinition.taskDefinitionArn;
         } catch (error) {
             if (error.name === "AccessDeniedException") {
-                throw new Error(`IAM permissions error: ${error.message}. Ensure your IAM user or role has 'iam:PassRole' permission on the role ${process.env.ECS_EXECUTION_ROLE}.`);
+                throw new Error(`IAM permissions  error: ${error.message}. Ensure your IAM user or role has 'iam:PassRole' permission on the role ${process.env.ECS_EXECUTION_ROLE}.`);
             }
-            throw err;
+            throw error;
         }
     }
 
@@ -367,7 +367,6 @@ class DeployManager {
             );
             const certificateArns = domainResult.rows.map(r => r.certificate_arn).filter(arn => arn);
     
-    
             const listenerResp = await this.elbv2.send(new DescribeListenersCommand({
                 ListenerArns: [process.env.ALB_LISTENER_ARN_HTTPS],
             }));
@@ -379,7 +378,7 @@ class DeployManager {
                         ListenerArn: process.env.ALB_LISTENER_ARN_HTTPS,
                         Certificates: [{ CertificateArn: certArn }],
                     }));
-                } else {}
+                }
             }
     
             const baseDomain = `${projectName}.stackforgeengine.com`;
@@ -467,6 +466,12 @@ class DeployManager {
                             Host: "#{host}",
                             Path: "/#{path}",
                             Query: "#{query}"
+                        },
+                        ResponseMetadata: {
+                            Headers: {
+                                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+                                "Pragma": "no-cache"
+                            }
                         }
                     }]
                 }));
@@ -484,6 +489,12 @@ class DeployManager {
                             Host: "#{host}",
                             Path: "/#{path}",
                             Query: "#{query}"
+                        },
+                        ResponseMetadata: {
+                            Headers: {
+                                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+                                "Pragma": "no-cache"
+                            }
                         }
                     }]
                 }));
@@ -508,6 +519,12 @@ class DeployManager {
                             Host: "#{host}",
                             Path: "/#{path}",
                             Query: "#{query}"
+                        },
+                        ResponseMetadata: {
+                            Headers: {
+                                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+                                "Pragma": "no-cache"
+                            }
                         }
                     }]
                 }));
@@ -525,6 +542,12 @@ class DeployManager {
                             Host: "#{host}",
                             Path: "/#{path}",
                             Query: "#{query}"
+                        },
+                        ResponseMetadata: {
+                            Headers: {
+                                "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+                                "Pragma": "no-cache"
+                            }
                         }
                     }]
                 }));
@@ -554,13 +577,12 @@ class DeployManager {
             }));
             if (healthResp.TargetHealthDescriptions.length === 0 || 
                 !healthResp.TargetHealthDescriptions.some(th => th.TargetHealth.State === "healthy")) {
-            } else {}
+            }
     
         } catch (error) {
             throw new Error(`Failed to create/update ECS service: ${error.message}.`);
         }
     }
-
     async createCodeBuildProject({ projectName, repository, branch, rootDirectory, installCommand, buildCommand, outputDirectory, githubAccessToken }) {
         if (!repository || typeof repository !== "string" || repository.trim() === "") {
             throw new Error("Invalid repository: repository parameter is required and must be a non-empty string.");
@@ -810,7 +832,7 @@ class DeployManager {
             } catch (error) {
                 if (error.name === "ResourceNotFoundException") {
                     retryCount++;
-                    onChunk(`Log stream not yet available, retrying (${retryCount}/${maxRetries}), error: ${error.message}\n`);
+                    onChunk(`Log stream not yet available, retrying (${retryCount}/${maxRetries}),  error: ${error.message}\n`);
                     if (retryCount >= maxRetries) {
                         onChunk(`Max retries reached for log stream\n`);
                         throw new Error(`Log stream not found after ${maxRetries} retries.`);
@@ -819,7 +841,7 @@ class DeployManager {
                     continue;
                 }
                 onChunk(`Error fetching logs: ${error.message}\n`);
-                throw err;
+                throw error;
             }
             try {
                 const buildInfo = await codeBuildClient.send(new BatchGetBuildsCommand({ ids: [buildId] }));
@@ -833,7 +855,7 @@ class DeployManager {
                 }
             } catch (error) {
                 onChunk(`Error checking build status: ${error.message}\n`);
-                throw err;
+                throw  error;
             }
             await new Promise(resolve => setTimeout(resolve, 5000));
         }
@@ -908,7 +930,7 @@ class DeployManager {
             const response = await axios.get(deploymentUrl, { timeout: 5000 });
             httpStatus = response.status;
         } catch (error) {
-            httpStatus = errorresponse?.status || 503;
+            httpStatus =  errorresponse?.status || 503;
         }
 
         const resp = await cloudWatchLogsClient.send(new DescribeLogStreamsCommand({
@@ -1002,7 +1024,7 @@ class DeployManager {
             return logDir;
         } catch (error) {
             onData(`Error during build process: ${error.message}\n`);
-            throw err;
+            throw error;
         }
     }
 
@@ -1131,7 +1153,7 @@ class DeployManager {
             await this.updateDNSRecord(projectName, subdomains);
         } catch (error) {
             fs.appendFileSync(path.join(logDir, "error.log"), `DNS update failed: ${error.message}\n`);
-            throw error;
+            throw  error;
         }
         try {
             const fqdn = `${domainName}.stackforgeengine.com`;
@@ -1238,7 +1260,7 @@ class DeployManager {
                 await this.recordBuildLogCombined(organizationID, userID, deploymentId, logDir);
                 await this.recordRuntimeLogs(organizationID, userID, deploymentId, projectName);
             }
-            throw error;
+            throw  error;
         }
     }
 
@@ -1592,7 +1614,7 @@ class DeployManager {
                 await this.recordRuntimeLogs(organizationID, userID, deploymentId, projectName);
                 onData(`Failed runtime logs recorded\n`);
             }
-            throw error;
+            throw  error;
         }
     }
 
@@ -2094,3 +2116,9 @@ class DeployManager {
 }
 
 module.exports = new DeployManager();
+
+
+
+
+
+

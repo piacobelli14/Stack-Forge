@@ -8,6 +8,7 @@ import {
   faSquareCheck,
   faGears,
   faIdCard,
+  faCaretDown,
 } from "@fortawesome/free-solid-svg-icons";
 import "../../styles/mainStyles/StackForgemainStyles/StackForgeProjectSettings.css";
 import "../../styles/helperStyles/LoadingSpinner.css";
@@ -39,6 +40,15 @@ const StackForgeProjectSettings = () => {
   const [domainLoadingStates, setDomainLoadingStates] = useState({});
   const [domains, setDomains] = useState([]);
   const [selectedDomainStates, setSelectedDomainStates] = useState({});
+  const [domainEditModes, setDomainEditModes] = useState({});
+  const redirectButtonRefs = useRef({});
+  const redirectDropdownRefs = useRef({});
+  const environmentButtonRefs = useRef({});
+  const environmentDropdownRefs = useRef({});
+  const [redirectDropdownOpen, setRedirectDropdownOpen] = useState({});
+  const [environmentDropdownOpen, setEnvironmentDropdownOpen] = useState({});
+  const [redirectDropdownPositions, setRedirectDropdownPositions] = useState({});
+  const [environmentDropdownPositions, setEnvironmentDropdownPositions] = useState({});
 
   useEffect(() => {
     if (!loading && !token) navigate("/login");
@@ -59,11 +69,119 @@ const StackForgeProjectSettings = () => {
       setIsLoaded(false);
       setScreenSize(window.innerWidth);
       setResizeTrigger((prev) => !prev);
+      setRedirectDropdownOpen({});
+      setEnvironmentDropdownOpen({});
       setTimeout(() => setIsLoaded(true), 300);
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setRedirectDropdownOpen({});
+      setEnvironmentDropdownOpen({});
+    };
+
+    const scrollContainer = scrollContainerRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener("scroll", handleScroll);
+    }
+
+    return () => {
+      if (scrollContainer) {
+        scrollContainer.removeEventListener("scroll", handleScroll);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    domains.forEach((domain) => {
+      const domainID = domain.domainID;
+      if (
+        redirectDropdownOpen[domainID] &&
+        redirectButtonRefs.current[domainID] &&
+        redirectDropdownRefs.current[domainID]
+      ) {
+        const buttonRect = redirectButtonRefs.current[domainID].getBoundingClientRect();
+        const dropdownRect = redirectDropdownRefs.current[domainID].getBoundingClientRect();
+        let newTop = buttonRect.bottom + 5;
+        let newLeft = buttonRect.right - dropdownRect.width;
+        if (newTop + dropdownRect.height > window.innerHeight) {
+          newTop = window.innerHeight - dropdownRect.height;
+        }
+        if (newLeft < 0) {
+          newLeft = 0;
+        }
+        setRedirectDropdownPositions((prev) => ({
+          ...prev,
+          [domainID]: { top: newTop, left: newLeft },
+        }));
+      }
+      if (
+        environmentDropdownOpen[domainID] &&
+        environmentButtonRefs.current[domainID] &&
+        environmentDropdownRefs.current[domainID]
+      ) {
+        const buttonRect = environmentButtonRefs.current[domainID].getBoundingClientRect();
+        const dropdownRect = environmentDropdownRefs.current[domainID].getBoundingClientRect();
+        let newTop = buttonRect.bottom + 5;
+        let newLeft = buttonRect.right - dropdownRect.width;
+        if (newTop + dropdownRect.height > window.innerHeight) {
+          newTop = window.innerHeight - dropdownRect.height;
+        }
+        if (newLeft < 0) {
+          newLeft = 0;
+        }
+        setEnvironmentDropdownPositions((prev) => ({
+          ...prev,
+          [domainID]: { top: newTop, left: newLeft },
+        }));
+      }
+    });
+  }, [redirectDropdownOpen, environmentDropdownOpen, domains]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      let shouldCloseRedirect = true;
+      let shouldCloseEnvironment = true;
+      domains.forEach((domain) => {
+        const domainID = domain.domainID;
+        if (
+          redirectButtonRefs.current[domainID] &&
+          redirectButtonRefs.current[domainID].contains(event.target)
+        ) {
+          shouldCloseRedirect = false;
+        }
+        if (
+          redirectDropdownRefs.current[domainID] &&
+          redirectDropdownRefs.current[domainID].contains(event.target)
+        ) {
+          shouldCloseRedirect = false;
+        }
+        if (
+          environmentButtonRefs.current[domainID] &&
+          environmentButtonRefs.current[domainID].contains(event.target)
+        ) {
+          shouldCloseEnvironment = false;
+        }
+        if (
+          environmentDropdownRefs.current[domainID] &&
+          environmentDropdownRefs.current[domainID].contains(event.target)
+        ) {
+          shouldCloseEnvironment = false;
+        }
+      });
+      if (shouldCloseRedirect) {
+        setRedirectDropdownOpen({});
+      }
+      if (shouldCloseEnvironment) {
+        setEnvironmentDropdownOpen({});
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [domains]);
 
   const fetchDomains = async () => {
     setDomainsLoading(true);
@@ -137,6 +255,102 @@ const StackForgeProjectSettings = () => {
     } finally {
       setDomainLoadingStates((prev) => ({ ...prev, [domainID]: false }));
     }
+  };
+
+  const updateRedirect = async (domainID, redirectTarget) => {
+    const payload = { userID, organizationID, projectID, domainID, redirectTarget };
+    try {
+      const response = await fetch("http://localhost:3000/edit-redirect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to update redirect: ${response.status}`);
+      }
+
+      setDomains((prev) =>
+        prev.map((d) => (d.domainID === domainID ? { ...d, redirectTarget } : d))
+      );
+    } catch (error) {
+      await showDialog({
+        title: "Error",
+        message: error.message,
+      });
+    }
+  };
+
+  const updateEnvironment = async (domainID, environment) => {
+    const payload = { userID, organizationID, projectID, domainID, environment };
+    try {
+      const response = await fetch("http://localhost:3000/edit-environment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to update environment: ${response.status}`);
+      }
+
+      setDomains((prev) =>
+        prev.map((d) => (d.domainID === domainID ? { ...d, environment } : d))
+      );
+    } catch (error) {
+      await showDialog({
+        title: "Error",
+        message: error.message,
+      });
+    }
+  };
+
+  const toggleRedirectDropdown = (domainID) => {
+    setRedirectDropdownOpen((prev) => ({
+      ...prev,
+      [domainID]: !prev[domainID],
+    }));
+    setEnvironmentDropdownOpen((prev) => ({
+      ...prev,
+      [domainID]: false,
+    }));
+  };
+
+  const toggleEnvironmentDropdown = (domainID) => {
+    setEnvironmentDropdownOpen((prev) => ({
+      ...prev,
+      [domainID]: !prev[domainID],
+    }));
+    setRedirectDropdownOpen((prev) => ({
+      ...prev,
+      [domainID]: false,
+    }));
+  };
+
+  const handleRedirectSelect = (domainID, redirectTarget) => {
+    updateRedirect(domainID, redirectTarget);
+    setRedirectDropdownOpen((prev) => ({
+      ...prev,
+      [domainID]: false,
+    }));
+  };
+
+  const handleEnvironmentSelect = (domainID, environment) => {
+    const capitalizedEnvironment =
+      environment.charAt(0).toUpperCase() + environment.slice(1).toLowerCase();
+    updateEnvironment(domainID, capitalizedEnvironment);
+    setEnvironmentDropdownOpen((prev) => ({
+      ...prev,
+      [domainID]: false,
+    }));
   };
 
   const copyText = (text) => {
@@ -486,84 +700,206 @@ const StackForgeProjectSettings = () => {
                                 >
                                   Refresh
                                 </button>
-                              </div>
-                            </div>
 
-                            <div className="projectSettingsDomainContent">
-                              <div className="projectSettingsRecordStatusBar">
                                 <button
+                                  style={{ backgroundColor: "rgba(255,255,255,0.1)" }}
                                   onClick={() =>
-                                    setSelectedDomainStates((prev) => ({
+                                    setDomainEditModes((prev) => ({
                                       ...prev,
-                                      [domain.domainID]: "ARecord",
+                                      [domain.domainID]: !prev[domain.domainID],
                                     }))
                                   }
-                                  style={{
-                                    borderBottom:
-                                      selectedDomainStates[domain.domainID] === "ARecord"
-                                        ? "2px solid #c1c1c1"
-                                        : "none",
-                                  }}
+                                  disabled={domainLoadingStates[domain.domainID]}
                                 >
-                                  A Record
+                                  {domainEditModes[domain.domainID] ? "Save" : "Edit"}
                                 </button>
-                                <button
-                                  onClick={() =>
-                                    setSelectedDomainStates((prev) => ({
-                                      ...prev,
-                                      [domain.domainID]: "AAAARecord",
-                                    }))
-                                  }
-                                  style={{
-                                    borderBottom:
-                                      selectedDomainStates[domain.domainID] === "AAAARecord"
-                                        ? "2px solid #c1c1c1"
-                                        : "none",
-                                  }}
-                                >
-                                  AAAA Record
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    setSelectedDomainStates((prev) => ({
-                                      ...prev,
-                                      [domain.domainID]: "CNameRecord",
-                                    }))
-                                  }
-                                  style={{
-                                    borderBottom:
-                                      selectedDomainStates[domain.domainID] === "CNameRecord"
-                                        ? "2px solid #c1c1c1"
-                                        : "none",
-                                  }}
-                                >
-                                  CName Record
-                                </button>
-                              </div>
-                              <label>
-                                Set the following record on your DNS provider to continue:
-                              </label>
-                              <div className="projectSettingsRecordInfo">
-                                {dnsRecord ? (
-                                  <>
-                                    <p>
-                                      Type
-                                      <br /> <i>{dnsRecord.type}</i>
-                                    </p>
-                                    <p>
-                                      Name
-                                      <br /> <i>{dnsRecord.name}</i>
-                                    </p>
-                                    <p>
-                                      Value
-                                      <br /> <i>{dnsRecord.value}</i>
-                                    </p>
-                                  </>
-                                ) : (
-                                  <p>No {selectedRecordType} record found for this domain.</p>
-                                )}
                               </div>
                             </div>
+                                  
+                            {!domainEditModes[domain.domainID] && (
+                              <div className="projectSettingsDomainContent">
+                                <div className="projectSettingsRecordStatusBar">
+                                  <button
+                                    onClick={() =>
+                                      setSelectedDomainStates((prev) => ({
+                                        ...prev,
+                                        [domain.domainID]: "ARecord",
+                                      }))
+                                    }
+                                    style={{
+                                      borderBottom:
+                                        selectedDomainStates[domain.domainID] === "ARecord"
+                                          ? "2px solid #c1c1c1"
+                                          : "none",
+                                    }}
+                                  >
+                                    A Record
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      setSelectedDomainStates((prev) => ({
+                                        ...prev,
+                                        [domain.domainID]: "AAAARecord",
+                                      }))
+                                    }
+                                    style={{
+                                      borderBottom:
+                                        selectedDomainStates[domain.domainID] === "AAAARecord"
+                                          ? "2px solid #c1c1c1"
+                                          : "none",
+                                    }}
+                                  >
+                                    AAAA Record
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      setSelectedDomainStates((prev) => ({
+                                        ...prev,
+                                        [domain.domainID]: "CNameRecord",
+                                      }))
+                                    }
+                                    style={{
+                                      borderBottom:
+                                        selectedDomainStates[domain.domainID] === "CNameRecord"
+                                          ? "2px solid #c1c1c1"
+                                          : "none",
+                                    }}
+                                  >
+                                    CName Record
+                                  </button>
+                                </div>
+                                <label>
+                                  Set the following record on your DNS provider to continue:
+                                </label>
+                                <div className="projectSettingsRecordInfo">
+                                  {dnsRecord ? (
+                                    <>
+                                      <p>
+                                        Type
+                                        <br /> <i>{dnsRecord.type}</i>
+                                      </p>
+                                      <p>
+                                        Name
+                                        <br /> <i>{dnsRecord.name}</i>
+                                      </p>
+                                      <p>
+                                        Value
+                                        <br /> <i>{dnsRecord.value}</i>
+                                      </p>
+                                    </>
+                                  ) : (
+                                    <p>No {selectedRecordType} record found for this domain.</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                            {domainEditModes[domain.domainID] && (
+                              <div
+                                className="projectSettingsDomainContent"
+                                style={{ justifyContent: "flex-start", alignItems: "center" }}
+                              >
+                                <label>
+                                  Adjust the usage of this domain in your project:
+                                </label>
+                                <div className="projectSettingsDomainEditLine">
+                                  <label>
+                                    <p>Redirect to:</p>
+                                  </label>
+                                  <div className="projectSettingsDropdownWrapper">
+                                    <button
+                                      className="projectSettingsDomainButton"
+                                      onClick={() => toggleRedirectDropdown(domain.domainID)}
+                                      ref={(el) => (redirectButtonRefs.current[domain.domainID] = el)}
+                                    >
+                                      {domain.redirectTarget || "Redirect to..."}
+                                      <FontAwesomeIcon
+                                        icon={faCaretDown}
+                                        className="projectSettingsDomainCaretIcon"
+                                        style={{
+                                          transform: redirectDropdownOpen[domain.domainID]
+                                            ? "rotate(180deg)"
+                                            : "rotate(0deg)",
+                                          transition: "transform 0.3s ease",
+                                        }}
+                                      />
+                                    </button>
+                                    {redirectDropdownOpen[domain.domainID] && (
+                                      <div
+                                        className="projectSettingsDomainDropdownMenu"
+                                        ref={(el) => (redirectDropdownRefs.current[domain.domainID] = el)}
+                                        style={{
+                                          top: (redirectDropdownPositions[domain.domainID]?.top || 0) * 1,
+                                          left: redirectDropdownPositions[domain.domainID]?.left || 0,
+                                        }}
+                                      >
+                                        <button onClick={() => handleRedirectSelect(domain.domainID, null)}>
+                                          no redirect
+                                          <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                        </button>
+                                        {domains
+                                          .filter((d) => d.domainID !== domain.domainID)
+                                          .map((d) => (
+                                            <button
+                                              key={d.domainID}
+                                              onClick={() => handleRedirectSelect(domain.domainID, d.domainName)}
+                                            >
+                                              {d.domainName}
+                                              <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                            </button>
+                                          ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="projectSettingsDomainEditLine">
+                                  <label>
+                                    <p>Environment:</p>
+                                  </label>
+                                  <div className="projectSettingsDropdownWrapper">
+                                    <button
+                                      className="projectSettingsDomainButton"
+                                      onClick={() => toggleEnvironmentDropdown(domain.domainID)}
+                                      ref={(el) => (environmentButtonRefs.current[domain.domainID] = el)}
+                                    >
+                                      {domain.environment || "Environment..."}
+                                      <FontAwesomeIcon
+                                        icon={faCaretDown}
+                                        className="projectSettingsDomainCaretIcon"
+                                        style={{
+                                          transform: environmentDropdownOpen[domain.domainID]
+                                            ? "rotate(180deg)"
+                                            : "rotate(0deg)",
+                                          transition: "transform 0.3s ease",
+                                        }}
+                                      />
+                                    </button>
+                                    {environmentDropdownOpen[domain.domainID] && (
+                                      <div
+                                        className="projectSettingsDomainDropdownMenu"
+                                        ref={(el) => (environmentDropdownRefs.current[domain.domainID] = el)}
+                                        style={{
+                                          top: (environmentDropdownPositions[domain.domainID]?.top || 0) * 1,
+                                          left: environmentDropdownPositions[domain.domainID]?.left || 0,
+                                        }}
+                                      >
+                                        <button
+                                          onClick={() => handleEnvironmentSelect(domain.domainID, "Production")}
+                                        >
+                                          Production
+                                          <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                        </button>
+                                        <button
+                                          onClick={() => handleEnvironmentSelect(domain.domainID, "Preview")}
+                                        >
+                                          Preview
+                                          <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })

@@ -5,10 +5,10 @@ const axios = require("axios");
 const { authenticateToken } = require("../middleware/auth");
 const { pool } = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
-const {
-    Route53Client,
-    ChangeResourceRecordSetsCommand
-} = require("@aws-sdk/client-route-53");
+const { ElasticLoadBalancingV2Client, DescribeListenersCommand, DescribeRulesCommand, DeleteRuleCommand, CreateRuleCommand } = require('@aws-sdk/client-elastic-load-balancing-v2');
+const { WAFV2Client, GetWebACLForResourceCommand, UpdateWebACLCommand } = require('@aws-sdk/client-wafv2');
+const { Route53Client, ListResourceRecordSetsCommand, ChangeResourceRecordSetsCommand } = require('@aws-sdk/client-route-53');
+const { CloudFrontClient, CreateInvalidationCommand } = require('@aws-sdk/client-cloudfront');
 
 const deployManager = require("./drivers/deployManager");
 const route53Client = new Route53Client({ region: process.env.AWS_REGION });
@@ -345,5 +345,231 @@ router.post("/project-domains", authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, projectID, domainID, redirectTarget } = req.body;
+
+    const elbv2Client = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
+    const cloudfrontClient = new CloudFrontClient({ region: process.env.AWS_REGION });
+
+    if (!userID || !organizationID || !projectID || !domainID) {
+        return res.status(400).json({ message: "All required fields must be provided." });
+    }
+
+    try {
+        if (redirectTarget === null) {
+            const targetListenerArns = [
+                process.env.ALB_LISTENER_ARN_HTTPS,
+                process.env.ALB_LISTENER_ARN_HTTP
+            ];
+            await Promise.all(targetListenerArns.map(async (listenerArn) => {
+                const rulesResp = await elbv2Client.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+                await Promise.all(
+                    rulesResp.Rules
+                        .filter(rule => !rule.IsDefault)
+                        .map(rule => elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn })))
+                );
+            }));
+
+            const timestamp = new Date().toISOString();
+            await pool.query(
+                `UPDATE domains
+                 SET redirect_target = NULL,
+                     updated_at = $1
+                 WHERE domain_id = $2`,
+                [timestamp, domainID]
+            );
+
+            if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
+                await cloudfrontClient.send(new CreateInvalidationCommand({
+                    DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
+                    InvalidationBatch: {
+                        CallerReference: `redirect-remove-${domainID}-${Date.now()}`,
+                        Paths: { Quantity: 2, Items: ['/*', '/'] }
+                    }
+                }));
+            }
+
+            return res.status(200).json({ success: true, message: "Redirect removed" });
+        }
+
+        const [projectResult, domainResult] = await Promise.all([
+            pool.query(
+                "SELECT name FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
+                [projectID, organizationID, userID]
+            ),
+            pool.query(
+                "SELECT domain_name FROM domains WHERE domain_id = $1 AND project_id = $2 AND orgid = $3",
+                [domainID, projectID, organizationID]
+            )
+        ]);
+
+        if (projectResult.rows.length === 0 || domainResult.rows.length === 0) {
+            return res.status(404).json({ message: "Project or domain not found." });
+        }
+
+        const projectName = projectResult.rows[0].name.toLowerCase();
+        const domainName = domainResult.rows[0].domain_name;
+        const fullFqdn = `${domainName}.stackforgeengine.com`.toLowerCase().replace(/\.$/, '');
+
+        const targetSubdomain = redirectTarget.replace('.stackforgeengine.com', '');
+        if (targetSubdomain === domainName) {
+            return res.status(400).json({ message: "Cannot redirect to same domain." });
+        }
+
+        const redirectFqdn = `${targetSubdomain}.stackforgeengine.com`.toLowerCase().replace(/\.$/, '');
+        const changeFingerprint = `v=${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+        const cacheBuster = `cb=${uuidv4()}`;
+        const fullQueryString = `${changeFingerprint}&${cacheBuster}`;
+
+        const nuclearHeaders = [
+            { Name: "Cache-Control", Value: "private, no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0" },
+            { Name: "Pragma",        Value: "no-cache" },
+            { Name: "Expires",       Value: "0" },
+            { Name: "X-Accel-Expires", Value: "0" },
+            { Name: "Edge-Control",  Value: "no-store" },
+            { Name: "CDN-Cache-Control", Value: "no-store" },
+            { Name: "X-Cache-Bust",  Value: changeFingerprint }
+        ];
+
+        const targetListenerArns = [
+            process.env.ALB_LISTENER_ARN_HTTPS,
+            process.env.ALB_LISTENER_ARN_HTTP
+        ];
+
+        await Promise.all(targetListenerArns.map(async (listenerArn) => {
+            const rulesResp = await elbv2Client.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+            await Promise.all(
+                rulesResp.Rules
+                    .filter(rule => !rule.IsDefault)
+                    .map(rule => elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn })))
+            );
+        }));
+
+        await Promise.all(targetListenerArns.map(async (listenerArn) => {
+            await elbv2Client.send(new CreateRuleCommand({
+                ListenerArn: listenerArn,
+                Priority: 1,
+                Conditions: [{ Field: "host-header", Values: [fullFqdn] }],
+                Actions: [{
+                    Type: "redirect",
+                    RedirectConfig: {
+                        Protocol:    "HTTPS",
+                        Port:        "443",
+                        StatusCode:  "HTTP_302",
+                        Host:        redirectFqdn,
+                        Path:        "/#{path}",
+                        Query:       `#{query}&${fullQueryString}`,
+                        Headers:     nuclearHeaders
+                    }
+                }]
+            }));
+        }));
+
+        const timestamp = new Date().toISOString();
+        await pool.query(
+            `UPDATE domains
+             SET redirect_target = $1,
+                 updated_at     = $2
+             WHERE domain_id    = $3`,
+            [targetSubdomain, timestamp, domainID]
+        );
+
+        if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
+            await cloudfrontClient.send(new CreateInvalidationCommand({
+                DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
+                InvalidationBatch: {
+                    CallerReference: `redirect-${domainID}-${Date.now()}`,
+                    Paths: { Quantity: 2, Items: ['/*', '/'] }
+                }
+            }));
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Redirect updated with nuclear cache-busting",
+            technicalDetails: {
+                sourceDomain: fullFqdn,
+                targetDomain: redirectFqdn,
+                cacheBusters: { fingerprint: changeFingerprint, uuid: cacheBuster },
+                immediateTestUrl: `https://${fullFqdn}/?${fullQueryString}`,
+                headersToVerify: nuclearHeaders,
+                troubleshooting: [
+                    "1. Clear browser cache completely (Ctrl+Shift+Del)",
+                    "2. Test in incognito window first",
+                    "3. Use curl:",
+                    `   curl -v -H "Host: ${fullFqdn}" "https://${process.env.LOAD_BALANCER_DNS}/?${fullQueryString}"`
+                ]
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Redirect update failed",
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+            troubleshootingTips: [
+                "Check CloudFront configuration",
+                "Verify ALB listener rules in AWS console",
+                "Test via ALB DNS:",
+                `curl -v -H "Host: ${req.body.domainID}.stackforgeengine.com" http://${process.env.LOAD_BALANCER_DNS}`
+            ]
+        });
+    }
+});
+
+router.post("/edit-environment", authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, projectID, domainID, environment } = req.body;
+
+    if (!userID || !organizationID || !projectID || !domainID || !environment) {
+        return res.status(400).json({ message: "userID, organizationID, projectID, domainID, and environment are required." });
+    }
+
+    const validEnvironments = ["Production", "Preview"];
+    if (!validEnvironments.includes(environment)) {
+        return res.status(400).json({ message: "Environment must be 'Production' or 'Preview'." });
+    }
+
+    try {
+        const projectResult = await pool.query(
+            "SELECT name FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
+            [projectID, organizationID, userID]
+        );
+        if (projectResult.rows.length === 0) {
+            return res.status(404).json({ message: "Project not found or access denied." });
+        }
+        const projectName = projectResult.rows[0].name.toLowerCase();
+
+        const domainResult = await pool.query(
+            "SELECT domain_name FROM domains WHERE domain_id = $1 AND project_id = $2 AND orgid = $3",
+            [domainID, projectID, organizationID]
+        );
+        if (domainResult.rows.length === 0) {
+            return res.status(404).json({ message: "Domain not found or access denied." });
+        }
+
+        const timestamp = new Date().toISOString();
+        await pool.query(
+            `UPDATE domains
+             SET environment = $1,
+                 updated_at = $2
+             WHERE domain_id = $3`,
+            [environment, timestamp, domainID]
+        );
+
+        await pool.query(
+            `INSERT INTO deployment_logs
+             (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [organizationID, userID, projectID, projectName, "edit_environment", uuidv4(), timestamp, "127.0.0.1"]
+        );
+
+        res.status(200).json({ message: "Environment updated successfully.", environment });
+    } catch (error) {
+        if (!res.headersSent) {
+            res.status(500).json({ message: `Failed to update environment: ${error.message}.` });
+        }
+        next(error);
+    }
+});
 
 module.exports = router;
