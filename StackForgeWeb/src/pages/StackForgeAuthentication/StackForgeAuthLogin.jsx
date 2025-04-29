@@ -66,7 +66,7 @@ const Login = () => {
                     <img
                         className="loginLogo"
                         src="./StackForgeLogo-Letters.png"
-                        alt="Logo"
+                        alt=""
                     />
 
                     <div className="loginInputWrapper">

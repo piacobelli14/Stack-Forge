@@ -108,6 +108,45 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
             return res.status(400).json({ message: "Either websiteURL or repository is required." });
         }
 
+        let deploymentStatus = null;
+        if (websiteURL) {
+            try {
+                const deploymentResult = await pool.query(
+                    "SELECT deployment_id, url FROM deployments WHERE url = $1",
+                    [websiteURL]
+                );
+
+                if (deploymentResult.rows.length === 0) {
+                    return;
+                } else {
+                    const { deployment_id, url } = deploymentResult.rows[0];
+                    const browser = await puppeteer.launch({ headless: true });
+                    const page = await browser.newPage();
+                    let status = 'inactive';
+
+                    try {
+                        const response = await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 30000 });
+                        const responseStatus = response ? response.status() : null;
+
+                        if (responseStatus && responseStatus >= 200 && responseStatus < 300) {
+                            status = 'active';
+                        } else {}
+                    } catch (error) {
+                        status = 'inactive';
+                    } finally {
+                        await browser.close();
+                    }
+
+                    const updateResult = await pool.query(
+                        "UPDATE deployments SET status = $1 WHERE deployment_id = $2 RETURNING status",
+                        [status, deployment_id]
+                    );
+
+                    deploymentStatus = updateResult.rows[0].status;
+                }
+            } catch (error) {}
+        } else {}
+
         if (websiteURL) {
             try {
                 const startTime = Date.now();
@@ -130,14 +169,15 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                             images: 0,
                             links: 0
                         },
-                        error: `HTTP request failed: ${httpErr.message}`
+                        error: `HTTP request failed: ${httpErr.message}`,
+                        deploymentStatus 
                     };
                 }
-        
+
                 if (websiteResponse) {
                     const responseTime = Date.now() - startTime;
                     let contentLength = websiteResponse.headers["content-length"] || (websiteResponse.data ? websiteResponse.data.toString().length : 0);
-        
+
                     let performanceMetrics = {
                         pageLoadTime: 0,
                         scripts: 0,
@@ -148,8 +188,8 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                         const browser = await puppeteer.launch({ headless: true });
                         const page = await browser.newPage();
                         await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 30000 });
-                        await new Promise(resolve => setTimeout(resolve, 2000)); 
-        
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+
                         performanceMetrics = await page.evaluate(() => {
                             const { loadEventEnd, navigationStart } = performance.timing;
                             const pageLoadTime = loadEventEnd - navigationStart || 0;
@@ -158,12 +198,8 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                             const links = document.querySelectorAll("a").length || 0;
                             return { pageLoadTime, scripts, images, links };
                         });
-        
-                        // Verify page content
+
                         const pageContent = await page.content();
-                        if (!pageContent.includes("<html")) {
-                        }
-        
                         await browser.close();
                     } catch (puppeteerErr) {
                         performanceMetrics = {
@@ -173,7 +209,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                             links: 0
                         };
                     }
-        
+
                     websiteAnalytics = {
                         status: websiteResponse.status,
                         responseTime,
@@ -184,7 +220,8 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                             cacheControl: websiteResponse.headers["cache-control"] || "Unknown"
                         },
                         performance: performanceMetrics,
-                        error: null
+                        error: null,
+                        deploymentStatus 
                     };
                 }
             } catch (err) {
@@ -203,11 +240,13 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                         images: 0,
                         links: 0
                     },
-                    error: `Website analytics failed: ${err.message}`
+                    error: `Website analytics failed: ${err.message}`,
+                    deploymentStatus 
                 };
             }
         }
 
+        // Repository analytics
         if (repository) {
             let repoName = repository;
             let repoOwner = owner;
@@ -219,7 +258,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
             if (result.rows.length === 0 || !result.rows[0].github_access_token) {
                 return res.status(400).json({ message: "GitHub account not connected." });
             }
-            const githubAccessToken = result.rows[0].github_access_token;
+            const githubAccessraphqlAccessToken = result.rows[0].github_access_token;
 
             try {
                 const repoResponse = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
@@ -290,6 +329,75 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
     } catch (error) {
         if (!res.headersSent) {
             return res.status(500).json({ message: `Error processing analytics: ${error.message}.` });
+        }
+        next(error);
+    }
+});
+
+router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, owner, repo, projectID } = req.body;
+
+    try {
+        if (!owner || !repo || !projectID || !organizationID) {
+            return res.status(400).json({ message: "Owner, repository, projectID, and organizationID are required." });
+        }
+        const userResult = await pool.query(
+            "SELECT github_access_token FROM users WHERE username = $1",
+            [userID]
+        );
+
+        if (userResult.rows.length === 0 || !userResult.rows[0].github_access_token) {
+            return res.status(400).json({ message: "GitHub account not connected." });
+        }
+        const githubAccessToken = userResult.rows[0].github_access_token;
+
+        let repoName = repo;
+        let repoOwner = owner;
+        if (repo.includes("/")) {
+            [repoOwner, repoName] = repo.split("/");
+        }
+
+        const deploymentResult = await pool.query(
+            `SELECT commit_sha 
+             FROM deployments 
+             WHERE project_id = $1 AND orgid = $2 
+             ORDER BY last_deployed_at DESC 
+             LIMIT 1`,
+            [projectID, organizationID]
+        );
+
+        if (deploymentResult.rows.length === 0) {
+            return res.status(404).json({ message: "No deployments found for this project." });
+        }
+
+        const lastDeploymentCommit = deploymentResult.rows[0].commit_sha;
+        const gitResponse = await axios.get(
+            `https://api.github.com/repos/${repoOwner}/${repoName}/commits`,
+            {
+                headers: { 
+                    Authorization: `token ${githubAccessToken}`, 
+                    Accept: "application/vnd.github.v3+json" 
+                },
+                params: { per_page: 1 }
+            }
+        );
+
+        if (!gitResponse.data || gitResponse.data.length === 0) {
+            return res.status(404).json({ message: "No commits found in the repository." });
+        }
+
+        const latestCommitSha = gitResponse.data[0].sha;
+        const hasUpdates = lastDeploymentCommit !== latestCommitSha;
+
+        return res.status(200).json({
+            hasUpdates,
+            lastDeploymentCommit,
+            latestCommit: latestCommitSha,
+            latestCommitDetails: gitResponse.data[0]
+        });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: `Error checking repository updates: ${error.message}` });
         }
         next(error);
     }
@@ -508,7 +616,7 @@ router.post('/edit-project-name', authenticateToken, async (req, res, next) => {
         const updateDeploymentLogsInfo = await pool.query(updateDeploymentLogsQuery, [projectName, projectID]);
 
         if (updateProjectNameInfo.rowCount === 0) {
-            return res.status(500).json({ message: 'No project found to update. Please try again.' });
+            return res.status(400).json({ message: 'No project found to update. Please try again.' });
         }
 
         return res.status(200).json({ message: 'Project name updated successfully.' });
@@ -519,5 +627,7 @@ router.post('/edit-project-name', authenticateToken, async (req, res, next) => {
         next(error);
     }
 });
+
+
 
 module.exports = router;

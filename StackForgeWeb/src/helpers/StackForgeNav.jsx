@@ -81,7 +81,7 @@ const StackForgeNav = ({ activePage }) => {
             <img
               className="homeLogo"
               src="./StackForgeLogo.png"
-              alt="Logo"
+              alt=""
             />
             <label className="homeHeader" style={{ color: "#c0c0c0" }}>
               Stack Forge

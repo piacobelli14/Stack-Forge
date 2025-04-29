@@ -119,7 +119,7 @@ const Reset = () => {
                     <img
                         className="loginLogo"
                         src="./StackForgeLogo-Letters.png"
-                        alt="Logo"
+                        alt=""
                     />
 
                     {isEmail && (

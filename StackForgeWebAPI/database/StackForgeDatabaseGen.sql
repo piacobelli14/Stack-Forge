@@ -242,6 +242,7 @@ CREATE TABLE deployments
     domain_id TEXT, 
     status TEXT NOT NULL,
     url TEXT NOT NULL,
+    commit_sha VARCHAR(40),
     template TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
@@ -293,3 +294,8 @@ CREATE TABLE runtime_logs (
 );
 DROP INDEX IF EXISTS idx_runtime_logs;
 CREATE INDEX idx_runtime_logs ON build_logs (orgid, username, deployment_id);
+
+
+
+
+

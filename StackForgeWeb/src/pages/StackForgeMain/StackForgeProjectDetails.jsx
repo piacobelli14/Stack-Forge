@@ -66,6 +66,7 @@ const StackForgeProjectDetails = () => {
     useEffect(() => {
         const fetchData = async () => {
             await fetchProjectInfo();
+            
             setIsLoaded(true);
         };
         if (!loading && token) fetchData();
@@ -86,6 +87,7 @@ const StackForgeProjectDetails = () => {
             fetchSnapshot();
             fetchCommits();
             fetchAnalytics();
+            fetchUpdateMismatch();
         }
     }, [projectDetails]);
 
@@ -183,6 +185,29 @@ const StackForgeProjectDetails = () => {
             }
             const data = await response.json();
             setAnalytics(data);
+        } catch (error) { }
+    };
+
+    const fetchUpdateMismatch = async () => {
+        try {
+            const response = await fetch("http://localhost:3000/git-repo-updates", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    userID: userID,
+                    organizationID, 
+                    owner: projectDetails.project.created_by,
+                    repo: projectDetails.project.repository,
+                    projectID: projectID
+                })
+            });
+            if (!response.ok) {
+                throw new Error("Failed to fetch analytics");
+            }
+            const data = await response.json();
         } catch (error) { }
     };
 
@@ -343,7 +368,7 @@ const StackForgeProjectDetails = () => {
                                         >
                                             <img
                                                 src={snapshotUrl}
-                                                alt="Deployment Snapshot"
+                                                alt=""
                                             />
                                         </a>
                                     ) : (
@@ -801,9 +826,7 @@ const StackForgeProjectDetails = () => {
                                                             commit.author
                                                                 ?.avatar_url
                                                         }
-                                                        alt={
-                                                            commit.author?.login
-                                                        }
+                                                        alt=""
                                                     />
                                                 </div>
                                             </div>

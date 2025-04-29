@@ -171,7 +171,7 @@ const Register = () => {
                         <img
                             className="resetLogoSub"
                             src="./StackForgeLogo-Letters.png"
-                            alt="Logo"
+                            alt=""
                         />
 
                         <div className="registerInputFlex">
@@ -217,7 +217,7 @@ const Register = () => {
                          <img
                             className="resetLogo"
                             src="./StackForgeLogo-Letters.png"
-                            alt="Logo"
+                            alt=""
                         />
 
                         <div className="passwordInputFlex"> 

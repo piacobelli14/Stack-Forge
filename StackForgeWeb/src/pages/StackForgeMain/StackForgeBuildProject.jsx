@@ -589,7 +589,7 @@ const StackForgeBuildProject = () => {
             disabled={isDeploying}
           >
             <span>
-              <img src={teamImage} alt="Team" />
+              <img src={teamImage} alt="" />
               <strong>
                 {teamName}
                 <br />
@@ -606,7 +606,7 @@ const StackForgeBuildProject = () => {
             disabled={isDeploying}
           >
             <span>
-              <img src={personalImage} alt="Personal" />
+              <img src={personalImage} alt="" />
               <strong>
                 {personalName}
                 <br />

@@ -53,7 +53,7 @@ function Alert({
   return (
     <div className="alertOverlay">
       <div className="alertMainWrapper">
-        <img className="alertImage" src="./StackForgeLogo.png" alt="Logo" />
+        <img className="alertImage" src="./StackForgeLogo.png" alt="" />
         {title && <label className="alertHeader">{title}</label>}
         <label className="alertSubHeader">{message}</label>
         {inputs.length > 0 && inputs.map((input) => (

@@ -9,12 +9,19 @@ const { ElasticLoadBalancingV2Client, DescribeListenersCommand, DescribeRulesCom
 const { WAFV2Client, GetWebACLForResourceCommand, UpdateWebACLCommand } = require('@aws-sdk/client-wafv2');
 const { Route53Client, ListResourceRecordSetsCommand, ChangeResourceRecordSetsCommand } = require('@aws-sdk/client-route-53');
 const { CloudFrontClient, CreateInvalidationCommand } = require('@aws-sdk/client-cloudfront');
+const { google } = require('googleapis');
 
 const deployManager = require("./drivers/deployManager");
 const route53Client = new Route53Client({ region: process.env.AWS_REGION });
 
 require('dotenv').config();
 secretKey = process.env.JWT_SECRET_KEY;
+
+const auth = new google.auth.GoogleAuth({
+    scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+    keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS
+});
+const analyticsDataClient = google.analyticsdata('v1beta');
 
 router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     const https = require('https');

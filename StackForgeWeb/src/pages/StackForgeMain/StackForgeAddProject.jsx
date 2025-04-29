@@ -204,27 +204,27 @@ const StackForgeAddProject = () => {
                             <div className="addProjectsCellContent">
                                 <div className="templateList">
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="Template" />
+                                        <img src={"TestImage.png"} alt="" />
                                         <p>Next.js Boilerplate</p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="Template" />
+                                        <img src={"TestImage.png"} alt="" />
                                         <p>AI Chatbot</p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="Template" />
+                                        <img src={"TestImage.png"} alt="" />
                                         <p>Commerce</p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="Template" />
+                                        <img src={"TestImage.png"} alt="" />
                                         <p>Vite + React Starter</p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="Template" />
+                                        <img src={"TestImage.png"} alt="" />
                                         <p>Commerce</p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="Template" />
+                                        <img src={"TestImage.png"} alt="" />
                                         <p>Vite + React Starter</p>
                                     </div>
                                 </div>

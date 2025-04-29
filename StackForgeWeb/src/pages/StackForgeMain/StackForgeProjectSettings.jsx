@@ -422,12 +422,12 @@ const StackForgeProjectSettings = () => {
         showCancel: true,
       });
       if (!result) {
-        return; // User canceled
+        return; 
       }
       if (result.confirmation === `delete my project - ${projectName}`) {
         isConfirmed = true;
       } else {
-        continue; // Invalid input, loop to show dialog again
+        continue;
       }
     }
     setIsLoaded(false);
