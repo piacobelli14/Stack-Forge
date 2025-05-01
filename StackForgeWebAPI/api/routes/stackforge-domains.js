@@ -362,11 +362,8 @@ router.post("/project-domains", authenticateToken, async (req, res, next) => {
 });
 
 router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
-    console.log(`[START] edit-redirect ${new Date().toISOString()}`);
-    console.log(`[INPUT]`, req.body);
     const { userID, organizationID, projectID, domainID, redirectTarget } = req.body;
     if (!userID || !organizationID || !projectID || !domainID) {
-        console.error("[ERROR] Missing required fields");
         return res.status(400).json({ message: "userID, organizationID, projectID, and domainID are required." });
     }
 
@@ -420,7 +417,6 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     }
 
     try {
-        // 1) Fetch project & domain
         const [projRes, domRes] = await Promise.all([
             pool.query("SELECT name FROM projects WHERE project_id=$1 AND orgid=$2 AND username=$3",
                        [projectID, organizationID, userID]),
@@ -428,12 +424,10 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
                        [domainID, projectID, organizationID]),
         ]);
         if (!projRes.rows.length || !domRes.rows.length) {
-            console.error("[ERROR] Project or domain not found");
             return res.status(404).json({ message: "Project or domain not found." });
         }
 
         const sourceFqdn = `${domRes.rows[0].domain_name}.stackforgeengine.com`.toLowerCase();
-        console.log(`[INFO] sourceFqdn=${sourceFqdn}`);
         await upsertRecord(sourceFqdn);
 
         let targetFqdn = null;
@@ -441,22 +435,18 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
             let t = redirectTarget.trim().toLowerCase();
             if (t.endsWith(".stackforgeengine.com")) t = t.replace(/\.stackforgeengine\.com$/i, "");
             targetFqdn = `${t}.stackforgeengine.com`;
-            console.log(`[INFO] targetFqdn=${targetFqdn}`);
             await upsertRecord(targetFqdn);
         }
 
         const listeners = [ httpArn, httpsArn ];
 
-        // 2) If removing redirect
         if (redirectTarget === null) {
-            console.log(`[ACTION] Removing redirect for ${sourceFqdn}`);
             for (const arn of listeners) {
                 const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn }));
                 for (const rule of Rules) {
                     if (!rule.IsDefault &&
                         rule.Conditions.some(c => c.Field==="host-header" && c.Values.includes(sourceFqdn))
                     ) {
-                        console.log(`[DELETE] ${rule.RuleArn}`);
                         await elbv2.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn }));
                     }
                 }
@@ -465,7 +455,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
                 "UPDATE domains SET redirect_target=NULL, updated_at=$1 WHERE domain_id=$2",
                 [ new Date().toISOString(), domainID ]
             );
-            // only invalidate if DistributionId is set
+
             if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
                 await cloudfront.send(new CreateInvalidationCommand({
                     DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
@@ -478,20 +468,16 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
             return res.json({ success: true, message: "Redirect removed" });
         }
 
-        // 3) Create redirect rules at highest priority
         for (const arn of listeners) {
-            // delete any existing
             let { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn }));
             for (const rule of Rules) {
                 if (!rule.IsDefault &&
                     rule.Conditions.some(c => c.Field==="host-header" && c.Values.includes(sourceFqdn))
                 ) {
-                    console.log(`[DELETE] ${rule.RuleArn}`);
                     await elbv2.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn }));
                 }
             }
 
-            // recalc priorities
             ({ Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn })));
             const nonDefault = Rules.filter(r => !r.IsDefault);
             const used = nonDefault.map(r => parseInt(r.Priority));
@@ -504,16 +490,12 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
                     await elbv2.send(new SetRulePrioritiesCommand({
                         RulePriorities: [{ RuleArn: wildcardRule.RuleArn, Priority: 50000 }]
                     }));
-                    console.log(`[PRIORITY] Bumped wildcard rule to 50000`);
-                } catch (err) {
-                    console.warn("[WARN] cannot bump wildcard:", err.message);
-                }
+                } catch (error) {}
                 redirectPriority = 1;
             } else {
                 redirectPriority = minUsed ? minUsed - 1 : 1;
             }
 
-            console.log(`[CREATE] Redirect rule on ${arn} at priority ${redirectPriority}`);
             await elbv2.send(new CreateRuleCommand({
                 ListenerArn: arn,
                 Priority: redirectPriority,
@@ -532,7 +514,6 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
             }));
         }
 
-        // 4) Update DB & CloudFront
         await pool.query(
             "UPDATE domains SET redirect_target=$1, updated_at=$2 WHERE domain_id=$3",
             [ targetFqdn.split('.')[0], new Date().toISOString(), domainID ]
@@ -547,7 +528,6 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
             }));
         }
 
-        // 5) Poll until redirect confirmed
         const maxAttempts = 15, delayMs = 2000;
         let confirmed = false, finalStatus, finalLocation;
         for (let i = 1; i <= maxAttempts; i++) {
@@ -558,7 +538,6 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
                 });
                 if (resp.status >= 300 && resp.status < 400 && resp.headers.location?.includes(targetFqdn)) {
                     confirmed = true; finalStatus = resp.status; finalLocation = resp.headers.location;
-                    console.log(`[CONFIRMED] via hostname on attempt ${i}`);
                     break;
                 }
             } catch {}
@@ -570,14 +549,12 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
                 });
                 if (resp2.status >= 300 && resp2.status < 400 && resp2.headers.location?.includes(targetFqdn)) {
                     confirmed = true; finalStatus = resp2.status; finalLocation = resp2.headers.location;
-                    console.log(`[CONFIRMED] via LB DNS on attempt ${i}`);
                     break;
                 }
             } catch {}
             await new Promise(r => setTimeout(r, delayMs));
         }
 
-        console.log("[END] edit-redirect result:", confirmed, finalStatus, finalLocation);
         return res.json({
             success: confirmed,
             message: confirmed
@@ -585,16 +562,13 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
                 : "Redirect applied but not yet propagating.",
             test: { status: finalStatus, location: finalLocation }
         });
-    } catch (err) {
-        console.error("[ERROR] edit-redirect failed:", err);
-        res.status(500).json({ success:false, message:"Redirect update failed", error:err.message });
+    } catch (error) {
+        if (!res.headersSent) {
+            res.status(500).json({ message: `Failed to update redirect rules: ${error.message}.` });
+        }
+        next(error);
     }
 });
-
-
-
-
-
 
 router.post("/edit-environment", authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, domainID, environment } = req.body;

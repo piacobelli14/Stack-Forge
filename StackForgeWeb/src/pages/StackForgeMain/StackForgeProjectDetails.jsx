@@ -145,6 +145,30 @@ const StackForgeProjectDetails = () => {
         } catch (error) { }
     };
 
+    const fetchUpdateMismatch = async () => {
+        try {
+            const response = await fetch("http://localhost:3000/git-repo-updates", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    userID: userID,
+                    organizationID, 
+                    owner: projectDetails.project.created_by,
+                    repo: projectDetails.project.repository,
+                    projectID: projectID
+                })
+            });
+            if (!response.ok) {
+                throw new Error("Failed to fetch update mismatch");
+            }
+            const data = await response.json();
+            setUpdateMismatch(data);
+        } catch (error) { }
+    };
+
     const fetchCommits = async () => {
         try {
             const response = await fetch("http://localhost:3000/git-commits", {
@@ -188,30 +212,6 @@ const StackForgeProjectDetails = () => {
             }
             const data = await response.json();
             setAnalytics(data);
-        } catch (error) { }
-    };
-
-    const fetchUpdateMismatch = async () => {
-        try {
-            const response = await fetch("http://localhost:3000/git-repo-updates", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    userID: userID,
-                    organizationID, 
-                    owner: projectDetails.project.created_by,
-                    repo: projectDetails.project.repository,
-                    projectID: projectID
-                })
-            });
-            if (!response.ok) {
-                throw new Error("Failed to fetch update mismatch");
-            }
-            const data = await response.json();
-            setUpdateMismatch(data);
         } catch (error) { }
     };
 
@@ -618,8 +618,7 @@ const StackForgeProjectDetails = () => {
                                 </div>
 
 
-                                {updateMismatch ? (
-                                    updateMismatch.hasUpdates ? (
+                                {updateMismatch && updateMismatch.hasUpdates ? (
                                         <div className="projectUpdatesAvailableWrapper">
                                             <div 
                                                 className="projectUpdatesAvailableWrapperHeader" 
@@ -709,16 +708,13 @@ const StackForgeProjectDetails = () => {
                                                     ))}
                                             </div>
                                         </div>
-                                    ) : (
-                                        <div className="noProjectUpdatesAvailableWrapper">
-                                            <FontAwesomeIcon icon={faCheckToSlot}/>
-                                            <strong>No staged updates available.</strong>
-                                            <p>If you'd like to update one of your deployments push a commit to the project's Git repository.</p>
-                                        </div>
-                                    )
                                 ) : (
-                                    <div className="loading-wrapper">
-                                        <div className="loading-circle" />
+                                    <div className="productionAnalyticsList"> 
+                                    <div className="noProjectUpdatesAvailableWrapper">
+                                        <FontAwesomeIcon icon={faCheckToSlot}/>
+                                        <strong>No staged updates available.</strong>
+                                        <p>If you'd like to update one of your deployments push a commit to the project's Git repository.</p>
+                                    </div>
                                     </div>
                                 )}
                             </div>

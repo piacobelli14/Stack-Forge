@@ -116,7 +116,7 @@ const StackForgeUpdateDetails = () => {
 
   const checkCommitRelativeToDeployment = async () => {
     try {
-      const response = await fetch("http://localhost:3000/git-repo-update-relative-to-deployment", {
+      const response = await fetch("http://localhost:3000/git-repo-update-details-relative-to-deployment", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

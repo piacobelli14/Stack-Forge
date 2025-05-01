@@ -333,6 +333,83 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
         if (!owner || !repo || !projectID || !organizationID) {
             return res.status(400).json({ message: "Owner, repository, projectID, and organizationID are required." });
         }
+
+        const userResult = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
+
+        if (userResult.rows.length === 0 || !userResult.rows[0].github_access_token) {
+            return res.status(400).json({ message: "GitHub account not connected." });
+        }
+
+        const githubAccessToken = userResult.rows[0].github_access_token;
+
+        let repoOwner = owner;
+        let repoName = repo;
+        if (repo.includes("/")) {
+            [repoOwner, repoName] = repo.split("/");
+        }
+
+        const deploymentResult = await pool.query(
+            `SELECT commit_sha, last_deployed_at
+             FROM deployments
+             WHERE project_id = $1 AND orgid = $2
+             ORDER BY last_deployed_at DESC
+             LIMIT 1`,
+            [projectID, organizationID]
+        );
+
+        if (deploymentResult.rows.length === 0) {
+            return res.status(404).json({ message: "No deployments found for this project." });
+        }
+
+        const lastDeploymentCommit = deploymentResult.rows[0].commit_sha;
+        const lastDeployedAtRaw = deploymentResult.rows[0].last_deployed_at;
+        const lastDeployedAtUtc = new Date(Date.UTC(
+            lastDeployedAtRaw.getFullYear(),
+            lastDeployedAtRaw.getMonth(),
+            lastDeployedAtRaw.getDate(),
+            lastDeployedAtRaw.getHours(),
+            lastDeployedAtRaw.getMinutes(),
+            lastDeployedAtRaw.getSeconds(),
+            lastDeployedAtRaw.getMilliseconds()
+        ));
+
+        const repoMeta = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
+            headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
+        });
+        const defaultBranch = repoMeta.data.default_branch;
+
+        const gitResponse = await axios.get(
+            `https://api.github.com/repos/${repoOwner}/${repoName}/commits`,
+            {
+                headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" },
+                params: { sha: defaultBranch, since: lastDeployedAtUtc.toISOString(), per_page: 100 }
+            }
+        );
+
+        if (!gitResponse.data || gitResponse.data.length === 0) {
+            return res.status(404).json({ message: "No commits found in the repository since the last deployment." });
+        }
+        const newCommits = gitResponse.data.filter(c => c.sha !== lastDeploymentCommit);
+        const hasUpdates = newCommits.length > 0;
+
+        return res.status(200).json({ hasUpdates, lastDeploymentCommit, newCommitsCount: newCommits.length, newCommits });
+
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: `Error checking repository updates: ${error.message}` });
+        }
+        next(error);
+    }
+});
+
+router.post("/git-repo-update-details-relative-to-deployment", authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, projectID, owner, repo, commitSha } = req.body;
+
+    try {
+        if (!userID || !organizationID || !projectID || !owner || !repo || !commitSha) {
+            return res.status(400).json({ message: "userID, organizationID, projectID, owner, repo, and commitSha are required." });
+        }
+
         const userResult = await pool.query(
             "SELECT github_access_token FROM users WHERE username = $1",
             [userID]
@@ -341,6 +418,7 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
         if (userResult.rows.length === 0 || !userResult.rows[0].github_access_token) {
             return res.status(400).json({ message: "GitHub account not connected." });
         }
+
         const githubAccessToken = userResult.rows[0].github_access_token;
 
         let repoName = repo;
@@ -362,82 +440,18 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
             return res.status(404).json({ message: "No deployments found for this project." });
         }
 
-        const lastDeploymentCommit = deploymentResult.rows[0].commit_sha;
-        const lastDeployedAt = deploymentResult.rows[0].last_deployed_at;
-        const gitResponse = await axios.get(
-            `https://api.github.com/repos/${repoOwner}/${repoName}/commits`,
-            {
-                headers: { 
-                    Authorization: `token ${githubAccessToken}`, 
-                    Accept: "application/vnd.github.v3+json" 
-                },
-                params: { 
-                    since: lastDeployedAt.toISOString(), 
-                    per_page: 100 
-                }
-            }
-        );
-
-        if (!gitResponse.data || gitResponse.data.length === 0) {
-            return res.status(404).json({ message: "No commits found in the repository since the last deployment." });
-        }
-
-        const newCommits = gitResponse.data.filter(commit => commit.sha !== lastDeploymentCommit);
-        const hasUpdates = newCommits.length > 0;
-
-        return res.status(200).json({
-            hasUpdates,
-            lastDeploymentCommit,
-            newCommitsCount: newCommits.length,
-            newCommits
-        });
-    } catch (error) {
-        if (!res.headersSent) {
-            return res.status(500).json({ message: `Error checking repository updates: ${error.message}` });
-        }
-        next(error);
-    }
-});
-
-router.post("/git-repo-update-relative-to-deployment", authenticateToken, async (req, res, next) => {
-    const { userID, organizationID, projectID, owner, repo, commitSha } = req.body;
-
-    try {
-        if (!userID || !organizationID || !projectID || !owner || !repo || !commitSha) {
-            return res.status(400).json({ message: "userID, organizationID, projectID, owner, repo, and commitSha are required." });
-        }
-
-        const userResult = await pool.query(
-            "SELECT github_access_token FROM users WHERE username = $1",
-            [userID]
-        );
-
-        if (userResult.rows.length === 0 || !userResult.rows[0].github_access_token) {
-            return res.status(400).json({ message: "GitHub account not connected." });
-        }
-        const githubAccessToken = userResult.rows[0].github_access_token;
-
-        let repoName = repo;
-        let repoOwner = owner;
-        if (repo.includes("/")) {
-            [repoOwner, repoName] = repo.split("/");
-        } else {}
-
-        const deploymentResult = await pool.query(
-            `SELECT commit_sha, last_deployed_at 
-             FROM deployments 
-             WHERE project_id = $1 AND orgid = $2 
-             ORDER BY last_deployed_at DESC 
-             LIMIT 1`,
-            [projectID, organizationID] 
-        );
-
-        if (deploymentResult.rows.length === 0) {
-            return res.status(404).json({ message: "No deployments found for this project." });
-        }
-
-        const { commit_sha: lastDeploymentCommit, last_deployed_at } = deploymentResult.rows[0];
+        const { commit_sha: lastDeploymentCommit, last_deployed_at: lastDeployedAtRaw } = deploymentResult.rows[0];
+        const deploymentDate = new Date(Date.UTC(
+            lastDeployedAtRaw.getFullYear(),
+            lastDeployedAtRaw.getMonth(),
+            lastDeployedAtRaw.getDate(),
+            lastDeployedAtRaw.getHours(),
+            lastDeployedAtRaw.getMinutes(),
+            lastDeployedAtRaw.getSeconds(),
+            lastDeployedAtRaw.getMilliseconds()
+        ));
         const commitUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/commits/${commitSha}`;
+        
         let commitResponse;
         try {
             commitResponse = await axios.get(commitUrl, {
@@ -454,7 +468,6 @@ router.post("/git-repo-update-relative-to-deployment", authenticateToken, async 
         }
 
         const commitDate = new Date(commitResponse.data.commit.committer.date);
-        const deploymentDate = new Date(last_deployed_at);
 
         let status;
         if (commitDate < deploymentDate) {
@@ -472,7 +485,9 @@ router.post("/git-repo-update-relative-to-deployment", authenticateToken, async 
             lastDeploymentDate: deploymentDate.toISOString(),
             status
         };
+
         return res.status(200).json(response);
+        
     } catch (error) {
         if (!res.headersSent) {
             return res.status(500).json({ message: `Error checking commit relative to deployment: ${error.message}` });
