@@ -12,7 +12,9 @@ import {
   faCopy,
   faClone,
   faCheckSquare,
-  faCodeBranch
+  faCodeBranch,
+  faXmark,
+  faGlobe
 } from "@fortawesome/free-solid-svg-icons";
 import StackForgeNav from "../../helpers/StackForgeNav";
 import useAuth from "../../UseAuth";
@@ -22,15 +24,14 @@ import "../../styles/helperStyles/LoadingSpinner.css";
 const StackForgeUpdateDetails = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { token, userID, loading } = useAuth();
+  const { token, userID, organizationID, loading } = useAuth();
   const [isLoaded, setIsLoaded] = useState(false);
   const [screenSize, setScreenSize] = useState(window.innerWidth);
   const [commitData, setCommitData] = useState(null);
-  const { commitDetails, repository, owner, branchName } = location.state || {};
+  const [commitStatus, setCommitStatus] = useState(null);
+  const { commitDetails, repository, owner, branchName, projectID, projectName } = location.state || {};
   const [fileFilter, setFileFilter] = useState("");
-  const filteredFiles = commitData?.files?.filter((file) =>
-    file.filename.toLowerCase().includes(fileFilter.toLowerCase())
-  );
+  const filteredFiles = commitData?.files?.filter((file) => file.filename.toLowerCase().includes(fileFilter.toLowerCase()));
   const directoryTree = filteredFiles ? buildDirectoryTree(filteredFiles) : null;
   const [openDirs, setOpenDirs] = useState({});
   const [selectedFile, setSelectedFile] = useState(null);
@@ -45,7 +46,7 @@ const StackForgeUpdateDetails = () => {
   const commitSha = commitData?.sha || "";
   const commitUrl = commitData?.html_url || "";
   const commitMessage = commitData?.commit?.message || commitDetails?.commit?.message || "";
-
+  const [isProjectUpdate, setIsProjectUpdate] = useState(false);
   const handleCopy = (text) => {
     navigator.clipboard.writeText(text);
     setCopyStatus((prev) => ({ ...prev, [text]: true }));
@@ -61,6 +62,7 @@ const StackForgeUpdateDetails = () => {
   useEffect(() => {
     const fetchData = async () => {
       await fetchCommitDetails();
+      await checkCommitRelativeToDeployment();
       setIsLoaded(true);
     };
     if (!loading && token) fetchData();
@@ -109,7 +111,34 @@ const StackForgeUpdateDetails = () => {
       }
       const data = await response.json();
       setCommitData(data);
-    } catch (error) {}
+    } catch (error) { }
+  };
+
+  const checkCommitRelativeToDeployment = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/git-repo-update-relative-to-deployment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          userID: userID,
+          organizationID: organizationID,
+          projectID: projectID,
+          owner: owner,
+          repo: repository,
+          commitSha: commitDetails?.sha
+        })
+      });
+      if (!response.ok) {
+        throw new Error("Failed to check commit relative to deployment");
+      }
+      const data = await response.json();
+      setCommitStatus(data);
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   function buildDirectoryTree(files) {
@@ -224,6 +253,11 @@ const StackForgeUpdateDetails = () => {
     setOpenDirs((prev) => ({ ...prev, [dirPath]: !prev[dirPath] }));
   };
 
+  const closeUpdateProjectModal = () => {
+    setIsProjectUpdate(false);
+  };
+
+
   return (
     <div
       className="updateDetailsPageWrapper"
@@ -237,43 +271,41 @@ const StackForgeUpdateDetails = () => {
         <div className="updateDetailsCellHeaderContainer">
           <div className="updateDetailsTopBar">
             <span>
-                <h1>{totalFilesChanged} {totalFilesChanged.length > 1 ? "files" : "file"} changed</h1>
-                <div>
-                    <span style={{ color: "#21BF68" }}>+{totalAdditions}</span>
-                    <span style={{ color: "#E54B4B" }}>-{totalDeletions}</span>
-                </div>
+              <h1>{totalFilesChanged} {totalFilesChanged.length > 1 ? "files" : "file"} changed</h1>
+              <div>
+                <span style={{ color: "#21BF68" }}>+{totalAdditions} <small>additions</small></span>
+                <span style={{ color: "#E54B4B" }}>-{totalDeletions} <small>deletions</small></span>
+              </div>
             </span>
 
 
             <div className="updateDetailsTopBarCommitInfo">
-                <span>
-                    <label className="updateDetailsTopBarCommitInfoBranch">
-                        <FontAwesomeIcon icon={faCodeBranch} />
-                        <span className="branchName">{branch}</span>
-                    </label>
+              <span>
+                <label className="updateDetailsTopBarCommitInfoBranch">
+                  <FontAwesomeIcon icon={faCodeBranch} />
+                  <span className="branchName">{branch}</span>
+                </label>
 
-                    <label className="updateDetailsTopBarCommitInfoSha">
-                        {parentCount} parent{parentCount !== 1 ? "s" : ""}
-                        {parentSha && (
-                            <a href={parentUrl} target="_blank" rel="noopener noreferrer">
-                                {parentSha.substring(0, 7)}
-                            </a>
-                        )}
-                        commit
-                        {commitSha && (
-                            <a href={commitUrl} target="_blank" rel="noopener noreferrer">
-                                {commitSha.substring(0, 7)}
-                            </a>
-                        )}
-                        <button disabled={copyStatus[commitSha]} onClick={() => handleCopy(commitSha)}>
-                            <FontAwesomeIcon icon={copyStatus[commitSha] ? faCheckSquare : faClone} />
-                        </button>
-                    </label>
-                    
-
-                </span>
+                <label className="updateDetailsTopBarCommitInfoSha">
+                  {parentCount} parent{parentCount !== 1 ? "s" : ""}
+                  {parentSha && (
+                    <a href={parentUrl} target="_blank" rel="noopener noreferrer">
+                      {parentSha.substring(0, 7)}
+                    </a>
+                  )}
+                  commit
+                  {commitSha && (
+                    <a href={commitUrl} target="_blank" rel="noopener noreferrer">
+                      {commitSha.substring(0, 7)}
+                    </a>
+                  )}
+                  <button disabled={copyStatus[commitSha]} onClick={() => handleCopy(commitSha)}>
+                    <FontAwesomeIcon icon={copyStatus[commitSha] ? faCheckSquare : faClone} />
+                  </button>
+                </label>
+              </span>
             </div>
-            
+
           </div>
 
           <div className="updateCellContentWrapper">
@@ -291,65 +323,147 @@ const StackForgeUpdateDetails = () => {
                 {directoryTree && renderFileTree(directoryTree, "", 0)}
               </div>
             </div>
-            <div className="updateContentMainFlex">
-              {selectedFile ? (
-                <div key={selectedFile.sha} className="fileDiffCell">
-                  <div className="fileDiffHeader">
-                    <span className="fileDiffHeaderFileName">
-                      {selectedFile.filename}
-                      <button
-                        disabled={copyStatus[selectedFile.filename]}
-                        onClick={() => handleCopy(selectedFile.filename)}
-                      >
-                        <FontAwesomeIcon
-                          icon={copyStatus[selectedFile.filename]
-                            ? faCheckSquare
-                            : faClone}
-                        />
-                      </button>
-                    </span>
 
-                    <span className="fileDiffHeaderSupplement">
-                      <span className="fileDiffStatus">{selectedFile.status}</span>
-                      <span className="fileDiffStatus">
-                        <p style={{ color: "#21BF68" }}>+{selectedFile.additions}</p>
-                        <p style={{ color: "#E54B4B" }}>-{selectedFile.deletions}</p>
-                      </span>
+            <div className="updateContentMainFlexWrapper">
+              <div className="updateContentMainTopBarSupplement">
+                {commitStatus && (
+                  <label className="updateDetailsTopBarCommitStatus">
+                    Commit is <i>{commitStatus.status}</i> last deployment.
+                    <span>
+                      {commitStatus.status === "before" ? "Nothing to do!" : "Do you want to update your deployment?"}
                     </span>
+                  </label>
+                )}
+
+                {commitStatus.status === "after" && (
+                  <div className="updateDetailsTopBarSupplementButtonFlex">
+                    <button onClick={() => { setIsProjectUpdate(true) }}>
+                      Update Project
+                    </button>
+
+                    <button
+                      onClick={() => { navigate("/add-new-project") }}
+                    >
+                      Build New
+                    </button>
                   </div>
-                  <div className="fileDiffContent">{renderDiffView(selectedFile.patch)}</div>
-                </div>
-              ) : (
-                filteredFiles &&
-                filteredFiles.map((file) => (
-                  <div key={file.sha} className="fileDiffCell">
+                )}
+
+
+              </div>
+              <div className="updateContentMainFlex">
+
+
+
+                {selectedFile ? (
+                  <div key={selectedFile.sha} className="fileDiffCell">
                     <div className="fileDiffHeader">
                       <span className="fileDiffHeaderFileName">
-                        {file.filename}
+                        {selectedFile.filename}
                         <button
-                          disabled={copyStatus[file.filename]}
-                          onClick={() => handleCopy(file.filename)}
+                          disabled={copyStatus[selectedFile.filename]}
+                          onClick={() => handleCopy(selectedFile.filename)}
                         >
                           <FontAwesomeIcon
-                            icon={copyStatus[file.filename]
+                            icon={copyStatus[selectedFile.filename]
                               ? faCheckSquare
                               : faClone}
                           />
                         </button>
                       </span>
+
                       <span className="fileDiffHeaderSupplement">
-                        <span className="fileDiffStatus">{file.status}</span>
+                        <span className="fileDiffStatus">{selectedFile.status}</span>
                         <span className="fileDiffStatus">
-                          <p style={{ color: "#21BF68" }}>+{file.additions}</p>
-                          <p style={{ color: "#E54B4B" }}>-{file.deletions}</p>
+                          <p style={{ color: "#21BF68" }}>+{selectedFile.additions}</p>
+                          <p style={{ color: "#E54B4B" }}>-{selectedFile.deletions}</p>
                         </span>
                       </span>
                     </div>
-                    <div className="fileDiffContent">{renderDiffView(file.patch)}</div>
+                    <div className="fileDiffContent">{renderDiffView(selectedFile.patch)}</div>
                   </div>
-                ))
-              )}
+                ) : (
+                  filteredFiles &&
+                  filteredFiles.map((file) => (
+                    <div key={file.sha} className="fileDiffCell">
+                      <div className="fileDiffHeader">
+                        <span className="fileDiffHeaderFileName">
+                          {file.filename}
+                          <button
+                            disabled={copyStatus[file.filename]}
+                            onClick={() => handleCopy(file.filename)}
+                          >
+                            <FontAwesomeIcon
+                              icon={copyStatus[file.filename]
+                                ? faCheckSquare
+                                : faClone}
+                            />
+                          </button>
+                        </span>
+                        <span className="fileDiffHeaderSupplement">
+                          <span className="fileDiffStatus">{file.status}</span>
+                          <span className="fileDiffStatus">
+                            <p style={{ color: "#21BF68" }}>+{file.additions}</p>
+                            <p style={{ color: "#E54B4B" }}>-{file.deletions}</p>
+                          </span>
+                        </span>
+                      </div>
+                      <div className="fileDiffContent">{renderDiffView(file.patch)}</div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isProjectUpdate && (
+        <div className="projectUpdateModalOverlay">
+          <div
+            className="projectUpdateModalContainer"
+            style={{ position: "relative" }}
+          >
+
+            <div className="projectUpdateModalHeader">
+              <h2>Update Project: <i>{projectName}</i></h2>
+              <button onClick={closeUpdateProjectModal}>
+                <FontAwesomeIcon icon={faXmark} />
+              </button>
+            </div>
+
+            <div className="projectUpdateModalBody">
+              <p>
+                Project:{" "}
+                <strong>
+                  {projectName}
+                </strong>
+              </p>
+              <p>
+                Project ID:{" "}
+                <strong>
+                  {projectID}
+                </strong>
+              </p>
+              <p>Select which domains you would like to update this project on:</p>
+              <div className="projectUpdateDeploymentContent">
+                <div className="projectUpdateInputWrapperRounded">
+                  <FontAwesomeIcon icon={faGlobe} className="projectUpdateIcon" />
+                  <input
+                    type="text"
+                    className="projectUpdateInput"
+                    placeholder="example.com"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="projectUpdateModalFooter">
+              <button onClick={closeUpdateProjectModal}>Cancel</button>
+              <button /*disabled={!domainName}*/ /*onClick={confirmDomainEntry}*/>
+                Add Domain
+              </button>
+            </div>
+
           </div>
         </div>
       )}

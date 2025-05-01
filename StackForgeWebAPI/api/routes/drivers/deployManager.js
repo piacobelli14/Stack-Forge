@@ -602,6 +602,7 @@ class DeployManager {
             throw new Error(`Failed to create/update ECS service: ${error.message}.`);
         }
     }
+    
     async createCodeBuildProject({ projectName, repository, branch, rootDirectory, installCommand, buildCommand, outputDirectory, githubAccessToken }) {
         if (!repository || typeof repository !== "string" || repository.trim() === "") {
             throw new Error("Invalid repository: repository parameter is required and must be a non-empty string.");
@@ -949,7 +950,7 @@ class DeployManager {
             const response = await axios.get(deploymentUrl, { timeout: 5000 });
             httpStatus = response.status;
         } catch (error) {
-            httpStatus =  errorresponse?.status || 503;
+            httpStatus =  error.response?.status || 503;
         }
 
         const resp = await cloudWatchLogsClient.send(new DescribeLogStreamsCommand({
@@ -1100,7 +1101,6 @@ class DeployManager {
         let isNewProject = false;
         let domainId;
     
-        // Fetch GitHub access token
         const tokenResult = await pool.query(
             "SELECT github_access_token FROM users WHERE username = $1",
             [userID]
@@ -1110,7 +1110,6 @@ class DeployManager {
         }
         const githubAccessToken = tokenResult.rows[0].github_access_token;
     
-        // Fetch the latest commit SHA
         let commitSha;
         try {
             commitSha = await this.getLatestCommitSha(repository, branch, githubAccessToken);
@@ -1142,8 +1141,8 @@ class DeployManager {
             domainId = uuidv4();
             await pool.query(
                 `INSERT INTO domains 
-                 (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                 (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
                 [
                     organizationID,
                     userID,
@@ -1154,6 +1153,7 @@ class DeployManager {
                     timestamp,
                     timestamp,
                     "production",
+                    deploymentId 
                 ]
             );
         }
@@ -1166,16 +1166,16 @@ class DeployManager {
                 domainId = existingDomainRes.rows[0].domain_id;
                 await pool.query(
                     `UPDATE domains
-                     SET updated_at = $1
-                     WHERE domain_id = $2`,
-                    [timestamp, domainId]
+                     SET updated_at = $1, deployment_id = $2
+                     WHERE domain_id = $3`,
+                    [timestamp, deploymentId, domainId] 
                 );
             } else {
                 domainId = uuidv4();
                 await pool.query(
                     `INSERT INTO domains 
-                     (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                     (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
                     [
                         organizationID,
                         userID,
@@ -1186,6 +1186,7 @@ class DeployManager {
                         timestamp,
                         timestamp,
                         "production",
+                        deploymentId 
                     ]
                 );
             }
@@ -1426,7 +1427,6 @@ class DeployManager {
         let isNewProject = false;
         let domainId;
     
-        // Fetch GitHub access token
         const tokenResult = await pool.query(
             "SELECT github_access_token FROM users WHERE username = $1",
             [userID]
@@ -1438,7 +1438,6 @@ class DeployManager {
         const githubAccessToken = tokenResult.rows[0].github_access_token;
         onData(`GitHub access token retrieved successfully\n`);
     
-        // Fetch the latest commit SHA
         let commitSha;
         try {
             commitSha = await this.getLatestCommitSha(repository, branch, githubAccessToken);
@@ -1488,17 +1487,17 @@ class DeployManager {
                     onData(`Existing domain found, ID: ${domainId}\n`);
                     await pool.query(
                         `UPDATE domains
-                         SET updated_at = $1
-                         WHERE domain_id = $2`,
-                        [timestamp, domainId]
+                         SET updated_at = $1, deployment_id = $2
+                         WHERE domain_id = $3`,
+                        [timestamp, deploymentId, domainId] 
                     );
-                    onData(`Updated domain timestamp\n`);
+                    onData(`Updated domain timestamp and deployment_id\n`);
                 } else {
                     domainId = uuidv4();
                     await pool.query(
                         `INSERT INTO domains 
-                         (orgid, username, domain_id, domain_name, project_id, created_by, created Advised_at, updated_at, environment) 
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                         (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary, deployment_id) 
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
                         [
                             organizationID,
                             userID,
@@ -1509,6 +1508,8 @@ class DeployManager {
                             timestamp,
                             timestamp,
                             "production",
+                            true,
+                            deploymentId 
                         ]
                     );
                     onData(`Created new domain, ID: ${domainId}\n`);
@@ -1762,8 +1763,8 @@ class DeployManager {
     
                 await pool.query(
                     `INSERT INTO domains 
-                     (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                     (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary, deployment_id) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
                     [
                         organizationID,
                         userID,
@@ -1775,6 +1776,7 @@ class DeployManager {
                         timestamp,
                         "production",
                         true,
+                        deploymentId 
                     ]
                 );
     
@@ -1875,7 +1877,7 @@ class DeployManager {
             throw new Error("Project name cannot be empty.");
         }
         const hostedZoneId = process.env.ROUTE53_HOSTED_ZONE_ID;
-        const albZoneId = process.env.LOAD_BALANCER_ZONE_ID;
+        const albZoneId     = process.env.LOAD_BALANCER_ZONE_ID;
         const loadBalancerDNS = process.env.LOAD_BALANCER_DNS;
         if (!hostedZoneId || !albZoneId || !loadBalancerDNS) {
             throw new Error("Route53 DNS configuration missing.");
@@ -1884,42 +1886,33 @@ class DeployManager {
         projectName = projectName.toLowerCase();
     
         const fqdnList = [`${projectName}.stackforgeengine.com`];
-        const validSubdomains = [];
-        if (subdomains && subdomains.length > 0) {
-            for (const sub of subdomains) {
-                const cleanSub = sub.trim().toLowerCase();
-                if (cleanSub && cleanSub !== projectName && /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/.test(cleanSub)) {
-                    validSubdomains.push(cleanSub);
-                    fqdnList.push(`${cleanSub}.${projectName}.stackforgeengine.com`);
-                } else {}
-            }
+        if (Array.isArray(subdomains)) {
+            subdomains.forEach(sub => {
+                const clean = sub.trim().toLowerCase();
+                if (clean && clean !== projectName)
+                    fqdnList.push(`${clean}.${projectName}.stackforgeengine.com`);
+            });
         }
     
         const changes = [];
     
         for (const domain of fqdnList) {
-            const recordName = domain.endsWith(".") ? domain : `${domain}.`;
+            const recordName = domain.endsWith('.') ? domain : `${domain}.`;
             try {
-                const listResp = await route53Client.send(
-                    new ListResourceRecordSetsCommand({
-                        HostedZoneId: hostedZoneId,
-                        StartRecordName: recordName,
-                        MaxItems: "10",
-                    })
-                );
-                const existingRecords = listResp.ResourceRecordSets.filter(
-                    (r) => r.Name.replace(/\.$/, "") === recordName.replace(/\.$/, "")
-                );
-                for (const existing of existingRecords) {
-                    changes.push({
-                        Action: "DELETE",
-                        ResourceRecordSet: existing,
+                const listResp = await route53Client.send(new ListResourceRecordSetsCommand({
+                    HostedZoneId: hostedZoneId,
+                    StartRecordName: recordName,
+                    MaxItems: "10",
+                }));
+                listResp.ResourceRecordSets
+                    .filter(r => r.Name.replace(/\.$/,"") === recordName.replace(/\.$/,""))
+                    .forEach(existing => {
+                        changes.push({ Action: "DELETE", ResourceRecordSet: existing });
                     });
-                }
             } catch (error) {}
     
-            const subLabel = domain.split(".")[0];
-            if (subLabel === projectName) {
+            const label = domain.split('.')[0];
+            if (label === projectName) {
                 changes.push({
                     Action: "UPSERT",
                     ResourceRecordSet: {
@@ -1927,10 +1920,10 @@ class DeployManager {
                         Type: "A",
                         AliasTarget: {
                             HostedZoneId: albZoneId,
-                            DNSName: loadBalancerDNS.endsWith(".") ? loadBalancerDNS : `${loadBalancerDNS}.`,
-                            EvaluateTargetHealth: false,
-                        },
-                    },
+                            DNSName: loadBalancerDNS.endsWith('.') ? loadBalancerDNS : `${loadBalancerDNS}.`,
+                            EvaluateTargetHealth: false
+                        }
+                    }
                 });
             } else {
                 changes.push({
@@ -1938,60 +1931,42 @@ class DeployManager {
                     ResourceRecordSet: {
                         Name: recordName,
                         Type: "CNAME",
-                        TTL: 300,
-                        ResourceRecords: [
-                            {
-                                Value: `${projectName}.stackforgeengine.com.`,
-                            },
-                        ],
-                    },
+                        TTL: 30,
+                        ResourceRecords: [{ Value: `${projectName}.stackforgeengine.com.` }]
+                    }
                 });
             }
         }
     
-        if (changes.length === 0) {
-            return;
-        }
+        if (changes.length === 0) return;
     
-        try {
-            const changeCommand = new ChangeResourceRecordSetsCommand({
-                HostedZoneId: hostedZoneId,
-                ChangeBatch: { Changes: changes },
-            });
-            const response = await route53Client.send(changeCommand);
-            const resolver = new Resolver();
-            resolver.setServers(['8.8.8.8', '8.8.4.4']);
-            const maxAttempts = 10;
-            let attempt = 0;
+        await route53Client.send(new ChangeResourceRecordSetsCommand({
+            HostedZoneId: hostedZoneId,
+            ChangeBatch: { Changes: changes }
+        }));
     
-            for (const domain of fqdnList) {
-                let resolved = false;
-                attempt = 0;
-                while (attempt < maxAttempts && !resolved) {
-                    try {
-                        if (domain === `${projectName}.stackforgeengine.com`) {
-                            const aRecords = await resolver.resolve4(domain);
-                            if (aRecords.length > 0) {
-                                resolved = true;
-                            }
-                        } else {
-                            const cnameRecords = await resolver.resolveCname(domain);
-                            if (cnameRecords.includes(`${projectName}.stackforgeengine.com`)) {
-                                resolved = true;
-                            }
-                        }
-                    } catch (error) {}
-                    if (!resolved) {
-                        attempt++;
-                        await new Promise((resolve) => setTimeout(resolve, 15000));
+        const resolver = new Resolver();
+        resolver.setServers(['8.8.8.8','8.8.4.4']);
+        for (const domain of fqdnList) {
+            let tries = 0, ok = false;
+            while (tries < 10 && !ok) {
+                try {
+                    if (domain === `${projectName}.stackforgeengine.com`) {
+                        const a = await resolver.resolve4(domain);
+                        ok = a.length > 0;
+                    } else {
+                        const c = await resolver.resolveCname(domain);
+                        ok = c.includes(`${projectName}.stackforgeengine.com`);
                     }
+                } catch {}
+                if (!ok) {
+                    tries++;
+                    await new Promise(r=>setTimeout(r,15000));
                 }
-                if (!resolved) {}
             }
-        } catch (error) {
-            throw new Error(`Failed to update DNS records: ${error.message}.`);
         }
     }
+    
 
     async rollbackDeployment({ organizationID, userID, projectID, deploymentID }) {
         const timestamp = new Date().toISOString();

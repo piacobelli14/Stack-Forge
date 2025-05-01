@@ -574,6 +574,13 @@
     box-sizing: border-box;
 }
 
+.productionDeploymentCellShortHeader h2 svg {
+    font-size: 0.8rem;
+    color: #c1c1c1;
+    opacity: 0.8; 
+    margin-left: 0.4rem;
+}
+
 .productionDeploymentCellShortHeader svg {
     font-size: 1rem;
     font-weight: 800;
@@ -597,7 +604,6 @@
     justify-content: space-between;
     align-items: center;
     box-sizing: border-box;
-    ;
     padding: 0.5rem 1rem;
     cursor: pointer;
 }
@@ -1089,4 +1095,145 @@
 
 .rollbackModalFooter button:last-of-type {
     background: rgba(255, 255, 255, 0.2);
+}
+
+.noProjectUpdatesAvailableWrapper {
+    display: flex; 
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%; 
+    height: 100%; 
+}
+
+.noProjectUpdatesAvailableWrapper svg {
+    font-size: 1.6rem; 
+    color: #c1c1c1; 
+    margin-bottom: 1rem;
+}
+
+.noProjectUpdatesAvailableWrapper strong {
+    width: 80%; 
+    color: #c1c1c1; 
+    font-size: 0.9rem; 
+    font-weight: 600; 
+    text-align: center;
+    padding: 0; 
+    margin: 0;
+    margin-bottom: 0.6rem; 
+}
+
+.noProjectUpdatesAvailableWrapper p {
+    width: 70%; 
+    color: #c1c1c1; 
+    font-size: 0.7rem; 
+    font-weight: 500; 
+    text-align: center;
+    padding: 0; 
+    margin: 0; 
+    opacity: 0.8;
+}
+
+.projectUpdatesAvailableWrapper {
+    width: 100%; 
+    min-height: 100%; 
+    max-height: 100%;
+    display: flex; 
+    flex-direction: column; 
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+.projectUpdatesAvailableWrapperHeader {
+    display: flex; 
+    justify-content: space-between;
+    align-items: center;
+    height: 80px; 
+    width: 100%; 
+    position: sticky; 
+    top: 0; 
+    padding: 1rem; 
+    box-sizing: border-box;
+    background-color: #1B1A24;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    flex: 1;
+}
+
+.projectUpdatesAvailableWrapperHeader span {
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 0;
+}
+
+.projectUpdatesAvailableWrapperHeader span strong {
+    font-size: 0.7rem; 
+    font-weight: 500; 
+    color: #c1c1c1; 
+    opacity: 0.8;
+    margin: 0; 
+    margin-bottom: 0.4rem;
+    padding: 0; 
+    overflow: hidden;
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+}
+
+.projectUpdatesAvailableWrapperHeader span p {
+    font-size: 0.7rem; 
+    font-weight: 700; 
+    color: #c1c1c1; 
+    margin: 0; 
+    margin-bottom: 0.2rem;
+    padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+}
+
+.projectUpdatesAvailableWrapperHeader span small {
+    font-size: 0.7rem; 
+    font-weight: 700; 
+    color: #c1c1c1; 
+    margin: 0; 
+    padding: 0; 
+    overflow: hidden;
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+}
+
+.projectUpdatesAvailableWrapperHeader img {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+}
+
+.projectUpdatesAvailableWrapperHeader:hover {
+    background: rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    opacity: 0.6; 
+}
+
+.projectUpdatesAvailableWrapper label {
+    width: 100%; 
+    text-align: left;
+    padding: 1rem; 
+    font-size: 0.7rem; 
+    font-weight: 700; 
+    color: #c1c1c1;
+    box-sizing: border-box;
+}
+
+.projectUpdatesAvailableWrapperContent {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0 0 40px 0;
+    overflow: scroll;
+    flex: 2; 
 }

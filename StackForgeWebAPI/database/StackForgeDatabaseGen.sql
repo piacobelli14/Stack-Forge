@@ -217,6 +217,7 @@ CREATE TABLE domains
     domain_id TEXT PRIMARY KEY,
     domain_name TEXT NOT NULL,
     project_id TEXT,  
+    deployment_id TEXT, 
     created_by TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
@@ -247,7 +248,7 @@ CREATE TABLE deployments
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     last_deployed_at TIMESTAMP, 
-    task_def_arn TEXT
+    task_def_arn TEXT, 
 );
 DROP INDEX IF EXISTS idx_deployments;
 CREATE INDEX idx_deployments ON deployments (orgid, username);
@@ -294,8 +295,6 @@ CREATE TABLE runtime_logs (
 );
 DROP INDEX IF EXISTS idx_runtime_logs;
 CREATE INDEX idx_runtime_logs ON build_logs (orgid, username, deployment_id);
-
-
 
 
 

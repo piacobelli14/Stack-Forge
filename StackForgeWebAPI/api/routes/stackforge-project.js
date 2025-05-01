@@ -116,34 +116,29 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                     [websiteURL]
                 );
 
-                if (deploymentResult.rows.length === 0) {
-                    return;
-                } else {
-                    const { deployment_id, url } = deploymentResult.rows[0];
-                    const browser = await puppeteer.launch({ headless: true });
-                    const page = await browser.newPage();
-                    let status = 'inactive';
+                const { deployment_id, url } = deploymentResult.rows[0];
+                const browser = await puppeteer.launch({ headless: true });
+                const page = await browser.newPage();
+                let status = 'inactive';
 
-                    try {
-                        const response = await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 30000 });
-                        const responseStatus = response ? response.status() : null;
+                try {
+                    const response = await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 30000 });
+                    const responseStatus = response ? response.status() : null;
 
-                        if (responseStatus && responseStatus >= 200 && responseStatus < 300) {
-                            status = 'active';
-                        } else {}
-                    } catch (error) {
-                        status = 'inactive';
-                    } finally {
-                        await browser.close();
-                    }
-
-                    const updateResult = await pool.query(
-                        "UPDATE deployments SET status = $1 WHERE deployment_id = $2 RETURNING status",
-                        [status, deployment_id]
-                    );
-
-                    deploymentStatus = updateResult.rows[0].status;
+                    if (responseStatus && responseStatus >= 200 && responseStatus < 300) {
+                        status = 'active';
+                    } else {}
+                } catch (error) {
+                    status = 'inactive';
+                } finally {
+                    await browser.close();
                 }
+
+                const updateResult = await pool.query(
+                    "UPDATE deployments SET status = $1 WHERE deployment_id = $2 RETURNING status",
+                    [status, deployment_id]
+                );
+                deploymentStatus = updateResult.rows[0].status;
             } catch (error) {}
         } else {}
 
@@ -170,7 +165,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                             links: 0
                         },
                         error: `HTTP request failed: ${httpErr.message}`,
-                        deploymentStatus 
+                        deploymentStatus
                     };
                 }
 
@@ -221,7 +216,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                         },
                         performance: performanceMetrics,
                         error: null,
-                        deploymentStatus 
+                        deploymentStatus
                     };
                 }
             } catch (err) {
@@ -241,26 +236,25 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                         links: 0
                     },
                     error: `Website analytics failed: ${err.message}`,
-                    deploymentStatus 
+                    deploymentStatus
                 };
             }
         }
 
-        // Repository analytics
         if (repository) {
-            let repoName = repository;
-            let repoOwner = owner;
-            if (repository.includes("/")) {
-                [repoOwner, repoName] = repository.split("/");
-            }
-
-            const result = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
-            if (result.rows.length === 0 || !result.rows[0].github_access_token) {
-                return res.status(400).json({ message: "GitHub account not connected." });
-            }
-            const githubAccessraphqlAccessToken = result.rows[0].github_access_token;
-
             try {
+                let repoName = repository;
+                let repoOwner = owner;
+                if (repository.includes("/")) {
+                    [repoOwner, repoName] = repository.split("/");
+                }
+
+                const result = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
+                if (result.rows.length === 0 || !result.rows[0].github_access_token) {
+                    return res.status(400).json({ message: "GitHub account not connected." });
+                }
+                const githubAccessToken = result.rows[0].github_access_token;
+
                 const repoResponse = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
                     headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
                 });
@@ -322,10 +316,8 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
             }
         }
 
-        return res.status(200).json({
-            websiteAnalytics,
-            repositoryAnalytics
-        });
+        const finalResponse = { websiteAnalytics, repositoryAnalytics };
+        return res.status(200).json(finalResponse);
     } catch (error) {
         if (!res.headersSent) {
             return res.status(500).json({ message: `Error processing analytics: ${error.message}.` });
@@ -358,7 +350,7 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
         }
 
         const deploymentResult = await pool.query(
-            `SELECT commit_sha 
+            `SELECT commit_sha, last_deployed_at 
              FROM deployments 
              WHERE project_id = $1 AND orgid = $2 
              ORDER BY last_deployed_at DESC 
@@ -371,6 +363,7 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
         }
 
         const lastDeploymentCommit = deploymentResult.rows[0].commit_sha;
+        const lastDeployedAt = deploymentResult.rows[0].last_deployed_at;
         const gitResponse = await axios.get(
             `https://api.github.com/repos/${repoOwner}/${repoName}/commits`,
             {
@@ -378,22 +371,25 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
                     Authorization: `token ${githubAccessToken}`, 
                     Accept: "application/vnd.github.v3+json" 
                 },
-                params: { per_page: 1 }
+                params: { 
+                    since: lastDeployedAt.toISOString(), 
+                    per_page: 100 
+                }
             }
         );
 
         if (!gitResponse.data || gitResponse.data.length === 0) {
-            return res.status(404).json({ message: "No commits found in the repository." });
+            return res.status(404).json({ message: "No commits found in the repository since the last deployment." });
         }
 
-        const latestCommitSha = gitResponse.data[0].sha;
-        const hasUpdates = lastDeploymentCommit !== latestCommitSha;
+        const newCommits = gitResponse.data.filter(commit => commit.sha !== lastDeploymentCommit);
+        const hasUpdates = newCommits.length > 0;
 
         return res.status(200).json({
             hasUpdates,
             lastDeploymentCommit,
-            latestCommit: latestCommitSha,
-            latestCommitDetails: gitResponse.data[0]
+            newCommitsCount: newCommits.length,
+            newCommits
         });
     } catch (error) {
         if (!res.headersSent) {
@@ -402,6 +398,89 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
         next(error);
     }
 });
+
+router.post("/git-repo-update-relative-to-deployment", authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, projectID, owner, repo, commitSha } = req.body;
+
+    try {
+        if (!userID || !organizationID || !projectID || !owner || !repo || !commitSha) {
+            return res.status(400).json({ message: "userID, organizationID, projectID, owner, repo, and commitSha are required." });
+        }
+
+        const userResult = await pool.query(
+            "SELECT github_access_token FROM users WHERE username = $1",
+            [userID]
+        );
+
+        if (userResult.rows.length === 0 || !userResult.rows[0].github_access_token) {
+            return res.status(400).json({ message: "GitHub account not connected." });
+        }
+        const githubAccessToken = userResult.rows[0].github_access_token;
+
+        let repoName = repo;
+        let repoOwner = owner;
+        if (repo.includes("/")) {
+            [repoOwner, repoName] = repo.split("/");
+        } else {}
+
+        const deploymentResult = await pool.query(
+            `SELECT commit_sha, last_deployed_at 
+             FROM deployments 
+             WHERE project_id = $1 AND orgid = $2 
+             ORDER BY last_deployed_at DESC 
+             LIMIT 1`,
+            [projectID, organizationID] 
+        );
+
+        if (deploymentResult.rows.length === 0) {
+            return res.status(404).json({ message: "No deployments found for this project." });
+        }
+
+        const { commit_sha: lastDeploymentCommit, last_deployed_at } = deploymentResult.rows[0];
+        const commitUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/commits/${commitSha}`;
+        let commitResponse;
+        try {
+            commitResponse = await axios.get(commitUrl, {
+                headers: {
+                    Authorization: `token ${githubAccessToken}`,
+                    Accept: "application/vnd.github.v3+json"
+                }
+            });
+        } catch (error) {
+            if (error.response?.status === 404) {
+                return res.status(404).json({ message: "Commit not found in the repository." });
+            }
+            throw error;
+        }
+
+        const commitDate = new Date(commitResponse.data.commit.committer.date);
+        const deploymentDate = new Date(last_deployed_at);
+
+        let status;
+        if (commitDate < deploymentDate) {
+            status = "before";
+        } else if (commitDate > deploymentDate) {
+            status = "after";
+        } else {
+            status = "same";
+        }
+
+        const response = {
+            commitSha,
+            commitDate: commitDate.toISOString(),
+            lastDeploymentCommit,
+            lastDeploymentDate: deploymentDate.toISOString(),
+            status
+        };
+        return res.status(200).json(response);
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: `Error checking commit relative to deployment: ${error.message}` });
+        }
+        next(error);
+    }
+});
+
 
 router.post("/runtime-logs", authenticateToken, async (req, res, next) => {
     const { organizationID, userID, projectID, deploymentID, timePeriod } = req.body;

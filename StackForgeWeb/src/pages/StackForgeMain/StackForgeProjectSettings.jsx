@@ -258,6 +258,7 @@ const StackForgeProjectSettings = () => {
   };
 
   const updateRedirect = async (domainID, redirectTarget) => {
+    setDomainLoadingStates((prev) => ({ ...prev, [domainID]: true }));
     const payload = { userID, organizationID, projectID, domainID, redirectTarget };
     try {
       const response = await fetch("http://localhost:3000/edit-redirect", {
@@ -268,12 +269,12 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify(payload),
       });
-
+  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to update redirect: ${response.status}`);
       }
-
+  
       setDomains((prev) =>
         prev.map((d) => (d.domainID === domainID ? { ...d, redirectTarget } : d))
       );
@@ -282,10 +283,13 @@ const StackForgeProjectSettings = () => {
         title: "Error",
         message: error.message,
       });
+    } finally {
+      setDomainLoadingStates((prev) => ({ ...prev, [domainID]: false }));
     }
-  };
+  };  
 
   const updateEnvironment = async (domainID, environment) => {
+    setDomainLoadingStates((prev) => ({ ...prev, [domainID]: true }));
     const payload = { userID, organizationID, projectID, domainID, environment };
     try {
       const response = await fetch("http://localhost:3000/edit-environment", {
@@ -296,12 +300,12 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify(payload),
       });
-
+  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to update environment: ${response.status}`);
       }
-
+  
       setDomains((prev) =>
         prev.map((d) => (d.domainID === domainID ? { ...d, environment } : d))
       );
@@ -310,8 +314,10 @@ const StackForgeProjectSettings = () => {
         title: "Error",
         message: error.message,
       });
+    } finally {
+      setDomainLoadingStates((prev) => ({ ...prev, [domainID]: false }));
     }
-  };
+  };  
 
   const toggleRedirectDropdown = (domainID) => {
     setRedirectDropdownOpen((prev) => ({

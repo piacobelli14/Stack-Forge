@@ -30,7 +30,9 @@ import {
     faUsers,
     faFileCode,
     faTriangleExclamation,
-    faXmark
+    faXmark,
+    faCheckToSlot,
+    faExclamationTriangle
 } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeProjectDetails.css";
@@ -56,6 +58,7 @@ const StackForgeProjectDetails = () => {
     const [isRollbackModalOpen, setRollbackModalOpen] = useState(false);
     const [selectedDeployment, setSelectedDeployment] = useState(null);
     const [isRollbackLoading, setIsRollbackLoading] = useState(false);
+    const [updateMismatch, setUpdateMismatch] = useState(null); 
     const projectID = location.state?.projectID;
     const repository = location.state?.repository;
 
@@ -205,9 +208,10 @@ const StackForgeProjectDetails = () => {
                 })
             });
             if (!response.ok) {
-                throw new Error("Failed to fetch analytics");
+                throw new Error("Failed to fetch update mismatch");
             }
             const data = await response.json();
+            setUpdateMismatch(data);
         } catch (error) { }
     };
 
@@ -591,7 +595,11 @@ const StackForgeProjectDetails = () => {
                                                 
                                             </div>
                                         ) : (
-                                            <p>No website analytics available</p>
+                                            <div className="noProjectUpdatesAvailableWrapper">
+                                                <FontAwesomeIcon icon={faExclamationTriangle}/>
+                                                <strong>No website analytics available.</strong>
+                                                <p>Check your domain's status as it may be down.</p>
+                                            </div>
                                         )
                                     ) : (
                                         <div className="loading-wrapper">
@@ -603,16 +611,116 @@ const StackForgeProjectDetails = () => {
 
                             <div className="productionDeploymentCellShort">
                                 <div className="productionDeploymentCellShortHeader">
-                                    <h2>Performance</h2>
+                                    <h2>Staged Updates <FontAwesomeIcon icon={faInfoCircle}/></h2>
                                     <FontAwesomeIcon
                                         icon={faArrowUpRightFromSquare}
                                     />
                                 </div>
 
-                                <div
-                                    className="productionAnalyticsList"
-                                    style={{ alignItems: "center" }}
-                                />
+
+                                {updateMismatch ? (
+                                    updateMismatch.hasUpdates ? (
+                                        <div className="projectUpdatesAvailableWrapper">
+                                            <div 
+                                                className="projectUpdatesAvailableWrapperHeader" 
+                                                onClick={() => {
+                                                    navigate("/update-details", {
+                                                        state: {
+                                                            commitDetails: updateMismatch.newCommits[0],
+                                                            repository: projectDetails.project.repository,
+                                                            owner: projectDetails.project.created_by,
+                                                            branchName: projectDetails.project.branch,
+                                                            projectID: projectID, 
+                                                            projectName: projectDetails.project.name
+                                                        }
+                                                    });
+                                                }}
+                                            > 
+                                                <span>
+                                                    <strong> 
+                                                        Most Recent Update: 
+                                                    </strong>
+                                                    <p>
+                                                        <FontAwesomeIcon icon={faCodeCommit} />{" "}
+                                                        {updateMismatch.newCommits[0].sha.substring(0, 6)} -{" "}
+                                                        {updateMismatch.newCommits[0].commit.message}
+                                                    </p>
+                                                    <small>
+                                                        by {updateMismatch.newCommits[0].commit.author.name}{" "}
+                                                        on{" "}
+                                                        {new Date(
+                                                            updateMismatch.newCommits[0].commit.author.date
+                                                        ).toLocaleDateString()}
+                                                    </small>
+                                                </span>
+
+                                                <img
+                                                    src={updateMismatch.newCommits[0].author?.avatar_url}
+                                                    alt=""
+                                                />
+                                            </div> 
+
+                                            <label> 
+                                                Other available deployment updates: 
+                                            </label>
+
+                                            <div className="projectUpdatesAvailableWrapperContent"> 
+                                                {updateMismatch.newCommits
+                                                    .slice(1)
+                                                    .sort((a, b) => new Date(b.commit.author.date) - new Date(a.commit.author.date))
+                                                    .map((commit) => (
+                                                        <div
+                                                            key={commit.sha}
+                                                            className="previousCommitItem"
+                                                            onClick={() => {
+                                                                navigate("/update-details", {
+                                                                    state: {
+                                                                        commitDetails: commit,
+                                                                        repository: projectDetails.project.repository,
+                                                                        owner: projectDetails.project.created_by,
+                                                                        branchName: projectDetails.project.branch,
+                                                                        projectID: projectID,
+                                                                        projectName: projectDetails.project.name
+                                                                    }
+                                                                });
+                                                            }}
+                                                        >
+                                                            <span>
+                                                                <p>
+                                                                    <FontAwesomeIcon icon={faCodeCommit} />{" "}
+                                                                    {commit.sha.substring(0, 6)} -{" "}
+                                                                    {commit.commit.message}
+                                                                </p>
+                                                                <small>
+                                                                    by {commit.commit.author.name}{" "}
+                                                                    on{" "}
+                                                                    {new Date(
+                                                                        commit.commit.author.date
+                                                                    ).toLocaleDateString()}
+                                                                </small>
+                                                            </span>
+                                                            <div>
+                                                                <img
+                                                                    src={commit.author?.avatar_url}
+                                                                    alt=""
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="noProjectUpdatesAvailableWrapper">
+                                            <FontAwesomeIcon icon={faCheckToSlot}/>
+                                            <strong>No staged updates available.</strong>
+                                            <p>If you'd like to update one of your deployments push a commit to the project's Git repository.</p>
+                                        </div>
+                                    )
+                                ) : (
+                                    <div className="loading-wrapper">
+                                        <div className="loading-circle" />
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -786,7 +894,9 @@ const StackForgeProjectDetails = () => {
                                                                 branchName:
                                                                     projectDetails
                                                                         .project
-                                                                        .branch
+                                                                        .branch,
+                                                                projectID: projectID, 
+                                                                projectName: projectDetails.project.name
                                                             }
                                                         }
                                                     );

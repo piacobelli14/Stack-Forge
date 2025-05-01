@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const dns = require("dns").promises;
+const https = require('https');
 const axios = require("axios");
 const { authenticateToken } = require("../middleware/auth");
 const { pool } = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
-const { ElasticLoadBalancingV2Client, DescribeListenersCommand, DescribeRulesCommand, DeleteRuleCommand, CreateRuleCommand } = require('@aws-sdk/client-elastic-load-balancing-v2');
+const { ElasticLoadBalancingV2Client, DescribeListenersCommand, DescribeRulesCommand, DeleteRuleCommand, CreateRuleCommand, ModifyRuleCommand, SetRulePrioritiesCommand, DescribeLoadBalancersCommand } = require('@aws-sdk/client-elastic-load-balancing-v2');
 const { WAFV2Client, GetWebACLForResourceCommand, UpdateWebACLCommand } = require('@aws-sdk/client-wafv2');
 const { Route53Client, ListResourceRecordSetsCommand, ChangeResourceRecordSetsCommand } = require('@aws-sdk/client-route-53');
 const { CloudFrontClient, CreateInvalidationCommand } = require('@aws-sdk/client-cloudfront');
@@ -37,13 +38,18 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
     try {
         const projectResult = await pool.query(
-            "SELECT name FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
+            "SELECT name, current_deployment FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
             [projectID, organizationID, userID]
         );
         if (projectResult.rows.length === 0) {
             return res.status(404).json({ message: "Project not found or access denied." });
         }
         const projectName = projectResult.rows[0].name.toLowerCase();
+        const deploymentId = projectResult.rows[0].current_deployment; 
+        if (!deploymentId) {
+            return res.status(400).json({ message: "No active deployment found for the project." });
+        }
+
         let rawSubdomain = domain.trim().toLowerCase();
         const baseDomain = ".stackforgeengine.com";
         if (rawSubdomain.endsWith(baseDomain)) {
@@ -158,9 +164,10 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
                 `UPDATE domains
                  SET updated_at = $1,
                      is_primary = $2,
-                     certificate_arn = $3
-                 WHERE domain_id = $4`,
-                [timestamp, isParentDomain, certificateArn, domainID]
+                     certificate_arn = $3,
+                     deployment_id = $4
+                 WHERE domain_id = $5`,
+                [timestamp, isParentDomain, certificateArn, deploymentId, domainID]
             );
         } else {
             domainID = uuidv4();
@@ -168,11 +175,11 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
                 `INSERT INTO domains (
                      orgid, username, domain_id, domain_name, project_id,
                      created_by, created_at, updated_at,
-                     environment, is_primary, certificate_arn
+                     environment, is_primary, certificate_arn, deployment_id
                  ) VALUES (
                      $1, $2, $3, $4, $5,
                      $6, $7, $8,
-                     $9, $10, $11
+                     $9, $10, $11, $12
                  )`,
                 [
                     organizationID,
@@ -186,6 +193,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
                     "production",
                     isParentDomain,
                     certificateArn,
+                    deploymentId
                 ]
             );
         }
@@ -280,9 +288,10 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
                  dns_records = $2,
                  checked_at = $3,
                  updated_at = $4,
-                 certificate_arn = $5
-             WHERE domain_id = $6`,
-            [result.isAccessible, JSON.stringify(result.dnsRecords), result.checkedAt, timestamp, certificateArn, domainID]
+                 certificate_arn = $5,
+                 deployment_id = $6
+             WHERE domain_id = $7`,
+            [result.isAccessible, JSON.stringify(result.dnsRecords), result.checkedAt, timestamp, certificateArn, deploymentId, domainID]
         );
 
         res.status(200).json(result);
@@ -353,176 +362,239 @@ router.post("/project-domains", authenticateToken, async (req, res, next) => {
 });
 
 router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
+    console.log(`[START] edit-redirect ${new Date().toISOString()}`);
+    console.log(`[INPUT]`, req.body);
     const { userID, organizationID, projectID, domainID, redirectTarget } = req.body;
-
-    const elbv2Client = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
-    const cloudfrontClient = new CloudFrontClient({ region: process.env.AWS_REGION });
-
     if (!userID || !organizationID || !projectID || !domainID) {
-        return res.status(400).json({ message: "All required fields must be provided." });
+        console.error("[ERROR] Missing required fields");
+        return res.status(400).json({ message: "userID, organizationID, projectID, and domainID are required." });
+    }
+
+    const elbv2         = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
+    const cloudfront    = new CloudFrontClient({ region: process.env.AWS_REGION });
+    const route53Client = new Route53Client({ region: process.env.AWS_REGION });
+    const lbDns         = process.env.LOAD_BALANCER_DNS;
+    const httpsArn      = process.env.ALB_LISTENER_ARN_HTTPS;
+    const httpArn       = process.env.ALB_LISTENER_ARN_HTTP;
+
+    // UPSERT CNAME or fallback to Alias A
+    async function upsertRecord(name) {
+        try {
+            await route53Client.send(new ChangeResourceRecordSetsCommand({
+                HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+                ChangeBatch: { Changes: [{
+                    Action: "UPSERT",
+                    ResourceRecordSet: {
+                        Name: name,
+                        Type: "CNAME",
+                        TTL: 60,
+                        ResourceRecords: [{ Value: lbDns }]
+                    }
+                }] }
+            }));
+        } catch (e) {
+            if (e.Code === "InvalidChangeBatch") {
+                const { Listeners } = await elbv2.send(new DescribeListenersCommand({ ListenerArns: [httpsArn] }));
+                const lbArn = Listeners[0].LoadBalancerArn;
+                const { LoadBalancers } = await elbv2.send(new DescribeLoadBalancersCommand({ LoadBalancerArns: [lbArn] }));
+                const hostedZoneId = LoadBalancers[0].CanonicalHostedZoneId;
+                await route53Client.send(new ChangeResourceRecordSetsCommand({
+                    HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+                    ChangeBatch: { Changes: [{
+                        Action: "UPSERT",
+                        ResourceRecordSet: {
+                            Name: name,
+                            Type: "A",
+                            AliasTarget: {
+                                DNSName: lbDns.endsWith('.') ? lbDns : `${lbDns}.`,
+                                HostedZoneId: hostedZoneId,
+                                EvaluateTargetHealth: false
+                            }
+                        }
+                    }] }
+                }));
+            } else {
+                throw e;
+            }
+        }
     }
 
     try {
-        if (redirectTarget === null) {
-            const targetListenerArns = [
-                process.env.ALB_LISTENER_ARN_HTTPS,
-                process.env.ALB_LISTENER_ARN_HTTP
-            ];
-            await Promise.all(targetListenerArns.map(async (listenerArn) => {
-                const rulesResp = await elbv2Client.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
-                await Promise.all(
-                    rulesResp.Rules
-                        .filter(rule => !rule.IsDefault)
-                        .map(rule => elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn })))
-                );
-            }));
-
-            const timestamp = new Date().toISOString();
-            await pool.query(
-                `UPDATE domains
-                 SET redirect_target = NULL,
-                     updated_at = $1
-                 WHERE domain_id = $2`,
-                [timestamp, domainID]
-            );
-
-            if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
-                await cloudfrontClient.send(new CreateInvalidationCommand({
-                    DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
-                    InvalidationBatch: {
-                        CallerReference: `redirect-remove-${domainID}-${Date.now()}`,
-                        Paths: { Quantity: 2, Items: ['/*', '/'] }
-                    }
-                }));
-            }
-
-            return res.status(200).json({ success: true, message: "Redirect removed" });
-        }
-
-        const [projectResult, domainResult] = await Promise.all([
-            pool.query(
-                "SELECT name FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
-                [projectID, organizationID, userID]
-            ),
-            pool.query(
-                "SELECT domain_name FROM domains WHERE domain_id = $1 AND project_id = $2 AND orgid = $3",
-                [domainID, projectID, organizationID]
-            )
+        // 1) Fetch project & domain
+        const [projRes, domRes] = await Promise.all([
+            pool.query("SELECT name FROM projects WHERE project_id=$1 AND orgid=$2 AND username=$3",
+                       [projectID, organizationID, userID]),
+            pool.query("SELECT domain_name FROM domains WHERE domain_id=$1 AND project_id=$2 AND orgid=$3",
+                       [domainID, projectID, organizationID]),
         ]);
-
-        if (projectResult.rows.length === 0 || domainResult.rows.length === 0) {
+        if (!projRes.rows.length || !domRes.rows.length) {
+            console.error("[ERROR] Project or domain not found");
             return res.status(404).json({ message: "Project or domain not found." });
         }
 
-        const projectName = projectResult.rows[0].name.toLowerCase();
-        const domainName = domainResult.rows[0].domain_name;
-        const fullFqdn = `${domainName}.stackforgeengine.com`.toLowerCase().replace(/\.$/, '');
+        const sourceFqdn = `${domRes.rows[0].domain_name}.stackforgeengine.com`.toLowerCase();
+        console.log(`[INFO] sourceFqdn=${sourceFqdn}`);
+        await upsertRecord(sourceFqdn);
 
-        const targetSubdomain = redirectTarget.replace('.stackforgeengine.com', '');
-        if (targetSubdomain === domainName) {
-            return res.status(400).json({ message: "Cannot redirect to same domain." });
+        let targetFqdn = null;
+        if (redirectTarget !== null) {
+            let t = redirectTarget.trim().toLowerCase();
+            if (t.endsWith(".stackforgeengine.com")) t = t.replace(/\.stackforgeengine\.com$/i, "");
+            targetFqdn = `${t}.stackforgeengine.com`;
+            console.log(`[INFO] targetFqdn=${targetFqdn}`);
+            await upsertRecord(targetFqdn);
         }
 
-        const redirectFqdn = `${targetSubdomain}.stackforgeengine.com`.toLowerCase().replace(/\.$/, '');
-        const changeFingerprint = `v=${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
-        const cacheBuster = `cb=${uuidv4()}`;
-        const fullQueryString = `${changeFingerprint}&${cacheBuster}`;
+        const listeners = [ httpArn, httpsArn ];
 
-        const nuclearHeaders = [
-            { Name: "Cache-Control", Value: "private, no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0" },
-            { Name: "Pragma",        Value: "no-cache" },
-            { Name: "Expires",       Value: "0" },
-            { Name: "X-Accel-Expires", Value: "0" },
-            { Name: "Edge-Control",  Value: "no-store" },
-            { Name: "CDN-Cache-Control", Value: "no-store" },
-            { Name: "X-Cache-Bust",  Value: changeFingerprint }
-        ];
-
-        const targetListenerArns = [
-            process.env.ALB_LISTENER_ARN_HTTPS,
-            process.env.ALB_LISTENER_ARN_HTTP
-        ];
-
-        await Promise.all(targetListenerArns.map(async (listenerArn) => {
-            const rulesResp = await elbv2Client.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
-            await Promise.all(
-                rulesResp.Rules
-                    .filter(rule => !rule.IsDefault)
-                    .map(rule => elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn })))
+        // 2) If removing redirect
+        if (redirectTarget === null) {
+            console.log(`[ACTION] Removing redirect for ${sourceFqdn}`);
+            for (const arn of listeners) {
+                const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn }));
+                for (const rule of Rules) {
+                    if (!rule.IsDefault &&
+                        rule.Conditions.some(c => c.Field==="host-header" && c.Values.includes(sourceFqdn))
+                    ) {
+                        console.log(`[DELETE] ${rule.RuleArn}`);
+                        await elbv2.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn }));
+                    }
+                }
+            }
+            await pool.query(
+                "UPDATE domains SET redirect_target=NULL, updated_at=$1 WHERE domain_id=$2",
+                [ new Date().toISOString(), domainID ]
             );
-        }));
+            // only invalidate if DistributionId is set
+            if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
+                await cloudfront.send(new CreateInvalidationCommand({
+                    DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
+                    InvalidationBatch: {
+                        CallerReference: `redirect-remove-${domainID}-${Date.now()}`,
+                        Paths: { Quantity: 1, Items: ['/*'] }
+                    }
+                }));
+            }
+            return res.json({ success: true, message: "Redirect removed" });
+        }
 
-        await Promise.all(targetListenerArns.map(async (listenerArn) => {
-            await elbv2Client.send(new CreateRuleCommand({
-                ListenerArn: listenerArn,
-                Priority: 1,
-                Conditions: [{ Field: "host-header", Values: [fullFqdn] }],
+        // 3) Create redirect rules at highest priority
+        for (const arn of listeners) {
+            // delete any existing
+            let { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn }));
+            for (const rule of Rules) {
+                if (!rule.IsDefault &&
+                    rule.Conditions.some(c => c.Field==="host-header" && c.Values.includes(sourceFqdn))
+                ) {
+                    console.log(`[DELETE] ${rule.RuleArn}`);
+                    await elbv2.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn }));
+                }
+            }
+
+            // recalc priorities
+            ({ Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn })));
+            const nonDefault = Rules.filter(r => !r.IsDefault);
+            const used = nonDefault.map(r => parseInt(r.Priority));
+            const minUsed = used.length ? Math.min(...used) : null;
+
+            let redirectPriority;
+            if (minUsed === 1) {
+                const wildcardRule = nonDefault.find(r => parseInt(r.Priority)===1);
+                try {
+                    await elbv2.send(new SetRulePrioritiesCommand({
+                        RulePriorities: [{ RuleArn: wildcardRule.RuleArn, Priority: 50000 }]
+                    }));
+                    console.log(`[PRIORITY] Bumped wildcard rule to 50000`);
+                } catch (err) {
+                    console.warn("[WARN] cannot bump wildcard:", err.message);
+                }
+                redirectPriority = 1;
+            } else {
+                redirectPriority = minUsed ? minUsed - 1 : 1;
+            }
+
+            console.log(`[CREATE] Redirect rule on ${arn} at priority ${redirectPriority}`);
+            await elbv2.send(new CreateRuleCommand({
+                ListenerArn: arn,
+                Priority: redirectPriority,
+                Conditions: [{ Field:"host-header", Values:[sourceFqdn] }],
                 Actions: [{
                     Type: "redirect",
                     RedirectConfig: {
-                        Protocol:    "HTTPS",
-                        Port:        "443",
-                        StatusCode:  "HTTP_302",
-                        Host:        redirectFqdn,
-                        Path:        "/#{path}",
-                        Query:       `#{query}&${fullQueryString}`,
-                        Headers:     nuclearHeaders
+                        Protocol: "HTTPS",
+                        Port: "443",
+                        Host: targetFqdn,
+                        Path: "/",
+                        Query: "",
+                        StatusCode: "HTTP_302"
                     }
                 }]
             }));
-        }));
+        }
 
-        const timestamp = new Date().toISOString();
+        // 4) Update DB & CloudFront
         await pool.query(
-            `UPDATE domains
-             SET redirect_target = $1,
-                 updated_at     = $2
-             WHERE domain_id    = $3`,
-            [targetSubdomain, timestamp, domainID]
+            "UPDATE domains SET redirect_target=$1, updated_at=$2 WHERE domain_id=$3",
+            [ targetFqdn.split('.')[0], new Date().toISOString(), domainID ]
         );
-
         if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
-            await cloudfrontClient.send(new CreateInvalidationCommand({
+            await cloudfront.send(new CreateInvalidationCommand({
                 DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
                 InvalidationBatch: {
                     CallerReference: `redirect-${domainID}-${Date.now()}`,
-                    Paths: { Quantity: 2, Items: ['/*', '/'] }
+                    Paths: { Quantity: 2, Items:['/*','/'] }
                 }
             }));
         }
 
-        res.status(200).json({
-            success: true,
-            message: "Redirect updated with nuclear cache-busting",
-            technicalDetails: {
-                sourceDomain: fullFqdn,
-                targetDomain: redirectFqdn,
-                cacheBusters: { fingerprint: changeFingerprint, uuid: cacheBuster },
-                immediateTestUrl: `https://${fullFqdn}/?${fullQueryString}`,
-                headersToVerify: nuclearHeaders,
-                troubleshooting: [
-                    "1. Clear browser cache completely (Ctrl+Shift+Del)",
-                    "2. Test in incognito window first",
-                    "3. Use curl:",
-                    `   curl -v -H "Host: ${fullFqdn}" "https://${process.env.LOAD_BALANCER_DNS}/?${fullQueryString}"`
-                ]
-            }
+        // 5) Poll until redirect confirmed
+        const maxAttempts = 15, delayMs = 2000;
+        let confirmed = false, finalStatus, finalLocation;
+        for (let i = 1; i <= maxAttempts; i++) {
+            try {
+                const resp = await axios.get(`https://${sourceFqdn}`, {
+                    maxRedirects:0, validateStatus:()=>true, timeout:5000,
+                    httpsAgent: new https.Agent({ rejectUnauthorized:false })
+                });
+                if (resp.status >= 300 && resp.status < 400 && resp.headers.location?.includes(targetFqdn)) {
+                    confirmed = true; finalStatus = resp.status; finalLocation = resp.headers.location;
+                    console.log(`[CONFIRMED] via hostname on attempt ${i}`);
+                    break;
+                }
+            } catch {}
+            try {
+                const resp2 = await axios.get(`https://${lbDns}`, {
+                    headers: { Host: sourceFqdn },
+                    maxRedirects:0, validateStatus:()=>true, timeout:5000,
+                    httpsAgent: new https.Agent({ rejectUnauthorized:false })
+                });
+                if (resp2.status >= 300 && resp2.status < 400 && resp2.headers.location?.includes(targetFqdn)) {
+                    confirmed = true; finalStatus = resp2.status; finalLocation = resp2.headers.location;
+                    console.log(`[CONFIRMED] via LB DNS on attempt ${i}`);
+                    break;
+                }
+            } catch {}
+            await new Promise(r => setTimeout(r, delayMs));
+        }
+
+        console.log("[END] edit-redirect result:", confirmed, finalStatus, finalLocation);
+        return res.json({
+            success: confirmed,
+            message: confirmed
+                ? "Redirect confirmed!"
+                : "Redirect applied but not yet propagating.",
+            test: { status: finalStatus, location: finalLocation }
         });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Redirect update failed",
-            error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-            troubleshootingTips: [
-                "Check CloudFront configuration",
-                "Verify ALB listener rules in AWS console",
-                "Test via ALB DNS:",
-                `curl -v -H "Host: ${req.body.domainID}.stackforgeengine.com" http://${process.env.LOAD_BALANCER_DNS}`
-            ]
-        });
+    } catch (err) {
+        console.error("[ERROR] edit-redirect failed:", err);
+        res.status(500).json({ success:false, message:"Redirect update failed", error:err.message });
     }
 });
+
+
+
+
+
 
 router.post("/edit-environment", authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, domainID, environment } = req.body;
