@@ -192,11 +192,6 @@ CREATE TABLE projects
     description TEXT,
     branch TEXT,
     team_name TEXT,
-    root_directory TEXT,
-    output_directory TEXT,
-    build_command TEXT,
-    install_command TEXT,
-    env_vars JSONB,
     created_by TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL, 
@@ -228,7 +223,17 @@ CREATE TABLE domains
     is_primary BOOLEAN DEFAULT FALSE,
     redirect_target TEXT, 
     environment TEXT, 
-    certificate_arn TEXT
+    repository TEXT,
+    branch TEXT, 
+    root_directory TEXT,
+    install_command TEXT,
+    build_command TEXT,
+    output_directory TEXT,
+    env_vars JSONB,
+    ecs_service_name TEXT,
+    certificate_arn TEXT, 
+    target_group_arn TEXT,
+    image_tag TEXT
 );
 DROP INDEX IF EXISTS idx_domains_orgid;
 CREATE INDEX idx_domains_orgid ON domains (orgid, username);
@@ -249,6 +254,15 @@ CREATE TABLE deployments
     updated_at TIMESTAMP NOT NULL,
     last_deployed_at TIMESTAMP, 
     task_def_arn TEXT, 
+    root_directory TEXT,
+    output_directory TEXT,
+    build_command TEXT,
+    install_command TEXT,
+    env_vars JSONB,
+    target_group_arn TEXT,
+    subdomain TEXT,
+    image_tag TEXT
+
 );
 DROP INDEX IF EXISTS idx_deployments;
 CREATE INDEX idx_deployments ON deployments (orgid, username);
@@ -295,6 +309,10 @@ CREATE TABLE runtime_logs (
 );
 DROP INDEX IF EXISTS idx_runtime_logs;
 CREATE INDEX idx_runtime_logs ON build_logs (orgid, username, deployment_id);
+
+
+
+
 
 
 

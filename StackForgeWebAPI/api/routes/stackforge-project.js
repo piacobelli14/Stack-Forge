@@ -487,10 +487,57 @@ router.post("/git-repo-update-details-relative-to-deployment", authenticateToken
         };
 
         return res.status(200).json(response);
-        
+
     } catch (error) {
         if (!res.headersSent) {
             return res.status(500).json({ message: `Error checking commit relative to deployment: ${error.message}` });
+        }
+        next(error);
+    }
+});
+
+router.post("/fetch-current-build-info", authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, projectID } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const projectInfoFetchQuery = `
+            SELECT 
+                root_directory, 
+                output_directory, 
+                build_command, 
+                install_command, 
+                env_vars, 
+                domain_id
+            FROM deployments
+            WHERE orgid = $1
+            AND username = $2
+            AND project_id = $3
+            ORDER BY last_deployed_at DESC
+            LIMIT 1
+        `;
+
+        const projectInfo = await pool.query(projectInfoFetchQuery, [organizationID, userID, projectID]);
+
+        if (projectInfo.rows.length === 0) {
+            return res.status(404).json({ message: 'No production deployment found for this project.' });
+        }
+
+        res.status(200).json({
+            root_directory: projectInfo.rows[0].root_directory,
+            output_directory: projectInfo.rows[0].output_directory,
+            build_command: projectInfo.rows[0].build_command,
+            install_command: projectInfo.rows[0].install_command,
+            env_vars: projectInfo.rows[0].env_vars,
+            domain_id: projectInfo.rows[0].domain_id
+        });
+
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }

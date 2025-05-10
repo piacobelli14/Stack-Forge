@@ -1,3 +1,5 @@
+
+
 const express = require("express");
 const router = express.Router();
 const dns = require("dns").promises;
@@ -6,314 +8,374 @@ const axios = require("axios");
 const { authenticateToken } = require("../middleware/auth");
 const { pool } = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
-const { ElasticLoadBalancingV2Client, DescribeListenersCommand, DescribeRulesCommand, DeleteRuleCommand, CreateRuleCommand, ModifyRuleCommand, SetRulePrioritiesCommand, DescribeLoadBalancersCommand } = require('@aws-sdk/client-elastic-load-balancing-v2');
-const { WAFV2Client, GetWebACLForResourceCommand, UpdateWebACLCommand } = require('@aws-sdk/client-wafv2');
-const { Route53Client, ListResourceRecordSetsCommand, ChangeResourceRecordSetsCommand } = require('@aws-sdk/client-route-53');
-const { CloudFrontClient, CreateInvalidationCommand } = require('@aws-sdk/client-cloudfront');
-const { google } = require('googleapis');
+const { 
+  ElasticLoadBalancingV2Client, 
+  DescribeListenersCommand, 
+  DescribeRulesCommand, 
+  DeleteRuleCommand, 
+  CreateRuleCommand, 
+  DescribeLoadBalancersCommand, 
+  AddListenerCertificatesCommand,
+  RemoveListenerCertificatesCommand, 
+  DescribeListenerCertificatesCommand 
+} = require('@aws-sdk/client-elastic-load-balancing-v2');
+const { Route53Client, ChangeResourceRecordSetsCommand } = require('@aws-sdk/client-route-53'); const {
+  ACMClient,
+  RequestCertificateCommand,
+  DescribeCertificateCommand
+} = require("@aws-sdk/client-acm");
+const { 
+  CloudFrontClient, 
+  CreateInvalidationCommand 
+} = require('@aws-sdk/client-cloudfront');
 
 const deployManager = require("./drivers/deployManager");
-const route53Client = new Route53Client({ region: process.env.AWS_REGION });
 
 require('dotenv').config();
 secretKey = process.env.JWT_SECRET_KEY;
 
-const auth = new google.auth.GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
-    keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS
-});
-const analyticsDataClient = google.analyticsdata('v1beta');
-
 router.post("/validate-domain", authenticateToken, async (req, res, next) => {
-    const https = require('https');
-    const { ACMClient, RequestCertificateCommand, DescribeCertificateCommand } = require("@aws-sdk/client-acm");
-    const { AddListenerCertificatesCommand, DescribeListenersCommand } = require("@aws-sdk/client-elastic-load-balancing-v2");
-    const { userID, organizationID, projectID, domain } = req.body;
+    const {
+      userID, organizationID, projectID, domain,
+      repository, branch, rootDirectory, outputDirectory,
+      buildCommand, installCommand, envVars,
+      internalCall = false
+    } = req.body;
 
     if (!userID || !organizationID || !projectID || !domain) {
-        return res.status(400).json({ message: "userID, organizationID, projectID, and domain are required." });
+      return res
+        .status(400)
+        .json({ message: "userID, organizationID, projectID, and domain are required." });
     }
 
-    const acmClient = new ACMClient({ region: process.env.AWS_REGION });
+    const timestamp = new Date().toISOString();
+    const elbv2 = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
+    const r53 = new Route53Client({ region: process.env.AWS_REGION });
+    const acm = new ACMClient({ region: process.env.AWS_REGION });
+    const L_HTTPS = process.env.ALB_LISTENER_ARN_HTTPS;
+    const L_HTTP = process.env.ALB_LISTENER_ARN_HTTP;
+    const albDns = process.env.LOAD_BALANCER_DNS.endsWith(".")
+      ? process.env.LOAD_BALANCER_DNS
+      : `${process.env.LOAD_BALANCER_DNS}.`;
 
-    try {
-        const projectResult = await pool.query(
-            "SELECT name, current_deployment FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
-            [projectID, organizationID, userID]
-        );
-        if (projectResult.rows.length === 0) {
-            return res.status(404).json({ message: "Project not found or access denied." });
-        }
-        const projectName = projectResult.rows[0].name.toLowerCase();
-        const deploymentId = projectResult.rows[0].current_deployment; 
-        if (!deploymentId) {
-            return res.status(400).json({ message: "No active deployment found for the project." });
-        }
+    const projRes = await pool.query(
+      "SELECT name,current_deployment FROM projects WHERE project_id=$1 AND orgid=$2 AND username=$3",
+      [projectID, organizationID, userID]
+    );
+    if (!projRes.rows.length)
+      return res.status(404).json({ message: "Project not found." });
 
-        let rawSubdomain = domain.trim().toLowerCase();
-        const baseDomain = ".stackforgeengine.com";
-        if (rawSubdomain.endsWith(baseDomain)) {
-            rawSubdomain = rawSubdomain.slice(0, -baseDomain.length);
-        }
+    const projectName = projRes.rows[0].name.toLowerCase();
+    let deploymentId = projRes.rows[0].current_deployment || uuidv4();
 
-        const suffix = `.${projectName}`;
-        while (rawSubdomain.endsWith(suffix)) {
-            rawSubdomain = rawSubdomain.slice(0, -suffix.length);
-        }
+    const parentRes = await pool.query(
+      `SELECT d.repository,d.branch,d.root_directory,d.output_directory,
+                d.build_command,d.install_command,d.env_vars,dep.task_def_arn
+         FROM domains d
+         JOIN deployments dep ON d.deployment_id = dep.deployment_id
+         WHERE d.project_id=$1 AND d.is_primary=true`,
+      [projectID]
+    );
+    const parentCfg = parentRes.rows[0] || {};
 
-        const isParentDomain = rawSubdomain === projectName || rawSubdomain === "";
-        if (isParentDomain) {
-            rawSubdomain = projectName;
-        }
+    let raw = domain.trim().toLowerCase()
+      .replace(/\.stackforgeengine\.com$/i, "")
+      .replace(new RegExp(`\\.${projectName}$`), "");
+    const isParent = raw === projectName || raw === "";
+    const subLabel = isParent ? projectName : raw.split(".")[0];
+    const storedName = isParent ? projectName : `${subLabel}.${projectName}`;
+    const fqdn = `${storedName}.stackforgeengine.com`;
 
-        const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
-        if (!hostnameRegex.test(rawSubdomain)) {
-            return res
-                .status(400)
-                .json({ message: "Invalid subdomain format. Use only alphanumeric characters and hyphens." });
-        }
+    const domRes = await pool.query(
+      `SELECT domain_id,certificate_arn,target_group_arn,redirect_target
+         FROM domains
+         WHERE project_id=$1 AND domain_name=$2`,
+      [projectID, storedName]
+    );
+    const existing = domRes.rows[0] || null;
+    const domainId = existing?.domain_id || uuidv4();
+    let certArn = existing?.certificate_arn || null;
+    let tgArn = existing?.target_group_arn || null;
+    const existingRedirect = existing?.redirect_target || null;
+    const wildcard = `*.${projectName}.stackforgeengine.com`;
+    const altNames = [wildcard, `${projectName}.stackforgeengine.com`];
 
-        const expectedSubdomain = isParentDomain ? projectName : `${rawSubdomain}.${projectName}`;
-        const fqdn = `${expectedSubdomain}.stackforgeengine.com`;
-        let certificateArn = null;
-        const wildcardDomain = `*.${projectName}.stackforgeengine.com`;
-        const existingCertResult = await pool.query(
-            "SELECT certificate_arn FROM domains WHERE project_id = $1 AND certificate_arn IS NOT NULL",
-            [projectID]
-        );
-        if (existingCertResult.rows.length > 0) {
-            certificateArn = existingCertResult.rows[0].certificate_arn;
+    if (!certArn) {
+      const reqCert = await acm.send(
+        new RequestCertificateCommand({
+          DomainName: wildcard,
+          SubjectAlternativeNames: altNames,
+          ValidationMethod: "DNS"
+        })
+      );
+      certArn = reqCert.CertificateArn;
 
-            const certDetails = await acmClient.send(new DescribeCertificateCommand({
-                CertificateArn: certificateArn,
-            }));
-            if (certDetails.Certificate.Status !== "ISSUED") {
-                throw new Error(`Certificate not issued, status: ${certDetails.Certificate.Status}.`);
-            }
-        } else {
-            const certRequest = await acmClient.send(new RequestCertificateCommand({
-                DomainName: wildcardDomain,
-                ValidationMethod: "DNS",
-                SubjectAlternativeNames: [wildcardDomain],
-            }));
-            certificateArn = certRequest.CertificateArn;
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            const certDetails = await acmClient.send(new DescribeCertificateCommand({
-                CertificateArn: certificateArn,
-            }));
-            const validationOptions = certDetails.Certificate.DomainValidationOptions;
-
-            if (validationOptions && validationOptions.length > 0) {
-                const validationRecord = validationOptions[0].ResourceRecord;
-                if (validationRecord) {
-                    const changeBatch = {
-                        Changes: [{
-                            Action: "UPSERT",
-                            ResourceRecordSet: {
-                                Name: validationRecord.Name,
-                                Type: validationRecord.Type,
-                                TTL: 300,
-                                ResourceRecords: [{ Value: validationRecord.Value }],
-                            },
-                        }],
-                    };
-                    await route53Client.send(new ChangeResourceRecordSetsCommand({
-                        HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
-                        ChangeBatch: changeBatch,
-                    }));
+      const certInfo = await acm.send(
+        new DescribeCertificateCommand({ CertificateArn: certArn })
+      );
+      const rr = certInfo.Certificate.DomainValidationOptions?.[0]?.ResourceRecord;
+      if (rr) {
+        await r53.send(
+          new ChangeResourceRecordSetsCommand({
+            HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+            ChangeBatch: {
+              Changes: [
+                {
+                  Action: "UPSERT",
+                  ResourceRecordSet: {
+                    Name: rr.Name,
+                    Type: rr.Type,
+                    TTL: 300,
+                    ResourceRecords: [{ Value: rr.Value }]
+                  }
                 }
+              ]
             }
-
-            let certStatus = "PENDING_VALIDATION";
-            const maxWaitTime = 5 * 60 * 1000;
-            const startTime = Date.now();
-            while (certStatus === "PENDING_VALIDATION" && Date.now() - startTime < maxWaitTime) {
-                const certCheck = await acmClient.send(new DescribeCertificateCommand({
-                    CertificateArn: certificateArn,
-                }));
-                certStatus = certCheck.Certificate.Status;
-                if (certStatus === "ISSUED") break;
-                await new Promise(resolve => setTimeout(resolve, 15000));
-            }
-            if (certStatus !== "ISSUED") {
-                throw new Error(`Certificate validation timed out, status: ${certStatus}.`);
-            }
-        }
-
-        const listenerResp = await deployManager.elbv2.send(new DescribeListenersCommand({
-            ListenerArns: [process.env.ALB_LISTENER_ARN_HTTPS],
-        }));
-        const attachedCerts = listenerResp.Listeners[0].Certificates.map(c => c.CertificateArn);
-        if (!attachedCerts.includes(certificateArn)) {
-            await deployManager.elbv2.send(new AddListenerCertificatesCommand({
-                ListenerArn: process.env.ALB_LISTENER_ARN_HTTPS,
-                Certificates: [{ CertificateArn: certificateArn }],
-            }));
-        } else {}
-
-        let domainID;
-        const existing = await pool.query(
-            "SELECT domain_id FROM domains WHERE project_id = $1 AND domain_name = $2",
-            [projectID, expectedSubdomain]
+          })
         );
-        const timestamp = new Date().toISOString();
-
-        if (existing.rows.length > 0) {
-            domainID = existing.rows[0].domain_id;
-            await pool.query(
-                `UPDATE domains
-                 SET updated_at = $1,
-                     is_primary = $2,
-                     certificate_arn = $3,
-                     deployment_id = $4
-                 WHERE domain_id = $5`,
-                [timestamp, isParentDomain, certificateArn, deploymentId, domainID]
-            );
-        } else {
-            domainID = uuidv4();
-            await pool.query(
-                `INSERT INTO domains (
-                     orgid, username, domain_id, domain_name, project_id,
-                     created_by, created_at, updated_at,
-                     environment, is_primary, certificate_arn, deployment_id
-                 ) VALUES (
-                     $1, $2, $3, $4, $5,
-                     $6, $7, $8,
-                     $9, $10, $11, $12
-                 )`,
-                [
-                    organizationID,
-                    userID,
-                    domainID,
-                    expectedSubdomain,
-                    projectID,
-                    userID,
-                    timestamp,
-                    timestamp,
-                    "production",
-                    isParentDomain,
-                    certificateArn,
-                    deploymentId
-                ]
-            );
-        }
-
-        const domainResult = await pool.query(
-            "SELECT domain_name FROM domains WHERE project_id = $1 AND orgid = $2",
-            [projectID, organizationID]
-        );
-        const subdomains = domainResult.rows
-            .map((row) => row.domain_name.split(".")[0])
-            .filter((sub) => sub !== projectName);
-
-        await deployManager.updateDNSRecord(projectName, subdomains);
-
-        const targetGroupArn = await deployManager.ensureTargetGroup(projectName);
-        await deployManager.createOrUpdateService({
-            projectName,
-            taskDefArn: null,
-            targetGroupArn,
-        });
-
-        const result = {
-            domain: fqdn,
-            isAccessible: false,
-            statusCode: null,
-            dnsRecords: [],
-            checkedAt: timestamp,
-            status: "pending",
-            certificateArn: certificateArn,
-        };
-
-        try {
-            const aRecords = await dns.resolve4(fqdn);
-            if (aRecords.length) result.dnsRecords.push({ type: "A", name: "@", value: aRecords[0] });
-        } catch (error) {}
-        try {
-            const aaaaRecords = await dns.resolve6(fqdn);
-            if (aaaaRecords.length) result.dnsRecords.push({ type: "AAAA", name: "@", value: aaaaRecords[0] });
-        } catch (error) {}
-        try {
-            const cnameRecords = await dns.resolveCname(fqdn);
-            if (cnameRecords.length) result.dnsRecords.push({ type: "CNAME", name: "@", value: cnameRecords[0] });
-        } catch (error) {}
-        try {
-            const mxRecords = await dns.resolveMx(fqdn);
-            if (mxRecords.length)
-                result.dnsRecords.push({
-                    type: "MX",
-                    name: "@",
-                    value: mxRecords.map((r) => `${r.priority} ${r.exchange}`).join(", "),
-                });
-        } catch (error) {}
-
-        const httpAgent = new https.Agent({
-            rejectUnauthorized: false,
-        });
-        const maxRetries = 5;
-        let retryCount = 0;
-        while (retryCount < maxRetries) {
-            try {
-                const response = await axios.head(`https://${fqdn}`, {
-                    timeout: 5000,
-                    validateStatus: null,
-                    httpsAgent: httpAgent,
-                });
-                result.isAccessible = response.status >= 200 && response.status < 400;
-                result.statusCode = response.status;
-                result.status = result.isAccessible ? "accessible" : "inaccessible";
-                break;
-            } catch (error) {
-                try {
-                    const response = await axios.head(`http://${fqdn}`, { timeout: 5000, validateStatus: null });
-                    result.isAccessible = response.status >= 200 && response.status < 400;
-                    result.statusCode = response.status;
-                    result.status = result.isAccessible ? "accessible" : "inaccessible";
-                    break;
-                } catch (error2) {}
-            }
-            retryCount++;
-            if (retryCount < maxRetries) {
-                await new Promise((resolve) => setTimeout(resolve, 10000));
-            }
-        }
-
-        if (!result.isAccessible && result.dnsRecords.length === 0) {
-            result.status = "pending";
-        }
-
-        await pool.query(
-            `UPDATE domains
-             SET is_accessible = $1,
-                 dns_records = $2,
-                 checked_at = $3,
-                 updated_at = $4,
-                 certificate_arn = $5,
-                 deployment_id = $6
-             WHERE domain_id = $7`,
-            [result.isAccessible, JSON.stringify(result.dnsRecords), result.checkedAt, timestamp, certificateArn, deploymentId, domainID]
-        );
-
-        res.status(200).json(result);
-    } catch (error) {
-        if (!res.headersSent) {
-            res.status(500).json({ message: `Failed to validate domain: ${error.message}.` });
-        }
-        next(error);
+      }
     }
-});
+
+    let certReady = false;
+    for (let i = 0; i < 12; i++) {
+      const info = await acm.send(
+        new DescribeCertificateCommand({ CertificateArn: certArn })
+      );
+      if (info.Certificate.Status === "ISSUED") {
+        certReady = true;
+        break;
+      }
+      await new Promise(r => setTimeout(r, 10_000));
+    }
+    if (!certReady) {
+      return res.status(202).json({
+        message:
+          `Certificate request created for ${wildcard}. ` +
+          `Please re‑run validation once DNS validation is complete.`,
+        certificateArn: certArn
+      });
+    }
+
+    const { Certificates } = await elbv2.send(
+      new DescribeListenerCertificatesCommand({ ListenerArn: L_HTTPS })
+    );
+    if (!Certificates.some(c => c.CertificateArn === certArn)) {
+      if (Certificates.length >= 25) {
+        const victim = Certificates.find(c => !c.IsDefault);
+        if (victim) {
+          await elbv2.send(
+            new RemoveListenerCertificatesCommand({
+              ListenerArn: L_HTTPS,
+              Certificates: [{ CertificateArn: victim.CertificateArn }]
+            })
+          );
+        }
+      }
+      await elbv2.send(
+        new AddListenerCertificatesCommand({
+          ListenerArn: L_HTTPS,
+          Certificates: [{ CertificateArn: certArn }]
+        })
+      );
+    }
+
+    let parsedEnv = envVars;
+    try { if (typeof parsedEnv === "string") parsedEnv = JSON.parse(parsedEnv); } catch { parsedEnv = null; }
+
+    const cfg = {
+      repository: repository || parentCfg.repository || null,
+      branch: branch || parentCfg.branch || "main",
+      rootDirectory: rootDirectory || parentCfg.root_directory || ".",
+      outputDirectory: outputDirectory || parentCfg.output_directory || "",
+      buildCommand: buildCommand || parentCfg.build_command || "",
+      installCommand: installCommand || parentCfg.install_command || "npm install",
+      envVars: parsedEnv !== null
+        ? parsedEnv
+        : (parentCfg.env_vars ? JSON.parse(parentCfg.env_vars || "[]") : [])
+    };
+
+    async function upsertDns(host) {
+      const isApex = host.split(".").length === 3;
+      if (isApex) {
+        const lb = await elbv2.send(
+          new DescribeLoadBalancersCommand({ Names: [process.env.LOAD_BALANCER_NAME] })
+        );
+        await r53.send(
+          new ChangeResourceRecordSetsCommand({
+            HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+            ChangeBatch: {
+              Changes: [
+                {
+                  Action: "UPSERT",
+                  ResourceRecordSet: {
+                    Name: host,
+                    Type: "A",
+                    AliasTarget: {
+                      HostedZoneId: lb.LoadBalancers[0].CanonicalHostedZoneId,
+                      DNSName: albDns,
+                      EvaluateTargetHealth: false
+                    }
+                  }
+                }
+              ]
+            }
+          })
+        );
+      } else {
+        await r53.send(
+          new ChangeResourceRecordSetsCommand({
+            HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+            ChangeBatch: {
+              Changes: [
+                {
+                  Action: "UPSERT",
+                  ResourceRecordSet: {
+                    Name: host,
+                    Type: "CNAME",
+                    TTL: 60,
+                    ResourceRecords: [{ Value: albDns }]
+                  }
+                }
+              ]
+            }
+          })
+        );
+      }
+    }
+    await upsertDns(fqdn);
+
+    if (!existingRedirect) {
+      tgArn = tgArn || (await deployManager.ensureTargetGroup(projectName, isParent ? null : subLabel));
+
+      for (const L of [L_HTTP, L_HTTPS]) {
+        const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: L }));
+        const missing = !Rules.some(r =>
+          r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(fqdn))
+        );
+        if (missing) {
+          const used = new Set(Rules.filter(r => !r.IsDefault).map(r => +r.Priority));
+          let pr = 1; while (used.has(pr)) pr++;
+          await elbv2.send(
+            new CreateRuleCommand({
+              ListenerArn: L,
+              Priority: pr,
+              Conditions: [{ Field: "host-header", Values: [fqdn] }],
+              Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
+            })
+          );
+        }
+      }
+
+      if (!internalCall) {
+        await deployManager.createOrUpdateService({
+          projectName,
+          subdomain: isParent ? null : subLabel,
+          taskDefArn: parentCfg.task_def_arn,
+          targetGroupArn: tgArn
+        });
+      }
+    } 
+
+    const valsCommon = [
+      timestamp,
+      deploymentId,
+      certArn,
+      cfg.repository,
+      cfg.branch,
+      cfg.rootDirectory,
+      cfg.outputDirectory,
+      cfg.buildCommand,
+      cfg.installCommand,
+      JSON.stringify(cfg.envVars),
+      tgArn
+    ];
+    if (existing) {
+      await pool.query(
+        `UPDATE domains SET
+             updated_at       = $1,
+             deployment_id    = $2,
+             certificate_arn  = $3,
+             repository       = $4,
+             branch           = $5,
+             root_directory   = $6,
+             output_directory = $7,
+             build_command    = $8,
+             install_command  = $9,
+             env_vars         = $10,
+             target_group_arn = $11
+           WHERE domain_id = $12`,
+        [...valsCommon, domainId]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO domains (
+             orgid,username,domain_id,domain_name,project_id,
+             created_by,created_at,updated_at,environment,is_primary,
+             deployment_id,certificate_arn,repository,branch,root_directory,
+             output_directory,build_command,install_command,env_vars,target_group_arn
+           ) VALUES (
+             $1,$2,$3,$4,$5,
+             $6,$7,$8,$9,$10,
+             $11,$12,$13,$14,$15,
+             $16,$17,$18,$19,$20
+           )`,
+        [
+          organizationID,
+          userID,
+          domainId,
+          storedName,
+          projectID,
+          userID,
+          timestamp,
+          timestamp,
+          "production",
+          isParent,
+          deploymentId,
+          certArn,
+          cfg.repository,
+          cfg.branch,
+          cfg.rootDirectory,
+          cfg.outputDirectory,
+          cfg.buildCommand,
+          cfg.installCommand,
+          JSON.stringify(cfg.envVars),
+          tgArn
+        ]
+      );
+    }
+
+    const recs = [];
+    try { const a = await dns.resolve4(fqdn); if (a.length) recs.push({ type: "A", name: "@", value: a[0] }); } catch { }
+    try { const a = await dns.resolve6(fqdn); if (a.length) recs.push({ type: "AAAA", name: "@", value: a[0] }); } catch { }
+    try { const c = await dns.resolveCname(fqdn); if (c.length) recs.push({ type: "CNAME", name: "@", value: c[0] }); } catch { }
+    try { const m = await dns.resolveMx(fqdn); if (m.length) recs.push({ type: "MX", name: "@", value: m.map(r => `${r.priority} ${r.exchange}`).join(", ") }); } catch { }
+    await pool.query(
+      "UPDATE domains SET dns_records=$1 WHERE domain_id=$2",
+      [JSON.stringify(recs), domainId]
+    );
+
+    return res.status(200).json({
+      message: existingRedirect
+        ? `Subdomain ${subLabel} refreshed (redirect still → ${existingRedirect}).`
+        : `Subdomain ${subLabel} validated${existing ? "" : " and deployment initiated"}.`,
+      url: `https://${fqdn}`,
+      certificateArn: certArn,
+      dnsRecords: recs
+    });
+  }
+);
 
 router.post("/project-domains", authenticateToken, async (req, res, next) => {
-    const { userID, organizationID, projectID } = req.body;
+  const { userID, organizationID, projectID } = req.body;
 
-    if (!userID || !organizationID || !projectID) {
-        return res.status(400).json({
-            message: "userID, organizationID, and projectID are required."
-        });
-    }
+  if (!userID || !organizationID || !projectID) {
+    return res.status(400).json({
+      message: "userID, organizationID, and projectID are required."
+    });
+  }
 
-    try {
-        const domainFetchQuery = `
+  try {
+    const domainFetchQuery = `
             SELECT 
                 domain_id,
                 domain_name,
@@ -326,303 +388,325 @@ router.post("/project-domains", authenticateToken, async (req, res, next) => {
                 checked_at,
                 is_primary,
                 redirect_target, 
-                environment
+                environment, 
+                deployment_id
             FROM domains
             WHERE orgid = $1
             AND username = $2
             AND project_id = $3
         `;
 
-        const domainFetchInfo = await pool.query(domainFetchQuery, [organizationID, userID, projectID]);
-        const domains = domainFetchInfo.rows.map(domain => ({
-            domainID: domain.domain_id,
-            domainName: domain.domain_name,
-            projectID: domain.project_id,
-            createdBy: domain.created_by,
-            createdAt: domain.created_at,
-            updatedAt: domain.updated_at,
-            isAccessible: domain.is_accessible,
-            dnsRecords: domain.dns_records,
-            checkedAt: domain.checked_at,
-            isPrimary: domain.is_primary,
-            redirectTarget: domain.redirect_target,
-            environment: domain.environment
-        }));
+    const domainFetchInfo = await pool.query(domainFetchQuery, [organizationID, userID, projectID]);
+    const domains = domainFetchInfo.rows.map(domain => ({
+      domainID: domain.domain_id,
+      domainName: domain.domain_name,
+      projectID: domain.project_id,
+      createdBy: domain.created_by,
+      createdAt: domain.created_at,
+      updatedAt: domain.updated_at,
+      isAccessible: domain.is_accessible,
+      dnsRecords: domain.dns_records,
+      checkedAt: domain.checked_at,
+      isPrimary: domain.is_primary,
+      redirectTarget: domain.redirect_target,
+      environment: domain.environment,
+      deploymentID: domain.deployment_id
+    }));
 
-        res.status(200).json({
-            domains: domains,
-            count: domains.length
-        });
-    } catch (error) {
-        if (!res.headersSent) {
-            res.status(500).json({ message: `Failed to retrieve domains: ${error.message}.` });
-        }
-        next(error);
+    res.status(200).json({
+      domains: domains,
+      count: domains.length
+    });
+  } catch (error) {
+    if (!res.headersSent) {
+      res.status(500).json({ message: `Failed to retrieve domains: ${error.message}.` });
     }
+    next(error);
+  }
 });
 
 router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
-    const { userID, organizationID, projectID, domainID, redirectTarget } = req.body;
-    if (!userID || !organizationID || !projectID || !domainID) {
-        return res.status(400).json({ message: "userID, organizationID, projectID, and domainID are required." });
+  const { userID, organizationID, projectID, domainID, redirectTarget } = req.body;
+
+  if (!userID || !organizationID || !projectID || !domainID) {
+    return res.status(400).json({
+      message: "userID, organizationID, projectID, and domainID are required."
+    });
+  }
+
+  const elbv2 = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
+  const cloudfront = new CloudFrontClient({ region: process.env.AWS_REGION });
+  const route53Client = new Route53Client({ region: process.env.AWS_REGION });
+  const lbDns = process.env.LOAD_BALANCER_DNS.endsWith(".")
+    ? process.env.LOAD_BALANCER_DNS
+    : `${process.env.LOAD_BALANCER_DNS}.`;
+  const httpsArn = process.env.ALB_LISTENER_ARN_HTTPS;
+  const httpArn = process.env.ALB_LISTENER_ARN_HTTP;
+
+  async function getFreePriority(listenerArn) {
+    const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+    const used = Rules.filter(r => !r.IsDefault).map(r => parseInt(r.Priority));
+    for (let p = 1; p <= 50000; p++) if (!used.includes(p)) return p;
+    throw new Error("No free ALB rule priority available.");
+  }
+
+  async function upsertRecord(fqdn) {
+    const isApex = fqdn.split(".").length === 3;
+    if (!isApex) {
+      await route53Client.send(new ChangeResourceRecordSetsCommand({
+        HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+        ChangeBatch: {
+          Changes: [{
+            Action: "UPSERT",
+            ResourceRecordSet: {
+              Name: fqdn,
+              Type: "CNAME",
+              TTL: 60,
+              ResourceRecords: [{ Value: lbDns }]
+            }
+          }]
+        }
+      }));
+      return;
     }
 
-    const elbv2         = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
-    const cloudfront    = new CloudFrontClient({ region: process.env.AWS_REGION });
-    const route53Client = new Route53Client({ region: process.env.AWS_REGION });
-    const lbDns         = process.env.LOAD_BALANCER_DNS;
-    const httpsArn      = process.env.ALB_LISTENER_ARN_HTTPS;
-    const httpArn       = process.env.ALB_LISTENER_ARN_HTTP;
-
-    // UPSERT CNAME or fallback to Alias A
-    async function upsertRecord(name) {
-        try {
-            await route53Client.send(new ChangeResourceRecordSetsCommand({
-                HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
-                ChangeBatch: { Changes: [{
-                    Action: "UPSERT",
-                    ResourceRecordSet: {
-                        Name: name,
-                        Type: "CNAME",
-                        TTL: 60,
-                        ResourceRecords: [{ Value: lbDns }]
-                    }
-                }] }
-            }));
-        } catch (e) {
-            if (e.Code === "InvalidChangeBatch") {
-                const { Listeners } = await elbv2.send(new DescribeListenersCommand({ ListenerArns: [httpsArn] }));
-                const lbArn = Listeners[0].LoadBalancerArn;
-                const { LoadBalancers } = await elbv2.send(new DescribeLoadBalancersCommand({ LoadBalancerArns: [lbArn] }));
-                const hostedZoneId = LoadBalancers[0].CanonicalHostedZoneId;
-                await route53Client.send(new ChangeResourceRecordSetsCommand({
-                    HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
-                    ChangeBatch: { Changes: [{
-                        Action: "UPSERT",
-                        ResourceRecordSet: {
-                            Name: name,
-                            Type: "A",
-                            AliasTarget: {
-                                DNSName: lbDns.endsWith('.') ? lbDns : `${lbDns}.`,
-                                HostedZoneId: hostedZoneId,
-                                EvaluateTargetHealth: false
-                            }
-                        }
-                    }] }
-                }));
-            } else {
-                throw e;
-            }
-        }
+    let hostedZoneId;
+    if (process.env.LOAD_BALANCER_NAME) {
+      const { LoadBalancers } = await elbv2.send(
+        new DescribeLoadBalancersCommand({ Names: [process.env.LOAD_BALANCER_NAME] })
+      );
+      hostedZoneId = LoadBalancers[0].CanonicalHostedZoneId;
+    } else {
+      const { Listeners } = await elbv2.send(
+        new DescribeListenersCommand({ ListenerArns: [httpsArn] })
+      );
+      const lbArn = Listeners[0].LoadBalancerArn;
+      const { LoadBalancers } = await elbv2.send(
+        new DescribeLoadBalancersCommand({ LoadBalancerArns: [lbArn] })
+      );
+      hostedZoneId = LoadBalancers[0].CanonicalHostedZoneId;
     }
 
-    try {
-        const [projRes, domRes] = await Promise.all([
-            pool.query("SELECT name FROM projects WHERE project_id=$1 AND orgid=$2 AND username=$3",
-                       [projectID, organizationID, userID]),
-            pool.query("SELECT domain_name FROM domains WHERE domain_id=$1 AND project_id=$2 AND orgid=$3",
-                       [domainID, projectID, organizationID]),
-        ]);
-        if (!projRes.rows.length || !domRes.rows.length) {
-            return res.status(404).json({ message: "Project or domain not found." });
-        }
-
-        const sourceFqdn = `${domRes.rows[0].domain_name}.stackforgeengine.com`.toLowerCase();
-        await upsertRecord(sourceFqdn);
-
-        let targetFqdn = null;
-        if (redirectTarget !== null) {
-            let t = redirectTarget.trim().toLowerCase();
-            if (t.endsWith(".stackforgeengine.com")) t = t.replace(/\.stackforgeengine\.com$/i, "");
-            targetFqdn = `${t}.stackforgeengine.com`;
-            await upsertRecord(targetFqdn);
-        }
-
-        const listeners = [ httpArn, httpsArn ];
-
-        if (redirectTarget === null) {
-            for (const arn of listeners) {
-                const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn }));
-                for (const rule of Rules) {
-                    if (!rule.IsDefault &&
-                        rule.Conditions.some(c => c.Field==="host-header" && c.Values.includes(sourceFqdn))
-                    ) {
-                        await elbv2.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn }));
-                    }
-                }
+    await route53Client.send(new ChangeResourceRecordSetsCommand({
+      HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+      ChangeBatch: {
+        Changes: [{
+          Action: "UPSERT",
+          ResourceRecordSet: {
+            Name: fqdn,
+            Type: "A",
+            AliasTarget: {
+              HostedZoneId: hostedZoneId,
+              DNSName: lbDns,
+              EvaluateTargetHealth: false
             }
-            await pool.query(
-                "UPDATE domains SET redirect_target=NULL, updated_at=$1 WHERE domain_id=$2",
-                [ new Date().toISOString(), domainID ]
-            );
+          }
+        }]
+      }
+    }));
+  }
 
-            if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
-                await cloudfront.send(new CreateInvalidationCommand({
-                    DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
-                    InvalidationBatch: {
-                        CallerReference: `redirect-remove-${domainID}-${Date.now()}`,
-                        Paths: { Quantity: 1, Items: ['/*'] }
-                    }
-                }));
-            }
-            return res.json({ success: true, message: "Redirect removed" });
+  try {
+    const [projRes, domRes, parentRes] = await Promise.all([
+      pool.query(
+        "SELECT name FROM projects WHERE project_id=$1 AND orgid=$2 AND username=$3",
+        [projectID, organizationID, userID]
+      ),
+      pool.query(
+        "SELECT domain_name,target_group_arn FROM domains WHERE domain_id=$1 AND project_id=$2 AND orgid=$3",
+        [domainID, projectID, organizationID]
+      ),
+      pool.query(
+        `SELECT dep.task_def_arn FROM domains d
+         JOIN deployments dep ON dep.deployment_id = d.deployment_id
+         WHERE d.project_id=$1 AND d.is_primary=true LIMIT 1`,
+        [projectID]
+      )
+    ]);
+    if (!projRes.rows.length || !domRes.rows.length)
+      return res.status(404).json({ message: "Project or domain not found." });
+
+    const projectName = projRes.rows[0].name.toLowerCase();
+    const sourceSub = domRes.rows[0].domain_name.toLowerCase(); 
+    const sourceFqdn = `${sourceSub}.stackforgeengine.com`;
+    let tgArn = domRes.rows[0].target_group_arn || null;
+    const parentTaskDef = parentRes.rows[0]?.task_def_arn || null;
+    const isApex = sourceSub === projectName;
+
+    await upsertRecord(sourceFqdn);
+
+    let targetFqdn = null;
+    if (redirectTarget !== null) {
+      let t = redirectTarget.trim().toLowerCase()
+        .replace(/^https?:\/\//, "")
+        .replace(/\/.*$/, "");
+      if (t.endsWith(".stackforgeengine.com"))
+        t = t.replace(/\.stackforgeengine\.com$/i, "");
+
+      if (t === projectName) {
+      } else if (!t.includes(".")) {
+        t = `${t}.${projectName}`;
+      }
+      targetFqdn = `${t}.stackforgeengine.com`;
+      await upsertRecord(targetFqdn);
+    }
+
+    for (const arn of [httpArn, httpsArn]) {
+      const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn }));
+      for (const r of Rules) {
+        if (!r.IsDefault &&
+          r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(sourceFqdn))) {
+          await elbv2.send(new DeleteRuleCommand({ RuleArn: r.RuleArn }));
         }
+      }
+    }
 
-        for (const arn of listeners) {
-            let { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn }));
-            for (const rule of Rules) {
-                if (!rule.IsDefault &&
-                    rule.Conditions.some(c => c.Field==="host-header" && c.Values.includes(sourceFqdn))
-                ) {
-                    await elbv2.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn }));
-                }
-            }
-
-            ({ Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn })));
-            const nonDefault = Rules.filter(r => !r.IsDefault);
-            const used = nonDefault.map(r => parseInt(r.Priority));
-            const minUsed = used.length ? Math.min(...used) : null;
-
-            let redirectPriority;
-            if (minUsed === 1) {
-                const wildcardRule = nonDefault.find(r => parseInt(r.Priority)===1);
-                try {
-                    await elbv2.send(new SetRulePrioritiesCommand({
-                        RulePriorities: [{ RuleArn: wildcardRule.RuleArn, Priority: 50000 }]
-                    }));
-                } catch (error) {}
-                redirectPriority = 1;
-            } else {
-                redirectPriority = minUsed ? minUsed - 1 : 1;
-            }
-
-            await elbv2.send(new CreateRuleCommand({
-                ListenerArn: arn,
-                Priority: redirectPriority,
-                Conditions: [{ Field:"host-header", Values:[sourceFqdn] }],
-                Actions: [{
-                    Type: "redirect",
-                    RedirectConfig: {
-                        Protocol: "HTTPS",
-                        Port: "443",
-                        Host: targetFqdn,
-                        Path: "/",
-                        Query: "",
-                        StatusCode: "HTTP_302"
-                    }
-                }]
-            }));
-        }
-
-        await pool.query(
-            "UPDATE domains SET redirect_target=$1, updated_at=$2 WHERE domain_id=$3",
-            [ targetFqdn.split('.')[0], new Date().toISOString(), domainID ]
+    if (redirectTarget === null) {
+      if (!tgArn) {
+        tgArn = await deployManager.ensureTargetGroup(
+          projectName, isApex ? null : sourceSub.split(".")[0]
         );
-        if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
-            await cloudfront.send(new CreateInvalidationCommand({
-                DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
-                InvalidationBatch: {
-                    CallerReference: `redirect-${domainID}-${Date.now()}`,
-                    Paths: { Quantity: 2, Items:['/*','/'] }
-                }
-            }));
-        }
+        await pool.query(
+          "UPDATE domains SET target_group_arn=$1 WHERE domain_id=$2",
+          [tgArn, domainID]
+        );
+      }
 
-        const maxAttempts = 15, delayMs = 2000;
-        let confirmed = false, finalStatus, finalLocation;
-        for (let i = 1; i <= maxAttempts; i++) {
-            try {
-                const resp = await axios.get(`https://${sourceFqdn}`, {
-                    maxRedirects:0, validateStatus:()=>true, timeout:5000,
-                    httpsAgent: new https.Agent({ rejectUnauthorized:false })
-                });
-                if (resp.status >= 300 && resp.status < 400 && resp.headers.location?.includes(targetFqdn)) {
-                    confirmed = true; finalStatus = resp.status; finalLocation = resp.headers.location;
-                    break;
-                }
-            } catch {}
-            try {
-                const resp2 = await axios.get(`https://${lbDns}`, {
-                    headers: { Host: sourceFqdn },
-                    maxRedirects:0, validateStatus:()=>true, timeout:5000,
-                    httpsAgent: new https.Agent({ rejectUnauthorized:false })
-                });
-                if (resp2.status >= 300 && resp2.status < 400 && resp2.headers.location?.includes(targetFqdn)) {
-                    confirmed = true; finalStatus = resp2.status; finalLocation = resp2.headers.location;
-                    break;
-                }
-            } catch {}
-            await new Promise(r => setTimeout(r, delayMs));
-        }
-
-        return res.json({
-            success: confirmed,
-            message: confirmed
-                ? "Redirect confirmed!"
-                : "Redirect applied but not yet propagating.",
-            test: { status: finalStatus, location: finalLocation }
+      if (parentTaskDef) {
+        await deployManager.createOrUpdateService({
+          projectName,
+          subdomain: isApex ? null : sourceSub.split(".")[0],
+          taskDefArn: parentTaskDef,
+          targetGroupArn: tgArn
         });
-    } catch (error) {
-        if (!res.headersSent) {
-            res.status(500).json({ message: `Failed to update redirect rules: ${error.message}.` });
-        }
-        next(error);
+      }
+
+      for (const arn of [httpArn, httpsArn]) {
+        const prio = await getFreePriority(arn);
+        await elbv2.send(new CreateRuleCommand({
+          ListenerArn: arn,
+          Priority: prio,
+          Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
+          Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
+        }));
+      }
+
+      await pool.query(
+        "UPDATE domains SET redirect_target=NULL, updated_at=$1 WHERE domain_id=$2",
+        [new Date().toISOString(), domainID]
+      );
+
+      if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
+        await cloudfront.send(new CreateInvalidationCommand({
+          DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
+          InvalidationBatch: {
+            CallerReference: `redirect-remove-${domainID}-${Date.now()}`,
+            Paths: { Quantity: 1, Items: ["/*"] }
+          }
+        }));
+      }
+
+      return res.json({ success: true, message: "Redirect removed & host restored." });
     }
+
+    for (const arn of [httpArn, httpsArn]) {
+      const prio = await getFreePriority(arn);
+      await elbv2.send(new CreateRuleCommand({
+        ListenerArn: arn,
+        Priority: prio,
+        Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
+        Actions: [{
+          Type: "redirect",
+          RedirectConfig: {
+            Protocol: "HTTPS",
+            Port: "443",
+            Host: targetFqdn,
+            Path: "/",
+            Query: "",
+            StatusCode: "HTTP_302"
+          }
+        }]
+      }));
+    }
+
+    await pool.query(
+      "UPDATE domains SET redirect_target=$1, updated_at=$2 WHERE domain_id=$3",
+      [targetFqdn.replace(/\.stackforgeengine\.com$/i, ""), new Date().toISOString(), domainID]
+    );
+
+    if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
+      await cloudfront.send(new CreateInvalidationCommand({
+        DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
+        InvalidationBatch: {
+          CallerReference: `redirect-${domainID}-${Date.now()}`,
+          Paths: { Quantity: 2, Items: ["/", "/*"] }
+        }
+      }));
+    }
+
+    return res.json({ success: true, message: "Redirect updated." });
+
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).json({ message: `Failed to update redirect rules: ${err.message}.` });
+    }
+    next(err);
+  }
 });
 
 router.post("/edit-environment", authenticateToken, async (req, res, next) => {
-    const { userID, organizationID, projectID, domainID, environment } = req.body;
+  const { userID, organizationID, projectID, domainID, environment } = req.body;
 
-    if (!userID || !organizationID || !projectID || !domainID || !environment) {
-        return res.status(400).json({ message: "userID, organizationID, projectID, domainID, and environment are required." });
+  if (!userID || !organizationID || !projectID || !domainID || !environment) {
+    return res.status(400).json({ message: "userID, organizationID, projectID, domainID, and environment are required." });
+  }
+
+  const validEnvironments = ["Production", "Preview"];
+  if (!validEnvironments.includes(environment)) {
+    return res.status(400).json({ message: "Environment must be 'Production' or 'Preview'." });
+  }
+
+  try {
+    const projectResult = await pool.query(
+      "SELECT name FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
+      [projectID, organizationID, userID]
+    );
+    if (projectResult.rows.length === 0) {
+      return res.status(404).json({ message: "Project not found or access denied." });
+    }
+    const projectName = projectResult.rows[0].name.toLowerCase();
+
+    const domainResult = await pool.query(
+      "SELECT domain_name FROM domains WHERE domain_id = $1 AND project_id = $2 AND orgid = $3",
+      [domainID, projectID, organizationID]
+    );
+    if (domainResult.rows.length === 0) {
+      return res.status(404).json({ message: "Domain not found or access denied." });
     }
 
-    const validEnvironments = ["Production", "Preview"];
-    if (!validEnvironments.includes(environment)) {
-        return res.status(400).json({ message: "Environment must be 'Production' or 'Preview'." });
-    }
-
-    try {
-        const projectResult = await pool.query(
-            "SELECT name FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
-            [projectID, organizationID, userID]
-        );
-        if (projectResult.rows.length === 0) {
-            return res.status(404).json({ message: "Project not found or access denied." });
-        }
-        const projectName = projectResult.rows[0].name.toLowerCase();
-
-        const domainResult = await pool.query(
-            "SELECT domain_name FROM domains WHERE domain_id = $1 AND project_id = $2 AND orgid = $3",
-            [domainID, projectID, organizationID]
-        );
-        if (domainResult.rows.length === 0) {
-            return res.status(404).json({ message: "Domain not found or access denied." });
-        }
-
-        const timestamp = new Date().toISOString();
-        await pool.query(
-            `UPDATE domains
+    const timestamp = new Date().toISOString();
+    await pool.query(
+      `UPDATE domains
              SET environment = $1,
                  updated_at = $2
              WHERE domain_id = $3`,
-            [environment, timestamp, domainID]
-        );
+      [environment, timestamp, domainID]
+    );
 
-        await pool.query(
-            `INSERT INTO deployment_logs
+    await pool.query(
+      `INSERT INTO deployment_logs
              (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [organizationID, userID, projectID, projectName, "edit_environment", uuidv4(), timestamp, "127.0.0.1"]
-        );
+      [organizationID, userID, projectID, projectName, "edit_environment", uuidv4(), timestamp, "127.0.0.1"]
+    );
 
-        res.status(200).json({ message: "Environment updated successfully.", environment });
-    } catch (error) {
-        if (!res.headersSent) {
-            res.status(500).json({ message: `Failed to update environment: ${error.message}.` });
-        }
-        next(error);
+    res.status(200).json({ message: "Environment updated successfully.", environment });
+  } catch (error) {
+    if (!res.headersSent) {
+      res.status(500).json({ message: `Failed to update environment: ${error.message}.` });
     }
+    next(error);
+  }
 });
 
 module.exports = router;

@@ -52,7 +52,7 @@
 }
 
 .updateDetailsTopBar span {
-    display: flex; 
+    display: flex;
     justify-content: center;
     align-items: center;
 }
@@ -92,15 +92,15 @@
 }
 
 .updateDetailsTopBar span div span small {
-    font-weight: 500; 
+    font-weight: 500;
     margin-left: 0.4rem;
-    opacity: 0.8; 
+    opacity: 0.8;
     font-style: italic;
-    
+
 }
 
 .updateDetailsTopBarCommitInfo {
-    display: flex; 
+    display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: flex-start !important;
@@ -109,57 +109,58 @@
 }
 
 .updateDetailsTopBarCommitInfo span {
-    display: flex; 
+    display: flex;
     flex-direction: column;
     align-items: flex-end;
-    justify-content: center; 
+    justify-content: center;
     gap: 0.4rem;
 }
 
 @media (max-width: 700px) {
     .updateDetailsTopBarCommitInfo span {
-        display: none; 
+        display: none;
     }
 }
 
 .updateDetailsTopBarCommitInfo span label {
-    display: flex; 
-    justify-content: center; 
+    display: flex;
+    justify-content: center;
     align-items: center;
     gap: 0.4rem;
-    white-space: nowrap; 
+    white-space: nowrap;
     overflow: scroll !important;
 }
 
 .updateDetailsTopBarCommitInfoBranch {
-    font-size: 0.9rem; 
-    font-weight: 700; 
-    color: #9B68DD; 
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #9B68DD;
     font-style: italic;
 }
 
 .updateDetailsTopBarCommitInfoSha {
-    gap: 0; 
-    font-size: 0.8rem; 
-    font-weight: 600; 
-    color: #c1c1c1; 
+    gap: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #c1c1c1;
     font-style: italic;
     white-space: nowrap;
     overflow: scroll !important;
 }
 
 .updateDetailsTopBarCommitInfoSha a {
-    font-weight: 900; 
-    color: #c1c1c1; 
+    font-weight: 900;
+    color: #c1c1c1;
     text-decoration: underline;
-    transition: transform 0.3s ease, opacity 0.3s ease; 
+    transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 .updateDetailsTopBarCommitInfoSha a:hover {
-    border: none; 
-    outline: none; 
-    opacity: 0.6;;
-    transform: scale(1.02); 
+    border: none;
+    outline: none;
+    opacity: 0.6;
+    ;
+    transform: scale(1.02);
 }
 
 .updateDetailsTopBarCommitInfoSha button {
@@ -168,25 +169,26 @@
 
 .updateDetailsTopBarCommitInfoSha button {
     background-color: rgba(0, 0, 0, 0.0);
-    padding: 0; 
-    color: #c1c1c1; 
-    font-size: 0.8rem; 
-    border: none; 
+    padding: 0;
+    color: #c1c1c1;
+    font-size: 0.8rem;
+    border: none;
     outline: none;
-    cursor: pointer; 
-    transition: transform 0.3s ease, opacity 0.3s ease; 
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 .updateDetailsTopBarCommitInfoSha button:hover {
-    border: none; 
-    outline: none; 
-    opacity: 0.6;;
-    transform: scale(1.1); 
+    border: none;
+    outline: none;
+    opacity: 0.6;
+    ;
+    transform: scale(1.1);
 }
 
 .updateDetailsTopBarCommitInfoSha button:focus {
-    border: none; 
-    outline: none; 
+    border: none;
+    outline: none;
     opacity: 0.6;
 }
 
@@ -305,8 +307,9 @@
 .updateContentMainFlexWrapper {
     width: calc(100% - 220px);
     min-height: 100%;
-    max-height: 100%; ;
-    display: flex; 
+    max-height: 100%;
+    ;
+    display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
@@ -322,7 +325,7 @@
     position: relative;
     box-sizing: border-box;
     padding: 4vh 60px 10vh 60px;
-    width: 100%; 
+    width: 100%;
 }
 
 @media (max-width: 700px) {
@@ -332,8 +335,8 @@
 }
 
 .updateContentMainTopBarSupplement {
-    position: sticky; 
-    top: 0; 
+    position: sticky;
+    top: 0;
     right: 0;
     left: 0;
     width: 100%;
@@ -348,60 +351,68 @@
     justify-content: space-between;
     align-items: center;
     padding: 0 2vw;
-    z-index: 2; 
+    z-index: 2;
 }
 
 .updateDetailsTopBarCommitStatus {
-    font-size: 0.8rem; 
-    font-weight: 500; 
+    font-size: 0.8rem;
+    font-weight: 500;
     color: #c1c1c1;
+    white-space: nowrap;
+    overflow: hidden; 
+    text-overflow: ellipsis;
+    padding-right: 1rem;
 }
 
 .updateDetailsTopBarCommitStatus i {
     font-style: italic;
-    font-weight: 800; 
-    color: #f1f1f1; 
+    font-weight: 800;
+    color: #f1f1f1;
     text-decoration: underline;
 }
 
 .updateDetailsTopBarCommitStatus span {
     margin: 0;
-    margin-left: 0.6rem; 
+    margin-left: 0.6rem;
     padding: 0;
 }
 
 .updateDetailsTopBarSupplementButtonFlex {
-    display: flex; 
+    display: flex;
     align-items: center;
-    justify-content: center; 
-    gap: 1rem; 
+    justify-content: center;
+    gap: 1rem;
 }
+
 .updateDetailsTopBarSupplementButtonFlex button {
     padding: 0.4rem 16px;
     border-radius: 4px;
     border: none;
     font-weight: 600;
     cursor: pointer;
-    box-sizing: border-box; 
-    font-size: 0.7rem; 
-    font-weight: 700; 
+    box-sizing: border-box;
+    font-size: 0.7rem;
+    font-weight: 700;
     color: #f1f1f1;
     box-shadow: 0 0 10px solid black;
     border: 1px solid #c1c1c1;
-    outline: none; 
+    outline: none;
     background-color: rgba(255, 255, 255, 0.1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .updateDetailsTopBarSupplementButtonFlex button:hover {
-    opacity: 0.6; 
+    opacity: 0.6;
     border: 1px solid #c1c1c1;
-    outline: none; 
+    outline: none;
 }
 
 .updateDetailsTopBarSupplementButtonFlex button:focus {
-    opacity: 0.6; 
+    opacity: 0.6;
     border: 1px solid #c1c1c1;
-    outline: none; 
+    outline: none;
 }
 
 
@@ -425,27 +436,27 @@
     max-width: 90%;
     box-shadow: 0 0px 20px black;
     overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.2); 
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .projectUpdateModalHeader {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    height: 60px; 
-    width: 100%; 
-    box-sizing: border-box; 
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2); 
+    height: 60px;
+    width: 100%;
+    box-sizing: border-box;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
     background-color: #212121;
-    padding: 20px 20px; 
+    padding: 20px 20px;
 }
 
 .projectUpdateModalHeader h2 {
     margin: 0;
-    font-size: 1rem; 
-    font-weight: 600; 
-    color: #c1c1c1; 
-    font-style: italic; 
+    font-size: 1rem;
+    font-weight: 600;
+    color: #c1c1c1;
+    font-style: italic;
 }
 
 .projectUpdateModalHeader button {
@@ -455,128 +466,347 @@
     color: #c1c1c1;
     cursor: pointer;
     transition: transform 0.3s ease, opacity 0.3s ease;
-    border: none; 
-    outline: none; 
+    border: none;
+    outline: none;
     padding: 0;
 }
 
 .projectUpdateModalHeader button:hover {
-    opacity: 0.6; 
-    transform: scale(1.1); 
-    border: none; 
-    outline: none; 
+    opacity: 0.6;
+    transform: scale(1.1);
+    border: none;
+    outline: none;
 }
 
 .projectUpdateModalHeader button:focus {
-    opacity: 0.6; 
-    border: none; 
-    outline: none; 
+    opacity: 0.6;
+    border: none;
+    outline: none;
 }
 
 .projectUpdateModalBody {
-    display: flex; 
-    flex-direction: column; 
+    display: flex;
+    flex-direction: column;
     justify-content: flex-start;
     align-items: center;
     box-sizing: border-box;
     overflow: scroll;
-    background-color: #191919; 
-    position: relative; 
+    background-color: #191919;
+    position: relative;
 }
 
 .projectUpdateModalBody p {
     font-size: 0.9rem;
     color: #ddd;
-    width: 100%; 
-    background-color: #191919; 
-    position: sticky; 
-    top: 0; 
-    padding: 10px 20px 0 20px; 
+    width: 100%;
+    background-color: #191919;
+    position: sticky;
+    top: 0;
+    padding: 10px 20px 0 20px;
     box-sizing: border-box;
-    margin: 0; 
-    font-size: 0.8rem; 
-    font-weight: 600; 
-    color: #c1c1c1; 
-    text-overflow: ellipsis; 
-    overflow: hidden; 
-    white-space: nowrap; 
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #c1c1c1;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
 }
 
 .projectUpdateModalBody p strong {
-    font-weight: 500; 
-    margin-left: 0.4rem; 
+    font-weight: 500;
+    margin-left: 0.4rem;
     font-style: italic;
 }
 
 .projectUpdateModalBody p a {
-    color: #c1c1c1; 
+    color: #c1c1c1;
     text-decoration: underline;
     font-style: italic;
-    cursor: pointer; 
+    cursor: pointer;
     transition: transform 0.3s ease, opacity 0.3s ease;
     border: none;
-    outline: none; 
+    outline: none;
 }
 
 .projectUpdateModalBody p a:hover {
-    opacity: 0.6; 
-    transform: scale(1.02); 
-    border: none; 
-    outline: none; 
+    opacity: 0.6;
+    transform: scale(1.02);
+    border: none;
+    outline: none;
 }
 
 .projectUpdateModalBody p a:focus {
-    border: none; 
-    outline: none; 
+    border: none;
+    outline: none;
 }
 
 .projectUpdateDeploymentList {
     display: flex;
     flex-direction: column;
+    justify-content: flex-start;
     box-sizing: border-box;
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 4px;
-    width: 90%; 
-    height: 200px; 
-    margin: 20px 0 40px 0; 
-    position: relative; 
+    width: 90%;
+    height: 200px;
+    margin: 20px 0 40px 0;
+    position: relative;
     overflow: hidden;
-    overflow-y: auto; 
+    overflow-y: auto;
 }
 
+.projectUpdateDeploymentContentShort, 
 .projectUpdateDeploymentContent {
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    justify-content: flex-start;
+    align-items: flex-start;
     box-sizing: border-box;
     border: none;
     border-radius: 4px;
-    width: 90%; 
-    margin: 20px 20px 20px 20px; 
-    position: relative; 
+    width: 90%;
+    margin: 20px 0px 20px 0px;
+    position: relative;
     overflow: hidden;
-    overflow-y: auto; 
+    overflow-y: auto;
 }
 
-.projectUpdateInputWrapper, 
-.projectUpdateInputWrapperRounded {
-    position: sticky; 
-    top: 0; 
-    width: 100%; 
-    min-height: 40px; 
-    max-height: 40px; 
-    background-color: #131313;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    display: flex; 
+.projectUpdateDeploymentContent {
+    min-height: 200px; 
+    max-height: 200px; 
+}
+
+.projectUpdateDeploymentContentShort {
+    min-height: 150px; 
+    max-height: 150px; 
+}
+
+.projectUpdateDeploymentContent small, 
+.projectUpdateDeploymentContentShort small {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #c1c1c1;
+    margin: 0;
+    padding: 0 0 0 0;
+    position: sticky;
+    top: 0;
+    width: 100%;
+    min-height: 40px;
+    max-height: 40px;
+    background-color: #191919;
+    z-index: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.projectUpdateDeploymentContentHeaderFlex {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    min-height: 40px;
+    max-height: 40px;
+    width: 100%;
+    z-index: 2;
+    padding: 0 0 1rem 0;
+    background-color: #191919;
+}
+
+.projectUpdateDeploymentContentHeaderFlex label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #c1c1c1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.projectUpdateDeploymentContentHeaderFlex button svg {
+    margin-right: 0.6rem;
+    font-size: 1rem;
+}
+
+
+.projectUpdateDeploymentContentHeaderFlex button {
+    background-color: rgba(255, 255, 255, 0.0);
+    border: none;
+    outline: none;
+    padding: 0 0.4rem;
+    ;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #c1c1c1;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.projectUpdateDeploymentContentHeaderFlex button:hover {
+    opacity: 0.6;
+    transform: scale(1.02);
+    border: none;
+    outline: none;
+}
+
+.projectUpdateDeploymentContentHeaderFlex button:focus {
+    opacity: 1.0;
+    border: none;
+    outline: none;
+}
+
+.updateProjectEnvVarsWrapper {
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.updateProjectEnvVarsRow {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
+    padding: 0 0;
+    box-sizing: border-box;
+    gap: 0.6rem;
+}
+
+.updateProjectEnvVarsInput {
+    flex: 1;
+    background: transparent;
+    border: 1px solid #A3A3A3;
+    border-radius: 6px;
+    color: #c1c1c1;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+}
+
+.updateProjectEnvVarsInput::placeholder {
+    color: #8b8b8b;
+}
+
+.updateProjectEnvVarsRemoveBtn {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid #A3A3A3;
+    color: #c1c1c1;
+    border-radius: 6px;
+    width: 40px;
+    height: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
     align-items: center;
     justify-content: center;
-    box-sizing: border-box; 
+}
+
+.updateProjectEnvVarsRemoveBtn:hover {
+    opacity: 0.6;
+    outline: none;
+}
+
+.updateProjectEnvVarsRemoveBtn:focus {
+    opacity: 1.0;
+    outline: none;
+}
+
+.updateProjectOperationsField {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid #A3A3A3;
+    border-radius: 6px;
+    padding: 0rem 0.8rem;
+    width: 100%;
+    height: 40px;
+    box-shadow: 0 0 8px black;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    position: relative;
+}
+
+.updateProjectOperationsField input {
+    text-align: left;
+}
+
+.updateProjectOperationsField span {
+    display: flex;
+    align-items: center;
+}
+
+.updateProjectOperationsField p {
+    font-size: 0.7rem;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 0.6rem;
+    color: #c1c1c1;
+}
+
+.updateProjectOperationsField:hover {
+    opacity: 0.6;
+    border: 1px solid #A3A3A3;
+    outline: none;
+}
+
+.updateProjectOperationsField:focus {
+    border: 1px solid #A3A3A3;
+    outline: none;
+}
+
+.projectUpdateInputContainer {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    width: 100%;
+    height: 60px;
+    padding: 0 1rem;
+    box-sizing: border-box;
+    margin: 1rem 0;
+    gap: 0.6rem;
+}
+
+.projectUpdateInputContainer label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #c1c1c1;
+    padding: 0;
+    margin: 0;
+    font-style: italic;
+}
+
+.projectUpdateInputWrapper,
+.projectUpdateInputWrapperRounded {
+    position: sticky;
+    top: 0;
+    width: 100%;
+    min-height: 40px;
+    max-height: 40px;
+    background-color: #131313;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
     padding: 0 1rem;
 }
 
 .projectUpdateInputWrapperRounded {
-    border-radius: 4px; 
+    border-radius: 4px;
     border: 1px solid #c1c1c1;
 }
 
@@ -618,33 +848,33 @@
 }
 
 .projectUpdateDeploymentItem {
-    border: none; 
+    border: none;
     border-bottom: 1px solid #444;
     border-radius: 0;
     padding: 12px;
-    min-width: 100%; 
-    max-width: 100%; 
+    min-width: 100%;
+    max-width: 100%;
     height: 60px;
     background-color: #161616;
-    box-sizing: border-box; 
-    display: flex; 
-    justify-content: space-between; 
+    box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
 }
 
 .projectUpdateDeploymentItem span {
-    display: flex; 
+    display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 0.6rem; 
-    margin: 0; 
-    font-size: 0.7rem; 
-    font-weight: 700; 
-    color: #c1c1c1; 
+    padding: 0 0.6rem;
+    margin: 0;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #c1c1c1;
     gap: 1rem;
-    text-overflow: ellipsis; 
-    overflow: hidden; 
-    white-space: nowrap; 
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
 }
 
 .projectUpdateDeploymentItem span svg {
@@ -652,38 +882,48 @@
 }
 
 .projectUpdateDeploymentItem button {
-    background-color: #A3A3A3; 
-    border: 1px solid #222222; 
-    border-radius: 4px; 
-    color: #222222; 
-    padding: 0.4rem 0.8rem; 
+    background-color: #A3A3A3;
+    border: 1px solid #222222;
+    border-radius: 4px;
+    color: #222222;
+    padding: 0.4rem 0.8rem;
     font-size: 0.7rem;
-    font-weight: 800;  
-    outline: none; 
-    cursor: pointer; 
+    font-weight: 800;
+    outline: none;
+    cursor: pointer;
 }
 
 .projectUpdateDeploymentItem button:hover {
-    border: 1px solid #222222; 
-    outline: none; 
-    opacity: 0.6; 
+    border: 1px solid #222222;
+    outline: none;
+    opacity: 0.6;
 }
 
 .projectUpdateDeploymentItem button:focus {
-    border: 1px solid #222222; 
-    outline: none; 
+    border: 1px solid #222222;
+    outline: none;
 }
 
 .projectUpdateModalFooter {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    height: 60px; 
-    width: 100%; 
-    box-sizing: border-box; 
-    border-top: 1px solid rgba(255, 255, 255, 0.2); 
+    height: 60px;
+    width: 100%;
+    box-sizing: border-box;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
     background-color: #212121;
-    padding: 20px 20px; 
+    padding: 20px 20px;
+}
+
+.projectUpdateModalFooter span {
+    padding: 0;
+    margin: 0;
+    height: 100%;
+    gap: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .projectUpdateModalFooter button {
@@ -692,25 +932,25 @@
     border: none;
     font-weight: 600;
     cursor: pointer;
-    box-sizing: border-box; 
-    font-size: 0.8rem; 
-    font-weight: 700; 
+    box-sizing: border-box;
+    font-size: 0.8rem;
+    font-weight: 700;
     color: #f1f1f1;
     box-shadow: 0 0 10px solid black;
     border: 1px solid #c1c1c1;
-    outline: none; 
+    outline: none;
 }
 
 .projectUpdateModalFooter button:hover {
-    opacity: 0.6; 
+    opacity: 0.6;
     border: 1px solid #c1c1c1;
-    outline: none; 
+    outline: none;
 }
 
 .projectUpdateModalFooter button:focus {
-    opacity: 0.6; 
+    opacity: 1.0;
     border: 1px solid #c1c1c1;
-    outline: none; 
+    outline: none;
 }
 
 .projectUpdateModalFooter button:disabled {
@@ -937,10 +1177,206 @@
     padding-bottom: 10px;
 }
 
-
 .lineContent {
     flex: 1;
     display: flex;
     align-items: center;
     font-size: 0.8rem
 }
+
+.projectUpdateDomainItem,
+.projectUpdateDomainItemSupplement {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.projectUpdateDomainItem {
+    margin: 0.4rem 0;
+}
+
+.projectUpdateDomainItemSupplement {
+    padding: 0.4rem 1rem;
+    cursor: pointer;
+}
+
+.projectUpdateDomainItemSupplement:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.projectUpdateDomainItem p,
+.projectUpdateDomainItemSupplement p {
+    padding: 0;
+    margin: 0;
+    margin-left: 1rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #c1c1c1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-style: italic;
+}
+
+.projectUpdateDomainItemSupplement p:hover {
+    cursor: pointer;
+}
+
+.projectUpdateDomainItem span,
+.projectUpdateDomainItemSupplement span {
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+}
+
+.projectUpdateDomainItemSupplement span:hover {
+    cursor: pointer;
+}
+
+.projectUpdateDomainItem span label,
+.projectUpdateDomainItemSupplement span label {
+    padding: 0;
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #c1c1c1;
+    opacity: 0.8;
+    font-style: italic;
+}
+
+.projectUpdateDomainItemSupplement span label:hover {
+    cursor: pointer;
+}
+
+.projectUpdateDomainItem span i,
+.projectUpdateDomainItemSupplement span i {
+    padding: 0;
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #c1c1c1;
+}
+
+.projectUpdateDomainItemSupplement span i:hover {
+    cursor: pointer;
+}
+
+.noEnvVarsAvailable {
+    width: 100%; 
+    min-height: 100%; 
+    max-height: 100%; 
+    display: flex; 
+    flex-direction: column;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 1rem 0; 
+    box-sizing: border-box; 
+    border-radius: 0; 
+}
+
+.noEnvVarsAvailable svg {
+    margin: 0 0 0.6rem 0; 
+    font-size: 1.6rem; 
+    color: #c1c1c1;
+}
+
+.noEnvVarsAvailable p {
+    font-size: 0.8rem; 
+    font-weight: 700; 
+    color: #c1c1c1; 
+    text-align: center;
+}
+
+.noEnvVarsAvailable button svg {
+    margin-right: 0.6rem;
+    font-size: 0.9rem;
+    margin-bottom: 0;
+}
+
+.noEnvVarsAvailable button {
+    background-color: rgba(255, 255, 255, 0.0);
+    border: none;
+    outline: none;
+    padding: 0 0.4rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #c1c1c1;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    text-decoration: underline;
+    margin-top: 0.6rem
+}
+
+.noEnvVarsAvailable button:hover {
+    opacity: 0.6;
+    transform: scale(1.02);
+    border: none;
+    outline: none;
+}
+
+.noEnvVarsAvailable button:focus {
+    opacity: 1.0;
+    border: none;
+    outline: none;
+}
+
+.updateLogsHeader {
+    width: 100%; 
+    height: 30px; 
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding:  1rem 1rem 2rem 1rem; 
+    box-sizing: border-box;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin: 0;
+    box-sizing: border-box;
+  }
+  
+  .updateLogsHeader h3 {
+    font-size: 0.9rem; 
+    font-weight: 600; 
+    color: #f1f1f1; 
+    font-style: italic;
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+  }
+  
+  .updateLogsHeader span {
+    display: flex; 
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.8rem;
+  }
+  
+  .updateLogsHeader span button {
+    background-color: rgba(255,255,255,0.0);
+    padding: 0; 
+    color: #c1c1c1; 
+    border: none; 
+    outline: none; 
+    cursor: pointer; 
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+  
+  .updateLogsHeader span button:hover {
+    border: none; 
+    outline: none; 
+    opacity: 0.6; 
+    transform: scale(1.05); 
+  }
