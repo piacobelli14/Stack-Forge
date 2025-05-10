@@ -367,13 +367,13 @@
 
 .deploymentsContainer.grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 400px));
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
     gap: 30px;
     width: 100%;
-    min-width: 100%; 
-    max-width: 100%; 
-    justify-content: center;
-    justify-items: center; 
+    min-width: 100%;
+    max-width: 100%;
+    justify-content: start;
+    justify-items: stretch;
 }
 
 .deploymentsContainer.grid .deploymentCell {
@@ -383,7 +383,7 @@
     min-height: 210px;
     max-height: 210px;
     width: 100%;
-    max-width: 400px; 
+    max-width: none;
     background-color: rgba(0, 0, 0, 0.2);
     box-shadow: 0 0 10px black;
     position: relative;

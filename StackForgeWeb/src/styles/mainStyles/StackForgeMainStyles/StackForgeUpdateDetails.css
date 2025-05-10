@@ -58,7 +58,7 @@
 }
 
 .updateDetailsTopBar h1 {
-    font-size: 1.2rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #C6C6C6;
     text-overflow: ellipsis;
@@ -78,7 +78,7 @@
 }
 
 .updateDetailsTopBar span div span {
-    font-size: 1rem;
+    font-size: 0.8rem;
     font-weight: 700;
     color: #c1c1c1;
     text-overflow: ellipsis;
@@ -159,7 +159,6 @@
     border: none;
     outline: none;
     opacity: 0.6;
-    ;
     transform: scale(1.02);
 }
 
@@ -182,7 +181,6 @@
     border: none;
     outline: none;
     opacity: 0.6;
-    ;
     transform: scale(1.1);
 }
 
@@ -308,7 +306,6 @@
     width: calc(100% - 220px);
     min-height: 100%;
     max-height: 100%;
-    ;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -324,7 +321,7 @@
     flex-direction: column;
     position: relative;
     box-sizing: border-box;
-    padding: 4vh 60px 10vh 60px;
+    padding: 4vh 30px 10vh 30px;
     width: 100%;
 }
 
@@ -359,7 +356,7 @@
     font-weight: 500;
     color: #c1c1c1;
     white-space: nowrap;
-    overflow: hidden; 
+    overflow: hidden;
     text-overflow: ellipsis;
     padding-right: 1rem;
 }
@@ -414,7 +411,6 @@
     border: 1px solid #c1c1c1;
     outline: none;
 }
-
 
 .projectUpdateModalOverlay {
     position: fixed;
@@ -556,7 +552,8 @@
     overflow-y: auto;
 }
 
-.projectUpdateDeploymentContentShort, 
+.projectUpdateDeploymentContentShort,
+.projectUpdateDeploymentContentShortSpecial,
 .projectUpdateDeploymentContent {
     display: flex;
     flex-direction: column;
@@ -573,17 +570,19 @@
 }
 
 .projectUpdateDeploymentContent {
-    min-height: 200px; 
-    max-height: 200px; 
+    min-height: 200px;
+    max-height: 200px;
 }
 
-.projectUpdateDeploymentContentShort {
-    min-height: 150px; 
-    max-height: 150px; 
+.projectUpdateDeploymentContentShort, 
+.projectUpdateDeploymentContentShortSpecial {
+    min-height: 150px;
+    max-height: 150px;
 }
 
-.projectUpdateDeploymentContent small, 
-.projectUpdateDeploymentContentShort small {
+.projectUpdateDeploymentContent small,
+.projectUpdateDeploymentContentShort small, 
+.projectUpdateDeploymentContentShortSpecial small {
     font-size: 0.8rem;
     font-weight: 600;
     color: #c1c1c1;
@@ -599,6 +598,21 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.projectUpdateDeploymentContent small,
+.projectUpdateDeploymentContentShort small {
+    min-height: 40px;
+    max-height: 40px;
+}
+
+.projectUpdateDeploymentContentShortSpecial small {
+    min-height: 60px;
+    max-height: 60px;
+    margin-bottom: 0.4rem;
+    padding-bottom: 1rem;
+    border-bottom: 0.5px solid rgba(255, 255, 255, 0.2); 
+    box-sizing: border-box;
 }
 
 .projectUpdateDeploymentContentHeaderFlex {
@@ -629,13 +643,11 @@
     font-size: 1rem;
 }
 
-
 .projectUpdateDeploymentContentHeaderFlex button {
     background-color: rgba(255, 255, 255, 0.0);
     border: none;
     outline: none;
     padding: 0 0.4rem;
-    ;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -966,22 +978,10 @@
     background: rgba(255, 255, 255, 0.2);
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 .fileDiffCell {
     box-sizing: border-box;
     border: none;
-    border-radius: 6px;
+    border-radius: 2px;
     width: 100%;
     background-color: rgba(0, 0, 0, 0.2);
     box-shadow: 0 0 10px black;
@@ -996,21 +996,53 @@
 
 .fileDiffHeader {
     width: 100%;
-    height: 30px;
+    min-height: 40px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 2rem;
+    padding: 0 1rem;
     box-sizing: border-box;
-    background-color: #25242E;
+    background-color: #161b22;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    border-top-right-radius: 6px;
-    border-top-left-radius: 6px;
+    border-top-right-radius: 2px;
+    border-top-left-radius: 2px;
     margin: 0;
 }
 
+@media (max-width: 700px) {
+    .fileDiffCell {
+        border-radius: 6px;
+    }
+
+    .fileDiffHeader {
+        border-top-right-radius: 6px;
+        border-top-left-radius: 6px;
+    }
+}
+
+.diffSquare {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    margin-left: 4px;
+}
+
+.diffSquareAdd {
+    background-color: #238636;
+}
+
+.diffSquareRemove {
+    background-color: #da3633;
+    background-image: repeating-linear-gradient(45deg, transparent 0 4px, #ffffff 4px 6px);
+}
+
+.diffSquareNeutral {
+    background-color: #2d333b;
+}
+
 .fileDiffHeaderFileName {
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 600;
     color: #c1c1c1;
     font-style: italic;
@@ -1027,6 +1059,7 @@
     border: none;
     outline: none;
     transition: transform 0.3s ease, opacity 0.3s ease;
+    opacity: 0.9;
 }
 
 .fileDiffHeaderFileName button:hover {
@@ -1042,7 +1075,6 @@
     opacity: 0.6;
     transform: scale(1.1);
 }
-
 
 .fileDiffHeaderSupplement {
     display: flex;
@@ -1105,10 +1137,10 @@
 }
 
 .fileDiffChangeWrapper {
-    background-color: #1e1e1e;
+    background-color: #0d1117;
     overflow-x: auto;
     font-family: monospace;
-    line-height: 1.4;
+    line-height: 1.45;
     box-sizing: border-box;
     width: auto;
     min-width: max-content;
@@ -1118,14 +1150,14 @@
     width: 100%;
     padding: 0 0 0 0;
     box-sizing: border-box;
-    background-color: #1e1e1e;
+    background-color: #0d1117;
     border-bottom-right-radius: 6px;
     border-bottom-left-radius: 6px;
 }
 
 .fileDiffLine {
     white-space: pre;
-    font-size: 0.7rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: #c1c1c1;
     font-style: italic;
@@ -1134,7 +1166,7 @@
     align-items: stretch;
     margin: 0;
     padding: 0;
-    line-height: 1.5;
+    line-height: 1.45;
     gap: 0.6rem;
     min-width: max-content;
 }
@@ -1144,33 +1176,34 @@
 }
 
 .diffChunkHeader {
-    background-color: #444444;
-    color: #e2e2e2;
+    background-color: #21262d;
+    color: #79c0ff;
 }
 
 .diffAdd {
-    background-color: rgba(0, 255, 115, 0.3);
-    color: white;
+    background-color: #033a16;
+    color: #56d364;
 }
 
 .diffRemove {
-    background-color: rgba(200, 117, 117, 0.4);
-    color: white;
+    background-color: #3c0814;
+    color: #ff7b72;
 }
 
 .lineNumberMargin {
-    background-color: #2A2A2A !important;
+    background-color: #161b22 !important;
     align-self: stretch;
     display: flex;
     justify-content: flex-start;
     align-items: center;
     text-align: right;
-    min-width: 40px;
-    padding: 0.2rem 0.5rem;
+    min-width: 50px;
+    padding: 0.2rem 0.6rem;
     height: 100%;
     box-sizing: border-box;
-    font-size: 0.7rem;
-    border-right: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 0.75rem;
+    border-right: 1px solid #30363d;
+    color: #8b949e;
 }
 
 .fileDiffLine:last-child .lineNumberMargin {
@@ -1181,16 +1214,25 @@
     flex: 1;
     display: flex;
     align-items: center;
-    font-size: 0.8rem
+    font-size: 0.8rem;
 }
 
 .projectUpdateDomainItem,
-.projectUpdateDomainItemSupplement {
+.projectUpdateDomainItemSupplement, 
+.projectUpdateDomainItemSpecial {
     display: flex;
     justify-content: space-between;
     align-items: center;
     width: 100%;
     box-sizing: border-box;
+}
+
+.projectUpdateDomainItemSpecial {
+    position: sticky; 
+    top: 0; 
+    padding-bottom: 10vw; 
+    border-bottom: 1px solid grey;
+    margin: 0.6rem 0 0 0; 
 }
 
 .projectUpdateDomainItem {
@@ -1207,6 +1249,7 @@
 }
 
 .projectUpdateDomainItem p,
+.projectUpdateDomainItemSpecial p, 
 .projectUpdateDomainItemSupplement p {
     padding: 0;
     margin: 0;
@@ -1225,6 +1268,7 @@
 }
 
 .projectUpdateDomainItem span,
+.projectUpdateDomainItemSpecial span,
 .projectUpdateDomainItemSupplement span {
     padding: 0;
     margin: 0;
@@ -1240,6 +1284,7 @@
 }
 
 .projectUpdateDomainItem span label,
+.projectUpdateDomainItemSpecial span label,
 .projectUpdateDomainItemSupplement span label {
     padding: 0;
     margin: 0;
@@ -1255,6 +1300,7 @@
 }
 
 .projectUpdateDomainItem span i,
+.projectUpdateDomainItemSpecial span i,
 .projectUpdateDomainItemSupplement span i {
     padding: 0;
     margin: 0;
@@ -1268,28 +1314,28 @@
 }
 
 .noEnvVarsAvailable {
-    width: 100%; 
-    min-height: 100%; 
-    max-height: 100%; 
-    display: flex; 
+    width: 100%;
+    min-height: 100%;
+    max-height: 100%;
+    display: flex;
     flex-direction: column;
     align-items: center !important;
     justify-content: center !important;
-    padding: 1rem 0; 
-    box-sizing: border-box; 
-    border-radius: 0; 
+    padding: 1rem 0;
+    box-sizing: border-box;
+    border-radius: 0;
 }
 
 .noEnvVarsAvailable svg {
-    margin: 0 0 0.6rem 0; 
-    font-size: 1.6rem; 
+    margin: 0 0 0.6rem 0;
+    font-size: 1.6rem;
     color: #c1c1c1;
 }
 
 .noEnvVarsAvailable p {
-    font-size: 0.8rem; 
-    font-weight: 700; 
-    color: #c1c1c1; 
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #c1c1c1;
     text-align: center;
 }
 
@@ -1334,49 +1380,49 @@
 }
 
 .updateLogsHeader {
-    width: 100%; 
-    height: 30px; 
+    width: 100%;
+    height: 30px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding:  1rem 1rem 2rem 1rem; 
+    padding: 1rem 1rem 2rem 1rem;
     box-sizing: border-box;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     margin: 0;
     box-sizing: border-box;
-  }
-  
-  .updateLogsHeader h3 {
-    font-size: 0.9rem; 
-    font-weight: 600; 
-    color: #f1f1f1; 
+}
+
+.updateLogsHeader h3 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #f1f1f1;
     font-style: italic;
-    overflow: hidden; 
-    text-overflow: ellipsis; 
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  
-  .updateLogsHeader span {
-    display: flex; 
+}
+
+.updateLogsHeader span {
+    display: flex;
     justify-content: flex-start;
     align-items: center;
     gap: 0.6rem;
     font-size: 0.8rem;
-  }
-  
-  .updateLogsHeader span button {
-    background-color: rgba(255,255,255,0.0);
-    padding: 0; 
-    color: #c1c1c1; 
-    border: none; 
-    outline: none; 
-    cursor: pointer; 
+}
+
+.updateLogsHeader span button {
+    background-color: rgba(255, 255, 255, 0.0);
+    padding: 0;
+    color: #c1c1c1;
+    border: none;
+    outline: none;
+    cursor: pointer;
     transition: transform 0.3s ease, opacity 0.3s ease;
-  }
-  
-  .updateLogsHeader span button:hover {
-    border: none; 
-    outline: none; 
-    opacity: 0.6; 
-    transform: scale(1.05); 
-  }
+}
+
+.updateLogsHeader span button:hover {
+    border: none;
+    outline: none;
+    opacity: 0.6;
+    transform: scale(1.05);
+}

@@ -98,6 +98,47 @@ router.post("/git-commit-details", authenticateToken, async (req, res, next) => 
     }
 });
 
+router.post("/git-commit-details-file-content", authenticateToken, async (req, res, next) => {
+    const { userID, owner, repo, ref, filePath } = req.body;
+    try {
+        if (!owner || !repo || !ref || !filePath)
+            return res.status(400).json({ message: "owner, repo, ref, and filePath are required." });
+
+        const result = await pool.query(
+            "SELECT github_access_token FROM users WHERE username = $1",
+            [userID]
+        );
+        if (result.rows.length === 0 || !result.rows[0].github_access_token)
+            return res.status(400).json({ message: "GitHub account not connected." });
+
+        const githubAccessToken = result.rows[0].github_access_token;
+
+        let repoOwner = owner;
+        let repoName = repo;
+        if (repo.includes("/")) {
+            [repoOwner, repoName] = repo.split("/");
+        }
+
+        const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${encodeURIComponent(filePath)}?ref=${ref}`;
+        const gitResponse = await axios.get(url, {
+            headers: {
+                Authorization: `token ${githubAccessToken}`,
+                Accept: "application/vnd.github.v3.raw"
+            },
+            responseType: "arraybuffer"
+        });
+
+        const contentBuffer = Buffer.from(gitResponse.data, "binary");
+        res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+        return res.end(contentBuffer);
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: `Error fetching file content: ${error.message}` });
+        }
+        next(error);
+    }
+});
+
 router.post("/git-analytics", authenticateToken, async (req, res, next) => {
     const { userID, websiteURL, repository, owner, projectName } = req.body;
     let websiteAnalytics = null;
