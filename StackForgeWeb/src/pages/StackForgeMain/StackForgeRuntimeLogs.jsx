@@ -190,7 +190,7 @@ const StackForgeRuntimeLogs = () => {
       }}
     >
       <StackForgeNav activePage="main" />
-      {isLoaded ? (
+      {isLoaded && (
         <div className="runtimeLogsCellHeaderContainer">
           <div className="runtimeLogsTopBar">
             <div className="runtimeLogsTopBarSearchContainer">
@@ -448,9 +448,11 @@ const StackForgeRuntimeLogs = () => {
             </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {!isLoaded && (
         <div
-          className="addDomainsCellHeaderContainer"
+          className="projectDetailsCellHeaderContainer"
           style={{ justifyContent: "center" }}
         >
           <div className="loading-wrapper">

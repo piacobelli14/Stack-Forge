@@ -2,15 +2,15 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-    faBarsStaggered,
-    faCaretDown,
-    faCircleInfo,
-    faClock,
-    faExclamationTriangle,
-    faListUl,
-    faRefresh,
-    faSearch,
-    faThLarge
+  faBarsStaggered,
+  faCaretDown,
+  faCircleInfo,
+  faClock,
+  faExclamationTriangle,
+  faListUl,
+  faRefresh,
+  faSearch,
+  faThLarge
 } from "@fortawesome/free-solid-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeBuildLogs.css";
 import "../../styles/helperStyles/LoadingSpinner.css";
@@ -164,7 +164,7 @@ const StackForgeBuildLogs = () => {
       }}
     >
       <StackForgeNav activePage="main" />
-      {isLoaded ? (
+      {isLoaded && (
         <div className="buildLogsCellHeaderContainer">
           <div className="buildLogsTopBar">
             <div className="buildLogsTopBarSearchContainer">
@@ -268,7 +268,7 @@ const StackForgeBuildLogs = () => {
                         className="buildLogsNoResultsIcon"
                       />
                       <div className="buildLogsNoResultsText">
-                        No logs found for the selected filters. 
+                        No logs found for the selected filters.
                       </div>
                       <div className="buildLogsNoResultsButtons">
                         <button
@@ -309,7 +309,7 @@ const StackForgeBuildLogs = () => {
                         arrow={false}
                       >
                         <div className="buildLogsEntryCellMedium">
-                          {deploymentID} 
+                          {deploymentID}
                         </div>
                       </Tippy>
 
@@ -327,11 +327,11 @@ const StackForgeBuildLogs = () => {
                         theme="tooltip-light"
                         arrow={false}
                         placement="bottom"
-                        >
+                      >
                         <div className="buildLogsEntryCellLong">
-                            {log.log_messages}
+                          {log.log_messages}
                         </div>
-                        </Tippy>
+                      </Tippy>
 
                     </div>
                   ))
@@ -340,9 +340,11 @@ const StackForgeBuildLogs = () => {
             </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {!isLoaded && (
         <div
-          className="addDomainsCellHeaderContainer"
+          className="projectDetailsCellHeaderContainer"
           style={{ justifyContent: "center" }}
         >
           <div className="loading-wrapper">

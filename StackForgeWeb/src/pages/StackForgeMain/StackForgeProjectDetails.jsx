@@ -65,7 +65,7 @@ const StackForgeProjectDetails = () => {
     const [selectedSubdomain, setSelectedSubdomain] = useState(null);
     const projectID = location.state?.projectID;
     const repository = location.state?.repository;
-    const [domainSearchState, setDomainSearchState] = useState(false); 
+    const [domainSearchState, setDomainSearchState] = useState(false);
     const getFullDomainName = (sub) =>
         sub && sub.endsWith(".stackforgeengine.com")
             ? sub
@@ -136,7 +136,7 @@ const StackForgeProjectDetails = () => {
             if (!response.ok) throw new Error("Failed to fetch project details");
             const data = await response.json();
             setProjectDetails(data);
-        } catch (error) {}
+        } catch (error) { }
     };
 
     const fetchSnapshot = async () => {
@@ -154,7 +154,7 @@ const StackForgeProjectDetails = () => {
             if (!response.ok) throw new Error("Failed to fetch snapshot");
             const blob = await response.blob();
             setSnapshotUrl(URL.createObjectURL(blob));
-        } catch (error) {}
+        } catch (error) { }
     };
 
     const fetchUpdateMismatch = async () => {
@@ -178,7 +178,7 @@ const StackForgeProjectDetails = () => {
             if (!response.ok) throw new Error("Failed to fetch update mismatch");
             const data = await response.json();
             setUpdateMismatch(data);
-        } catch (error) {}
+        } catch (error) { }
     };
 
     const fetchCommits = async () => {
@@ -202,7 +202,7 @@ const StackForgeProjectDetails = () => {
             if (!response.ok) throw new Error("Failed to fetch commits");
             const data = await response.json();
             setCommits(data);
-        } catch (error) {}
+        } catch (error) { }
     };
 
     const fetchAnalytics = async () => {
@@ -225,7 +225,7 @@ const StackForgeProjectDetails = () => {
             if (!response.ok) throw new Error("Failed to fetch analytics");
             const data = await response.json();
             setAnalytics(data);
-        } catch (error) {}
+        } catch (error) { }
     };
 
     const openRollbackModal = () => {
@@ -261,7 +261,7 @@ const StackForgeProjectDetails = () => {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(
                     errorData.message ||
-                        `Rollback failed with status ${response.status}`
+                    `Rollback failed with status ${response.status}`
                 );
             }
             const data = await response.json();
@@ -369,22 +369,22 @@ const StackForgeProjectDetails = () => {
                                     <FontAwesomeIcon
                                         icon={faXmarkSquare}
                                         className="projectDetailsSearchIconSupplement"
-                                        onClick={()=>{setDomainSearchState(false)}}
+                                        onClick={() => { setDomainSearchState(false) }}
                                     />
                                 </div>
                             ) : (
                                 <>
                                     <small>You have {projectDetails?.domains?.length} subdomains on this project.</small>
 
-                                    <button onClick={()=>{setDomainSearchState(true)}}> 
-                                        <FontAwesomeIcon icon={faMagnifyingGlass}/>
+                                    <button onClick={() => { setDomainSearchState(true) }}>
+                                        <FontAwesomeIcon icon={faMagnifyingGlass} />
                                     </button>
                                 </>
                             )}
 
 
                         </div>
-                        
+
                         <div className="projectDetailsNavContainer">
                             <span>
                                 {filteredDomains.map((domain) => (
@@ -400,17 +400,17 @@ const StackForgeProjectDetails = () => {
                                         }
                                         style={
                                             selectedSubdomain ===
-                                            domain.domain_name
+                                                domain.domain_name
                                                 ? {
-                                                      borderBottom:
-                                                          "1px solid #c1c1c1",
-                                                      color: "#f5f5f5",
-                                                  }
+                                                    borderBottom:
+                                                        "1px solid #c1c1c1",
+                                                    color: "#f5f5f5",
+                                                }
                                                 : {
-                                                      borderBottom:
-                                                          "2px solid transparent",
-                                                      color: "#8c8c8c",
-                                                  }
+                                                    borderBottom:
+                                                        "2px solid transparent",
+                                                    color: "#8c8c8c",
+                                                }
                                         }
                                     >
                                         {domain.domain_name}
@@ -641,7 +641,7 @@ const StackForgeProjectDetails = () => {
                                                                     backgroundColor:
                                                                         analytics.websiteAnalytics
                                                                             .status ===
-                                                                        200
+                                                                            200
                                                                             ? "#21BF68"
                                                                             : "#E54B4B",
                                                                 }}
@@ -660,9 +660,9 @@ const StackForgeProjectDetails = () => {
                                                                 .status === 200
                                                                 ? "OK"
                                                                 : analytics
-                                                                      .websiteAnalytics
-                                                                      .error ||
-                                                                  "Error"}
+                                                                    .websiteAnalytics
+                                                                    .error ||
+                                                                "Error"}
                                                         </i>
                                                     </label>
                                                     <div
@@ -764,7 +764,6 @@ const StackForgeProjectDetails = () => {
                                 </div>
                             </div>
 
-                            {/* STAGED UPDATES */}
                             <div className="productionDeploymentCellShort">
                                 <div className="productionDeploymentCellShortHeader">
                                     <h2>
@@ -779,7 +778,7 @@ const StackForgeProjectDetails = () => {
                                 </div>
 
                                 {updateMismatch &&
-                                updateMismatch.hasUpdates ? (
+                                    updateMismatch.hasUpdates ? (
                                     <div className="projectUpdatesAvailableWrapper">
                                         <div
                                             className="projectUpdatesAvailableWrapperHeader"
@@ -804,6 +803,8 @@ const StackForgeProjectDetails = () => {
                                                         projectName:
                                                             projectDetails
                                                                 .project.name,
+                                                        domainName:
+                                                            selectedSubdomain
                                                     },
                                                 });
                                             }}
@@ -896,6 +897,8 @@ const StackForgeProjectDetails = () => {
                                                                             projectDetails
                                                                                 .project
                                                                                 .name,
+                                                                        domainName:
+                                                                            selectedSubdomain
                                                                     },
                                                                 }
                                                             );
@@ -1107,7 +1110,6 @@ const StackForgeProjectDetails = () => {
                                 </div>
                             </div>
 
-                            {/* PREVIOUS UPDATES */}
                             <div className="productionDeploymentCellShort">
                                 <div className="productionDeploymentCellShortHeader">
                                     <h2>Previous Updates</h2>
@@ -1116,7 +1118,7 @@ const StackForgeProjectDetails = () => {
                                     />
                                 </div>
                                 <div className="previousDeploymentsList">
-                                    {commits &&
+                                    {commits ?
                                         commits.map((commit) => (
                                             <div
                                                 key={commit.sha}
@@ -1146,6 +1148,8 @@ const StackForgeProjectDetails = () => {
                                                                     projectDetails
                                                                         .project
                                                                         .name,
+                                                                domainName:
+                                                                    selectedSubdomain
                                                             },
                                                         }
                                                     );
@@ -1189,7 +1193,12 @@ const StackForgeProjectDetails = () => {
                                                     />
                                                 </div>
                                             </div>
-                                        ))}
+                                        )
+                                    ) : (
+                                        <div className="loading-wrapper">
+                                            <div className="loading-circle" />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -1272,12 +1281,11 @@ const StackForgeProjectDetails = () => {
                                     .map((dep, idx) => (
                                         <div
                                             key={dep.deployment_id}
-                                            className={`rollbackDeploymentItem ${
-                                                selectedDeployment ===
-                                                dep.deployment_id
+                                            className={`rollbackDeploymentItem ${selectedDeployment ===
+                                                    dep.deployment_id
                                                     ? "selected"
                                                     : ""
-                                            }`}
+                                                }`}
                                             onClick={() =>
                                                 setSelectedDeployment(
                                                     dep.deployment_id

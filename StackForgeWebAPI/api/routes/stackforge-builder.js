@@ -194,6 +194,7 @@ router.post("/update-project", authenticateToken, async (req, res, next) => {
             return res.status(404).json({ message: "Project not found." });
         }
         const projectID = projectResult.rows[0].project_id;
+
         const domainResult = await pool.query(
             "SELECT domain_name, domain_id FROM domains WHERE project_id = $1 AND orgid = $2",
             [projectID, organizationID]
@@ -251,8 +252,10 @@ router.post("/update-project", authenticateToken, async (req, res, next) => {
                 buildCommand: buildCommand || domainDetails.build_command || "",
                 installCommand: installCommand || domainDetails.install_command || "npm install",
                 envVars: envVars || (domainDetails.env_vars ? JSON.parse(domainDetails.env_vars) : [])
-            }
+            };
+
             await deployManager.ensureECRRepo(projectName);
+
             await deployManager.createCodeBuildProject({
                 projectName,
                 subdomain: isBaseDomain ? null : subdomain,
@@ -290,15 +293,16 @@ router.post("/update-project", authenticateToken, async (req, res, next) => {
                 targetGroupArn
             });
 
-            await pool.query(
+            const updateResult = await pool.query(
                 "UPDATE deployments SET status = $1, updated_at = $2 WHERE project_id = $3 AND domain_id = $4 AND status = $5",
                 ["inactive", timestamp, projectID, domainId, "active"]
             );
 
-            await pool.query(
+            const insertResult = await pool.query(
                 `INSERT INTO deployments 
                  (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                 RETURNING deployment_id`,
                 [
                     organizationID,
                     userID,
@@ -320,6 +324,9 @@ router.post("/update-project", authenticateToken, async (req, res, next) => {
                     JSON.stringify(config.envVars)
                 ]
             );
+            if (insertResult.rows.length === 0) {
+                throw new Error("Failed to insert new deployment record.");
+            }
 
             await pool.query(
                 `UPDATE domains
@@ -338,6 +345,15 @@ router.post("/update-project", authenticateToken, async (req, res, next) => {
                     subdomain,
                     projectID
                 ]
+            );
+
+            await pool.query(
+                `UPDATE projects
+                 SET previous_deployment = current_deployment,
+                     current_deployment = $1,
+                     updated_at = $2
+                 WHERE project_id = $3`,
+                [deploymentId, timestamp, projectID]
             );
 
             await pool.query(
@@ -412,6 +428,7 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
     try {
         writeChunk(`Starting update for project: ${projectName}, subdomains: ${subdomains.join(", ")}\n`);
         writeChunk(`Verifying project exists: ${projectName}\n`);
+
         const projectResult = await pool.query(
             "SELECT project_id FROM projects WHERE orgid = $1 AND username = $2 AND name = $3",
             [organizationID, userID, projectName]
@@ -424,6 +441,7 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
         const projectID = projectResult.rows[0].project_id;
 
         writeChunk(`Validating subdomains: ${subdomains.join(", ")}\n`);
+
         const domainResult = await pool.query(
             "SELECT domain_name, domain_id FROM domains WHERE project_id = $1 AND orgid = $2",
             [projectID, organizationID]
@@ -437,6 +455,7 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
         }
 
         writeChunk(`Fetching GitHub access token for user: ${userID}\n`);
+
         const tokenResult = await pool.query(
             "SELECT github_access_token FROM users WHERE username = $1",
             [userID]
@@ -449,6 +468,7 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
         const githubAccessToken = tokenResult.rows[0].github_access_token;
 
         writeChunk(`Fetching commit SHA for repository: ${repository}, branch: ${branch}\n`);
+
         let commitSha;
         try {
             commitSha = await deployManager.getLatestCommitSha(repository, branch, githubAccessToken);
@@ -497,6 +517,7 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
                 envVars: envVars || (domainDetails.env_vars ? JSON.parse(domainDetails.env_vars) : [])
             };
             writeChunk(`Config for subdomain ${subdomain}: ${JSON.stringify(config)}\n`);
+
             writeChunk(`Ensuring ECR repository for projectName: ${projectName}\n`);
             await deployManager.ensureECRRepo(projectName);
 
@@ -525,6 +546,7 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
                 capturingOnData
             );
             writeChunk(`CodeBuild completed: imageUri=${imageUri}\n`);
+
             writeChunk(`Creating task definition: projectName=${projectName}, subdomain=${isBaseDomain ? null : subdomain}\n`);
             const taskDefArn = await deployManager.createTaskDef({
                 projectName,
@@ -533,9 +555,11 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
                 envVars: config.envVars
             });
             writeChunk(`Task definition created: taskDefArn=${taskDefArn}\n`);
+
             writeChunk(`Ensuring target group: projectName=${projectName}, subdomain=${isBaseDomain ? null : subdomain}\n`);
             const targetGroupArn = await deployManager.ensureTargetGroup(projectName, isBaseDomain ? null : subdomain);
             writeChunk(`Target group ensured: targetGroupArn=${targetGroupArn}\n`);
+
             writeChunk(`Creating/updating ECS service: projectName=${projectName}, subdomain=${isBaseDomain ? null : subdomain}\n`);
             await deployManager.createOrUpdateService({
                 projectName,
@@ -545,14 +569,16 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
             });
 
             writeChunk(`Updating deployments table for deploymentId: ${deploymentId}\n`);
-            await pool.query(
+            const updateResult = await pool.query(
                 "UPDATE deployments SET status = $1, updated_at = $2 WHERE project_id = $3 AND domain_id = $4 AND status = $5",
                 ["inactive", timestamp, projectID, domainId, "active"]
             );
-            await pool.query(
+
+            const insertResult = await pool.query(
                 `INSERT INTO deployments 
                  (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                 RETURNING deployment_id`,
                 [
                     organizationID,
                     userID,
@@ -574,6 +600,9 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
                     JSON.stringify(config.envVars)
                 ]
             );
+            if (insertResult.rows.length === 0) {
+                throw new Error("Failed to insert new deployment record.");
+            }
 
             writeChunk(`Updating domains table for subdomain: ${subdomain}\n`);
             await pool.query(
@@ -593,6 +622,16 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
                     subdomain,
                     projectID
                 ]
+            );
+
+            writeChunk(`Updating projects table for deploymentId: ${deploymentId}\n`);
+            await pool.query(
+                `UPDATE projects
+                 SET previous_deployment = current_deployment,
+                     current_deployment = $1,
+                     updated_at = $2
+                 WHERE project_id = $3`,
+                [deploymentId, timestamp, projectID]
             );
 
             writeChunk(`Logging deployment: deploymentId=${deploymentId}\n`);
@@ -617,6 +656,7 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
 
             writeChunk(`Recording build logs for deploymentId: ${deploymentId}\n`);
             await deployManager.recordBuildLogs(organizationID, userID, deploymentId, logDir, streamBuffer);
+
             writeChunk(`Recording runtime logs for deploymentId: ${deploymentId}\n`);
             await deployManager.recordRuntimeLogs(organizationID, userID, deploymentId, projectName);
 

@@ -40,7 +40,8 @@ const StackForgeUpdateDetails = () => {
     owner,
     branchName,
     projectID,
-    projectName
+    projectName,
+    domainName
   } = location.state || {};
 
   const [commitData, setCommitData] = useState(null);
@@ -236,15 +237,44 @@ const StackForgeUpdateDetails = () => {
       });
       if (!r.ok) throw new Error(`Failed to fetch domains: ${r.status}`);
       const d = await r.json();
-      setDomains(
-        d.domains.map((dom) => ({
-          ...dom,
-          environment: dom.environment
-            ? dom.environment.charAt(0).toUpperCase() +
-              dom.environment.slice(1).toLowerCase()
-            : dom.environment
-        })) || []
+      const enriched = await Promise.all(
+        d.domains.map(async (dom) => {
+          const res = await fetch(
+            "http://localhost:3000/git-repo-update-details-relative-to-deployment",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                userID,
+                organizationID,
+                projectID,
+                owner,
+                repo: repository,
+                commitSha: commitDetails?.sha,
+                domainName: dom.domainName
+              })
+            }
+          );
+          let allowed = false;
+          if (res.ok) {
+            const s = await res.json();
+            if (s.status === "after") allowed = true;
+          }
+          return {
+            domainID: dom.domainID,
+            domainName: dom.domainName,
+            environment: dom.environment
+              ? dom.environment.charAt(0).toUpperCase() +
+                dom.environment.slice(1).toLowerCase()
+              : dom.environment,
+            allowed
+          };
+        })
       );
+      setDomains(enriched.filter((e) => e.allowed));
     } catch {}
   };
 
@@ -284,7 +314,6 @@ const StackForgeUpdateDetails = () => {
     setExpandedFullFiles((p) => ({ ...p, [file.sha]: true }));
   };
 
-
   const checkCommitRelativeToDeployment = async () => {
     try {
       const r = await fetch(
@@ -301,7 +330,8 @@ const StackForgeUpdateDetails = () => {
             projectID,
             owner,
             repo: repository,
-            commitSha: commitDetails?.sha
+            commitSha: commitDetails?.sha,
+            domainName
           })
         }
       );
@@ -899,7 +929,7 @@ const StackForgeUpdateDetails = () => {
               <h2>
                 Update Project: <i>{projectName}</i>
               </h2>
-              <button onClick={closeUpdateProjectModal}>
+              <button onClick={closeUpdateProjectModal} disabled={((modalStep === 5 && !isBuilding && successfulDeployment) || isBuilding) ? true : false} style={{"opacity": (modalStep === 5 && !isBuilding && successfulDeployment) || isBuilding ? "0.6" : "1.0"}}>
                 <FontAwesomeIcon icon={faXmark} />
               </button>
             </div>
@@ -922,6 +952,12 @@ const StackForgeUpdateDetails = () => {
                       <p>Select All</p>
                     </div>
                   </small>
+
+                  {domains.length === 0 && (
+                    <div className="noEnvVarsAvailable">
+                      <p>No eligible domains—this commit is already deployed everywhere.</p>
+                    </div>
+                  )}
 
                   {domains.map((d) => (
                     <div key={d.domainID} className="projectUpdateDomainItem">
@@ -1252,11 +1288,12 @@ const StackForgeUpdateDetails = () => {
             </div>
             <div className="projectUpdateModalFooter">
               <button
-                disabled={successfulDeployment}
+                disabled={successfulDeployment || isBuilding}
                 onClick={closeUpdateProjectModal}
               >
                 Cancel
               </button>
+              
               <span>
                 {modalStep > 0 && modalStep < 5 && (
                   <button onClick={() => setModalStep(modalStep - 1)}>
