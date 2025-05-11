@@ -179,6 +179,189 @@
     outline: none;
 }
 
+.projectDetailsTopBarSupplement {
+    position: sticky;
+    top: 0;
+    right: 0;
+    left: 0;
+    min-width: 100%;
+    max-width: 100%;
+    min-height: 40px;
+    max-height: 40px;
+    background-color: #1B1A24;
+    border: none;
+    border-bottom: 0.2vh solid rgba(255, 255, 255, 0.1);
+    box-sizing: border-box;
+    display: flex;
+    gap: 2vw;                       
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0;
+    z-index: 2;
+    overflow: hidden;
+}
+
+.projectDetailsSearchContainer, 
+.projectDetailsSearchContainerSearchMode {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    height: 35px;
+    box-sizing: border-box;
+    overflow: visible;
+    background-color: rgba(0,0,0,0.2);
+    border-right: 0.2vh solid rgba(255, 255, 255, 0.1);
+    width: fit-content;         
+    min-width: max-content;
+    padding: 0 2rem;
+    gap: 1rem; 
+}
+
+.projectDetailsSearchContainer small {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #c1c1c1;
+    opacity: 0.9;
+    width: 100%;
+    white-space: nowrap;
+}
+
+.projectDetailsSearchContainer button {
+    background-color: rgba(255,255,255,0.0);
+    padding: 0; 
+    font-size: 0.8rem; 
+    font-weight: 900; 
+    color: #c1c1c1;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    cursor: pointer; 
+    border: none; 
+    outline: none; 
+}
+
+.projectDetailsSearchContainer button:hover {
+    opacity: 0.6; 
+    transform: scale(1.1);
+    border: none; 
+    outline: none; 
+}
+
+
+.projectDetailsSearchContainer button:focus {
+    opacity: 1; 
+    transform: scale(1.1);
+    border: none; 
+    outline: none; 
+}
+
+.projectDetailsSearchBarWrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.8rem;
+    width: 100%;
+    height: 100%; 
+    box-sizing: border-box;
+    background-color: rgba(255, 255, 255, 0.0); 
+    border: none; 
+}
+
+.projectDetailsSearchIcon,
+.projectDetailsSearchIconSupplement {
+    color: #A3A3A3;
+    margin-right: 0.5rem;
+    font-size: 0.8rem; 
+    font-weight: 900; 
+}
+
+.projectDetailsSearchIconSupplement {
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    margin-left: 0.5rem;
+}
+
+.projectDetailsSearchIconSupplement:hover {
+    opacity: 0.6;
+    transform: scale(1.1);
+}
+
+.projectDetailsSearchInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #A3A3A3;
+}
+
+.searchInput::placeholder {
+    color: #8b8b8b;
+    font-size: 0.7rem;
+    font-weight: 800;
+}
+
+.projectDetailsNavContainer {
+    flex: 1 1 2;
+    min-width: 70%;                      
+    max-width: 70%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    box-sizing: border-box;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 0 0 2rem;
+}
+
+.projectDetailsNavContainer span {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 1vw;
+    min-width: max-content;
+    flex: 0 0 auto;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+    flex: 2;
+}
+
+.projectDetailsNavContainer span button {
+    background-color: transparent;
+    border-bottom: 2px solid #f5f5f5;
+    color: #f5f5f5;
+    padding: 0.4rem 0;
+    font-size: 0.7rem;
+    font-weight: 800;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+    outline: none;
+    white-space: nowrap;
+    overflow: hidden;
+    flex: 0 0 auto;
+    padding: 0 1rem;
+    font-style: italic;
+}
+
+.projectDetailsNavContainer span button:hover {
+    color: #f5f5f5;
+    border: none;
+    border-bottom: 2px solid #f5f5f5;
+    outline: none;
+}
+
+.projectDetailsNavContainer span button:focus {
+    color: #c1c1c1;
+    border: none;
+    outline: none;
+}
+
 .projectDetailsContainer {
     box-sizing: border-box;
     color: #000;

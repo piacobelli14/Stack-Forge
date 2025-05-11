@@ -32,7 +32,9 @@ import {
     faTriangleExclamation,
     faXmark,
     faCheckToSlot,
-    faExclamationTriangle
+    faExclamationTriangle,
+    faMagnifyingGlass,
+    faXmarkSquare
 } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeProjectDetails.css";
@@ -48,9 +50,10 @@ const StackForgeProjectDetails = () => {
     const location = useLocation();
     const isTouchDevice = useIsTouchDevice();
     const { token, userID, loading, organizationID } = useAuth();
+
     const [isLoaded, setIsLoaded] = useState(false);
     const [screenSize, setScreenSize] = useState(window.innerWidth);
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState("");
     const [projectDetails, setProjectDetails] = useState(null);
     const [snapshotUrl, setSnapshotUrl] = useState(null);
     const [commits, setCommits] = useState([]);
@@ -58,9 +61,19 @@ const StackForgeProjectDetails = () => {
     const [isRollbackModalOpen, setRollbackModalOpen] = useState(false);
     const [selectedDeployment, setSelectedDeployment] = useState(null);
     const [isRollbackLoading, setIsRollbackLoading] = useState(false);
-    const [updateMismatch, setUpdateMismatch] = useState(null); 
+    const [updateMismatch, setUpdateMismatch] = useState(null);
+    const [selectedSubdomain, setSelectedSubdomain] = useState(null);
     const projectID = location.state?.projectID;
     const repository = location.state?.repository;
+    const [domainSearchState, setDomainSearchState] = useState(false); 
+    const getFullDomainName = (sub) =>
+        sub && sub.endsWith(".stackforgeengine.com")
+            ? sub
+            : `${sub}.stackforgeengine.com`;
+    const filteredDomains =
+        projectDetails?.domains?.filter((d) =>
+            d.domain_name.toLowerCase().includes(searchTerm.toLowerCase())
+        ) ?? [];
 
     useEffect(() => {
         if (!loading && !token) navigate("/login");
@@ -69,7 +82,6 @@ const StackForgeProjectDetails = () => {
     useEffect(() => {
         const fetchData = async () => {
             await fetchProjectInfo();
-            
             setIsLoaded(true);
         };
         if (!loading && token) fetchData();
@@ -86,19 +98,26 @@ const StackForgeProjectDetails = () => {
     }, []);
 
     useEffect(() => {
-        if (projectDetails && projectDetails.project) {
-            fetchSnapshot();
+        if (projectDetails && projectDetails.project && selectedSubdomain) {
             fetchCommits();
-            fetchAnalytics();
             fetchUpdateMismatch();
+        }
+    }, [projectDetails, selectedSubdomain]);
+
+    useEffect(() => {
+        if (projectDetails?.domains?.length > 0) {
+            setSelectedSubdomain(projectDetails.domains[0].domain_name);
         }
     }, [projectDetails]);
 
     useEffect(() => {
-        const handleRejection = (event) => { };
-        window.addEventListener('unhandledrejection', handleRejection);
-        return () => window.removeEventListener('unhandledrejection', handleRejection);
-    }, []);
+        if (selectedSubdomain) {
+            setSnapshotUrl(null);
+            setAnalytics(null);
+            fetchSnapshot();
+            fetchAnalytics();
+        }
+    }, [selectedSubdomain]);
 
     const fetchProjectInfo = async () => {
         try {
@@ -106,20 +125,18 @@ const StackForgeProjectDetails = () => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
+                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                    organizationID: organizationID,
-                    userID: userID,
-                    projectID: projectID
-                })
+                    organizationID,
+                    userID,
+                    projectID,
+                }),
             });
-            if (!response.ok) {
-                throw new Error("Failed to fetch project details");
-            }
+            if (!response.ok) throw new Error("Failed to fetch project details");
             const data = await response.json();
             setProjectDetails(data);
-        } catch (error) { }
+        } catch (error) {}
     };
 
     const fetchSnapshot = async () => {
@@ -128,67 +145,64 @@ const StackForgeProjectDetails = () => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
+                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                    organizationID: organizationID,
-                    userID: userID,
-                    projectID: projectID
-                })
+                    domainName: selectedSubdomain,
+                }),
             });
-            if (!response.ok) {
-                throw new Error("Failed to fetch snapshot");
-            }
+            if (!response.ok) throw new Error("Failed to fetch snapshot");
             const blob = await response.blob();
-            const url = URL.createObjectURL(blob);
-            setSnapshotUrl(url);
-        } catch (error) { }
+            setSnapshotUrl(URL.createObjectURL(blob));
+        } catch (error) {}
     };
 
     const fetchUpdateMismatch = async () => {
+        if (!selectedSubdomain) return;
         try {
             const response = await fetch("http://localhost:3000/git-repo-updates", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
+                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                    userID: userID,
-                    organizationID, 
+                    userID,
+                    organizationID,
                     owner: projectDetails.project.created_by,
                     repo: projectDetails.project.repository,
-                    projectID: projectID
-                })
+                    projectID,
+                    domainName: selectedSubdomain,
+                }),
             });
-            if (!response.ok) {
-                throw new Error("Failed to fetch update mismatch");
-            }
+            if (!response.ok) throw new Error("Failed to fetch update mismatch");
             const data = await response.json();
             setUpdateMismatch(data);
-        } catch (error) { }
+        } catch (error) {}
     };
 
     const fetchCommits = async () => {
+        if (!selectedSubdomain) return;
         try {
             const response = await fetch("http://localhost:3000/git-commits", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
+                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                    userID: userID,
+                    userID,
+                    organizationID,
+                    projectID,
                     owner: projectDetails.project.created_by,
-                    repo: projectDetails.project.repository
-                })
+                    repo: projectDetails.project.repository,
+                    domainName: selectedSubdomain,
+                }),
             });
-            if (!response.ok) {
-                throw new Error("Failed to fetch commits");
-            }
+            if (!response.ok) throw new Error("Failed to fetch commits");
             const data = await response.json();
             setCommits(data);
-        } catch (error) { }
+        } catch (error) {}
     };
 
     const fetchAnalytics = async () => {
@@ -197,27 +211,25 @@ const StackForgeProjectDetails = () => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
+                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                    userID: userID,
-                    websiteURL: projectDetails.project.url,
+                    userID,
+                    domainName: selectedSubdomain,
+                    websiteURL: `https://${getFullDomainName(selectedSubdomain)}`,
                     repository: projectDetails.project.repository,
                     owner: projectDetails.project.created_by,
-                    projectName: projectDetails.project.name
-                })
+                    projectName: projectDetails.project.name,
+                }),
             });
-            if (!response.ok) {
-                throw new Error("Failed to fetch analytics");
-            }
+            if (!response.ok) throw new Error("Failed to fetch analytics");
             const data = await response.json();
             setAnalytics(data);
-        } catch (error) { }
+        } catch (error) {}
     };
 
     const openRollbackModal = () => {
-        const previous = projectDetails.project.previous_deployment;
-        setSelectedDeployment(previous);
+        setSelectedDeployment(projectDetails.project.previous_deployment);
         setRollbackModalOpen(true);
     };
 
@@ -234,43 +246,44 @@ const StackForgeProjectDetails = () => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
+                    Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                    organizationID: organizationID,
-                    userID: userID,
-                    projectID: projectID,
-                    deploymentID: selectedDeployment
-                })
+                    organizationID,
+                    userID,
+                    projectID,
+                    deploymentID: selectedDeployment,
+                }),
             });
-
             setIsRollbackLoading(false);
             closeRollbackModal();
-
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.message || `Rollback failed with status ${response.status}`);
+                throw new Error(
+                    errorData.message ||
+                        `Rollback failed with status ${response.status}`
+                );
             }
-
             const data = await response.json();
             showDialog({
                 title: "Success",
-                message: data.message || "Rollback completed successfully",
-                showCancel: false
+                message:
+                    data.message || "Rollback completed successfully",
+                showCancel: false,
             });
         } catch (error) {
             showDialog({
                 title: "Error",
-                message: error.message || "An unexpected error occurred during rollback",
-                showCancel: false
+                message:
+                    error.message ||
+                    "An unexpected error occurred during rollback",
+                showCancel: false,
             });
         }
         await fetchProjectInfo();
         setTimeout(() => {
-            if (isRollbackLoading || isRollbackModalOpen) {
-                setIsRollbackLoading(false);
-                setRollbackModalOpen(false);
-            }
+            setIsRollbackLoading(false);
+            setRollbackModalOpen(false);
         }, 1000);
     };
 
@@ -284,12 +297,19 @@ const StackForgeProjectDetails = () => {
         return "#";
     };
 
+    const fullDomainName = selectedSubdomain
+        ? getFullDomainName(selectedSubdomain)
+        : "";
+    const currentDomainUrl = selectedSubdomain
+        ? `https://${fullDomainName}`
+        : "#";
+
     return (
         <div
             className="projectDetailsPageWrapper"
             style={{
                 background: "linear-gradient(to bottom, #322A54, #29282D)",
-                display: screenSize >= 5300 ? "none" : ""
+                display: screenSize >= 5300 ? "none" : "",
             }}
         >
             <StackForgeNav activePage="main" />
@@ -314,11 +334,92 @@ const StackForgeProjectDetails = () => {
                             <button>
                                 <p>Usage</p>
                             </button>
-                            <button onClick={()=>{navigate("/project-settings", { state: { project: projectDetails.project, settingsState: "domains" } });}}>
+                            <button
+                                onClick={() => {
+                                    navigate("/project-settings", {
+                                        state: {
+                                            project: projectDetails.project,
+                                            settingsState: "domains",
+                                        },
+                                    });
+                                }}
+                            >
                                 <p>Domains</p>
                             </button>
                         </span>
                     </div>
+
+                    <div className="projectDetailsTopBarSupplement">
+                        <div className={domainSearchState ? "projectDetailsSearchContainerSearchMode" : "projectDetailsSearchContainer"}>
+                            {domainSearchState ? (
+                                <div className="projectDetailsSearchBarWrapper">
+                                    <FontAwesomeIcon
+                                        icon={faSearch}
+                                        className="projectDetailsSearchIcon"
+                                    />
+                                    <input
+                                        type="text"
+                                        className="projectDetailsSearchInput"
+                                        placeholder="Search subdomains..."
+                                        value={searchTerm}
+                                        onChange={(e) =>
+                                            setSearchTerm(e.target.value)
+                                        }
+                                    />
+                                    <FontAwesomeIcon
+                                        icon={faXmarkSquare}
+                                        className="projectDetailsSearchIconSupplement"
+                                        onClick={()=>{setDomainSearchState(false)}}
+                                    />
+                                </div>
+                            ) : (
+                                <>
+                                    <small>You have {projectDetails?.domains?.length} subdomains on this project.</small>
+
+                                    <button onClick={()=>{setDomainSearchState(true)}}> 
+                                        <FontAwesomeIcon icon={faMagnifyingGlass}/>
+                                    </button>
+                                </>
+                            )}
+
+
+                        </div>
+                        
+                        <div className="projectDetailsNavContainer">
+                            <span>
+                                {filteredDomains.map((domain) => (
+                                    <button
+                                        key={
+                                            domain.domain_id ??
+                                            domain.domain_name
+                                        }
+                                        onClick={() =>
+                                            setSelectedSubdomain(
+                                                domain.domain_name
+                                            )
+                                        }
+                                        style={
+                                            selectedSubdomain ===
+                                            domain.domain_name
+                                                ? {
+                                                      borderBottom:
+                                                          "1px solid #c1c1c1",
+                                                      color: "#f5f5f5",
+                                                  }
+                                                : {
+                                                      borderBottom:
+                                                          "2px solid transparent",
+                                                      color: "#8c8c8c",
+                                                  }
+                                        }
+                                    >
+                                        {domain.domain_name}
+                                    </button>
+                                ))}
+                            </span>
+                        </div>
+                    </div>
+
                     <div className="projectDetailsContainer">
                         <div className="productionDeploymentCell">
                             <div className="productionDeploymentHeader">
@@ -329,11 +430,12 @@ const StackForgeProjectDetails = () => {
                                             navigate("/build-logs", {
                                                 state: {
                                                     projectID,
-                                                    deploymentID: projectDetails.project.current_deployment
-                                                }
+                                                    deploymentID:
+                                                        projectDetails.project
+                                                            .current_deployment,
+                                                },
                                             })
                                         }
-
                                     >
                                         <FontAwesomeIcon icon={faHammer} />
                                         Build Logs
@@ -343,11 +445,12 @@ const StackForgeProjectDetails = () => {
                                             navigate("/runtime-logs", {
                                                 state: {
                                                     projectID,
-                                                    deploymentID: projectDetails.project.current_deployment
-                                                }
+                                                    deploymentID:
+                                                        projectDetails.project
+                                                            .current_deployment,
+                                                },
                                             })
                                         }
-
                                     >
                                         Runtime Logs{" "}
                                         <FontAwesomeIcon
@@ -366,14 +469,11 @@ const StackForgeProjectDetails = () => {
                                 <div className="productionDeploymentScreenshot">
                                     {snapshotUrl ? (
                                         <a
-                                            href={projectDetails.project.url}
+                                            href={currentDomainUrl}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                         >
-                                            <img
-                                                src={snapshotUrl}
-                                                alt=""
-                                            />
+                                            <img src={snapshotUrl} alt="" />
                                         </a>
                                     ) : (
                                         <div className="productionDeploymentPlaceholder">
@@ -386,22 +486,28 @@ const StackForgeProjectDetails = () => {
                                 <div className="productionDeploymentDetails">
                                     <div className="deploymentDetailLine">
                                         <strong>Deployment</strong>
-                                        <span>{projectDetails.project.current_deployment}</span>
+                                        <span>
+                                            {
+                                                projectDetails.project
+                                                    .current_deployment
+                                            }
+                                        </span>
                                     </div>
 
                                     <div className="deploymentDetailLine">
-                                        <strong>Domains</strong>
-                                        <span className="deploymentDetailLineDomainsSpan" onClick={()=>{navigate("/project-settings", { state: { project: projectDetails.project, settingsState: "domains" } });}}>
-                                            {
-                                                projectDetails.domains[0]
-                                                    ?.domain_name
-                                            }
-                                            {projectDetails.domains.length >
-                                                1
-                                                ? ` +${projectDetails.domains
-                                                    .length - 1
-                                                }`
-                                                : ""}
+                                        <strong>Current Subdomain</strong>
+                                        <span
+                                            className="deploymentDetailLineDomainsSpan"
+                                            onClick={() => {
+                                                navigate("/project-settings", {
+                                                    state: {
+                                                        project: projectDetails.project,
+                                                        settingsState: "domains",
+                                                    },
+                                                });
+                                            }}
+                                        >
+                                            {selectedSubdomain}
                                         </span>
                                     </div>
                                     <div className="deploymentDetailLineFlex">
@@ -415,7 +521,7 @@ const StackForgeProjectDetails = () => {
                                                             className="statusDot"
                                                             style={{
                                                                 backgroundColor:
-                                                                    "#21BF68"
+                                                                    "#21BF68",
                                                             }}
                                                         ></span>
                                                         Ready
@@ -426,14 +532,12 @@ const StackForgeProjectDetails = () => {
                                                             className="statusDot"
                                                             style={{
                                                                 backgroundColor:
-                                                                    "#E54B4B"
+                                                                    "#E54B4B",
                                                             }}
                                                         ></span>
                                                         {projectDetails
                                                             .deployments[0]
-                                                            ?.status?.charAt(
-                                                                0
-                                                            )
+                                                            ?.status?.charAt(0)
                                                             .toUpperCase() +
                                                             projectDetails
                                                                 .deployments[0]
@@ -519,7 +623,9 @@ const StackForgeProjectDetails = () => {
                             <div className="productionDeploymentCellShort">
                                 <div className="productionDeploymentCellShortHeader">
                                     <h2>Website Analytics</h2>
-                                    <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                    <FontAwesomeIcon
+                                        icon={faArrowUpRightFromSquare}
+                                    />
                                 </div>
 
                                 <div className="productionAnalyticsList">
@@ -533,72 +639,121 @@ const StackForgeProjectDetails = () => {
                                                                 className="statusDotBig"
                                                                 style={{
                                                                     backgroundColor:
-                                                                        analytics.websiteAnalytics.status === 200
+                                                                        analytics.websiteAnalytics
+                                                                            .status ===
+                                                                        200
                                                                             ? "#21BF68"
                                                                             : "#E54B4B",
                                                                 }}
                                                             />
-                                                            <p>{analytics.websiteAnalytics.status}</p>
+                                                            <p>
+                                                                {
+                                                                    analytics
+                                                                        .websiteAnalytics
+                                                                        .status
+                                                                }
+                                                            </p>
                                                         </span>
                                                         <i>
-                                                            {analytics.websiteAnalytics.status === 200
+                                                            {analytics
+                                                                .websiteAnalytics
+                                                                .status === 200
                                                                 ? "OK"
-                                                                : analytics.websiteAnalytics.error || "Error"}
+                                                                : analytics
+                                                                      .websiteAnalytics
+                                                                      .error ||
+                                                                  "Error"}
                                                         </i>
                                                     </label>
                                                     <div
                                                         className="productionAnalyticsListItemDivider"
-                                                        style={{ marginBottom: 0 }}
+                                                        style={{
+                                                            marginBottom: 0,
+                                                        }}
                                                     />
                                                 </div>
 
                                                 <div>
-                                                    <strong>Response Time:</strong>
-                                                    <p>{analytics.websiteAnalytics.responseTime} ms</p>
-                                                </div>
-
-                                                <div>
-                                                    <strong>Page Load Time:</strong>
+                                                    <strong>
+                                                        Response Time:
+                                                    </strong>
                                                     <p>
-                                                        {analytics.websiteAnalytics.performance?.pageLoadTime ?? 0} ms
+                                                        {
+                                                            analytics
+                                                                .websiteAnalytics
+                                                                .responseTime
+                                                        }{" "}
+                                                        ms
                                                     </p>
                                                 </div>
 
                                                 <div>
-                                                    <strong>Content Length:</strong>
+                                                    <strong>
+                                                        Page Load Time:
+                                                    </strong>
                                                     <p>
-                                                        {(analytics.websiteAnalytics.contentLength / 1024).toFixed(2)} KB
+                                                        {analytics.websiteAnalytics
+                                                            .performance
+                                                            ?.pageLoadTime ?? 0}{" "}
+                                                        ms
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <strong>
+                                                        Content Length:
+                                                    </strong>
+                                                    <p>
+                                                        {(
+                                                            analytics
+                                                                .websiteAnalytics
+                                                                .contentLength /
+                                                            1024
+                                                        ).toFixed(2)}{" "}
+                                                        KB
                                                     </p>
                                                 </div>
 
                                                 <div>
                                                     <strong>Scripts:</strong>
                                                     <p>
-                                                        {analytics.websiteAnalytics.performance?.scripts ?? 0}
+                                                        {analytics.websiteAnalytics
+                                                            .performance
+                                                            ?.scripts ?? 0}
                                                     </p>
                                                 </div>
 
                                                 <div>
                                                     <strong>Links:</strong>
                                                     <p>
-                                                        {analytics.websiteAnalytics.performance?.links ?? 0}
+                                                        {analytics.websiteAnalytics
+                                                            .performance
+                                                            ?.links ?? 0}
                                                     </p>
                                                 </div>
 
                                                 <div>
                                                     <strong>Images:</strong>
                                                     <p>
-                                                        {analytics.websiteAnalytics.performance?.images ?? 0}
+                                                        {analytics.websiteAnalytics
+                                                            .performance
+                                                            ?.images ?? 0}
                                                     </p>
                                                 </div>
-
-                                                
                                             </div>
                                         ) : (
                                             <div className="noProjectUpdatesAvailableWrapper">
-                                                <FontAwesomeIcon icon={faExclamationTriangle}/>
-                                                <strong>No website analytics available.</strong>
-                                                <p>Check your domain's status as it may be down.</p>
+                                                <FontAwesomeIcon
+                                                    icon={faExclamationTriangle}
+                                                />
+                                                <strong>
+                                                    No website analytics
+                                                    available.
+                                                </strong>
+                                                <p>
+                                                    Check your domain's status
+                                                    as it may be down.
+                                                </p>
                                             </div>
                                         )
                                     ) : (
@@ -609,112 +764,205 @@ const StackForgeProjectDetails = () => {
                                 </div>
                             </div>
 
+                            {/* STAGED UPDATES */}
                             <div className="productionDeploymentCellShort">
                                 <div className="productionDeploymentCellShortHeader">
-                                    <h2>Staged Updates <FontAwesomeIcon icon={faInfoCircle}/></h2>
+                                    <h2>
+                                        Staged Updates{" "}
+                                        <FontAwesomeIcon
+                                            icon={faInfoCircle}
+                                        />
+                                    </h2>
                                     <FontAwesomeIcon
                                         icon={faArrowUpRightFromSquare}
                                     />
                                 </div>
 
+                                {updateMismatch &&
+                                updateMismatch.hasUpdates ? (
+                                    <div className="projectUpdatesAvailableWrapper">
+                                        <div
+                                            className="projectUpdatesAvailableWrapperHeader"
+                                            onClick={() => {
+                                                navigate("/update-details", {
+                                                    state: {
+                                                        commitDetails:
+                                                            updateMismatch
+                                                                .newCommits[0],
+                                                        repository:
+                                                            projectDetails
+                                                                .project
+                                                                .repository,
+                                                        owner:
+                                                            projectDetails
+                                                                .project
+                                                                .created_by,
+                                                        branchName:
+                                                            projectDetails
+                                                                .project.branch,
+                                                        projectID: projectID,
+                                                        projectName:
+                                                            projectDetails
+                                                                .project.name,
+                                                    },
+                                                });
+                                            }}
+                                        >
+                                            <span>
+                                                <strong>
+                                                    Most Recent Update:
+                                                </strong>
+                                                <p>
+                                                    <FontAwesomeIcon
+                                                        icon={faCodeCommit}
+                                                    />{" "}
+                                                    {updateMismatch.newCommits[0].sha.substring(
+                                                        0,
+                                                        6
+                                                    )}{" "}
+                                                    -{" "}
+                                                    {
+                                                        updateMismatch
+                                                            .newCommits[0]
+                                                            .commit.message
+                                                    }
+                                                </p>
+                                                <small>
+                                                    by{" "}
+                                                    {
+                                                        updateMismatch
+                                                            .newCommits[0]
+                                                            .commit.author.name
+                                                    }{" "}
+                                                    on{" "}
+                                                    {new Date(
+                                                        updateMismatch
+                                                            .newCommits[0]
+                                                            .commit.author.date
+                                                    ).toLocaleDateString()}
+                                                </small>
+                                            </span>
 
-                                {updateMismatch && updateMismatch.hasUpdates ? (
-                                        <div className="projectUpdatesAvailableWrapper">
-                                            <div 
-                                                className="projectUpdatesAvailableWrapperHeader" 
-                                                onClick={() => {
-                                                    navigate("/update-details", {
-                                                        state: {
-                                                            commitDetails: updateMismatch.newCommits[0],
-                                                            repository: projectDetails.project.repository,
-                                                            owner: projectDetails.project.created_by,
-                                                            branchName: projectDetails.project.branch,
-                                                            projectID: projectID, 
-                                                            projectName: projectDetails.project.name
-                                                        }
-                                                    });
-                                                }}
-                                            > 
-                                                <span>
-                                                    <strong> 
-                                                        Most Recent Update: 
-                                                    </strong>
-                                                    <p>
-                                                        <FontAwesomeIcon icon={faCodeCommit} />{" "}
-                                                        {updateMismatch.newCommits[0].sha.substring(0, 6)} -{" "}
-                                                        {updateMismatch.newCommits[0].commit.message}
-                                                    </p>
-                                                    <small>
-                                                        by {updateMismatch.newCommits[0].commit.author.name}{" "}
-                                                        on{" "}
-                                                        {new Date(
-                                                            updateMismatch.newCommits[0].commit.author.date
-                                                        ).toLocaleDateString()}
-                                                    </small>
-                                                </span>
-
-                                                <img
-                                                    src={updateMismatch.newCommits[0].author?.avatar_url}
-                                                    alt=""
-                                                />
-                                            </div> 
-
-                                            <label> 
-                                                Other available deployment updates: 
-                                            </label>
-
-                                            <div className="projectUpdatesAvailableWrapperContent"> 
-                                                {updateMismatch.newCommits
-                                                    .slice(1)
-                                                    .sort((a, b) => new Date(b.commit.author.date) - new Date(a.commit.author.date))
-                                                    .map((commit) => (
-                                                        <div
-                                                            key={commit.sha}
-                                                            className="previousCommitItem"
-                                                            onClick={() => {
-                                                                navigate("/update-details", {
-                                                                    state: {
-                                                                        commitDetails: commit,
-                                                                        repository: projectDetails.project.repository,
-                                                                        owner: projectDetails.project.created_by,
-                                                                        branchName: projectDetails.project.branch,
-                                                                        projectID: projectID,
-                                                                        projectName: projectDetails.project.name
-                                                                    }
-                                                                });
-                                                            }}
-                                                        >
-                                                            <span>
-                                                                <p>
-                                                                    <FontAwesomeIcon icon={faCodeCommit} />{" "}
-                                                                    {commit.sha.substring(0, 6)} -{" "}
-                                                                    {commit.commit.message}
-                                                                </p>
-                                                                <small>
-                                                                    by {commit.commit.author.name}{" "}
-                                                                    on{" "}
-                                                                    {new Date(
-                                                                        commit.commit.author.date
-                                                                    ).toLocaleDateString()}
-                                                                </small>
-                                                            </span>
-                                                            <div>
-                                                                <img
-                                                                    src={commit.author?.avatar_url}
-                                                                    alt=""
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                            </div>
+                                            <img
+                                                src={
+                                                    updateMismatch.newCommits[0]
+                                                        .author?.avatar_url
+                                                }
+                                                alt=""
+                                            />
                                         </div>
-                                ) : (
-                                    <div className="productionAnalyticsList"> 
-                                    <div className="noProjectUpdatesAvailableWrapper">
-                                        <FontAwesomeIcon icon={faCheckToSlot}/>
-                                        <strong>No staged updates available.</strong>
-                                        <p>If you'd like to update one of your deployments push a commit to the project's Git repository.</p>
+
+                                        <label>
+                                            Other available deployment updates:
+                                        </label>
+
+                                        <div className="projectUpdatesAvailableWrapperContent">
+                                            {updateMismatch.newCommits
+                                                .slice(1)
+                                                .sort(
+                                                    (a, b) =>
+                                                        new Date(
+                                                            b.commit.author.date
+                                                        ) -
+                                                        new Date(
+                                                            a.commit.author.date
+                                                        )
+                                                )
+                                                .map((commit) => (
+                                                    <div
+                                                        key={commit.sha}
+                                                        className="previousCommitItem"
+                                                        onClick={() => {
+                                                            navigate(
+                                                                "/update-details",
+                                                                {
+                                                                    state: {
+                                                                        commitDetails:
+                                                                            commit,
+                                                                        repository:
+                                                                            projectDetails
+                                                                                .project
+                                                                                .repository,
+                                                                        owner:
+                                                                            projectDetails
+                                                                                .project
+                                                                                .created_by,
+                                                                        branchName:
+                                                                            projectDetails
+                                                                                .project
+                                                                                .branch,
+                                                                        projectID: projectID,
+                                                                        projectName:
+                                                                            projectDetails
+                                                                                .project
+                                                                                .name,
+                                                                    },
+                                                                }
+                                                            );
+                                                        }}
+                                                    >
+                                                        <span>
+                                                            <p>
+                                                                <FontAwesomeIcon
+                                                                    icon={
+                                                                        faCodeCommit
+                                                                    }
+                                                                />{" "}
+                                                                {commit.sha.substring(
+                                                                    0,
+                                                                    6
+                                                                )}{" "}
+                                                                -{" "}
+                                                                {
+                                                                    commit.commit
+                                                                        .message
+                                                                }
+                                                            </p>
+                                                            <small>
+                                                                by{" "}
+                                                                {
+                                                                    commit.commit
+                                                                        .author
+                                                                        .name
+                                                                }{" "}
+                                                                on{" "}
+                                                                {new Date(
+                                                                    commit
+                                                                        .commit
+                                                                        .author
+                                                                        .date
+                                                                ).toLocaleDateString()}
+                                                            </small>
+                                                        </span>
+                                                        <div>
+                                                            <img
+                                                                src={
+                                                                    commit
+                                                                        .author
+                                                                        ?.avatar_url
+                                                                }
+                                                                alt=""
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                        </div>
                                     </div>
+                                ) : (
+                                    <div className="productionAnalyticsList">
+                                        <div className="noProjectUpdatesAvailableWrapper">
+                                            <FontAwesomeIcon
+                                                icon={faCheckToSlot}
+                                            />
+                                            <strong>
+                                                No staged updates available.
+                                            </strong>
+                                            <p>
+                                                If you'd like to update one of
+                                                your deployments push a commit
+                                                to the project's Git repository.
+                                            </p>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -758,7 +1006,7 @@ const StackForgeProjectDetails = () => {
                                                     <div
                                                         className="productionAnalyticsListItemDivider"
                                                         style={{
-                                                            marginBottom: 0
+                                                            marginBottom: 0,
                                                         }}
                                                     />
                                                 </div>
@@ -859,6 +1107,7 @@ const StackForgeProjectDetails = () => {
                                 </div>
                             </div>
 
+                            {/* PREVIOUS UPDATES */}
                             <div className="productionDeploymentCellShort">
                                 <div className="productionDeploymentCellShortHeader">
                                     <h2>Previous Updates</h2>
@@ -891,9 +1140,13 @@ const StackForgeProjectDetails = () => {
                                                                     projectDetails
                                                                         .project
                                                                         .branch,
-                                                                projectID: projectID, 
-                                                                projectName: projectDetails.project.name
-                                                            }
+                                                                projectID:
+                                                                    projectID,
+                                                                projectName:
+                                                                    projectDetails
+                                                                        .project
+                                                                        .name,
+                                                            },
                                                         }
                                                     );
                                                 }}
@@ -987,46 +1240,78 @@ const StackForgeProjectDetails = () => {
                             <p>
                                 Rolling back{" "}
                                 <a
-                                    href={projectDetails.project.url}
+                                    href={currentDomainUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                 >
-                                    {new URL(projectDetails.project.url).hostname}
+                                    {currentDomainUrl.replace(
+                                        /^https?:\/\//,
+                                        ""
+                                    )}
                                 </a>{" "}
-                                <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                                <FontAwesomeIcon
+                                    icon={faArrowUpRightFromSquare}
+                                />
                             </p>
                             <div className="rollbackDeploymentList">
                                 {[
                                     projectDetails.deployments.find(
-                                        d => d.deployment_id === projectDetails.project.current_deployment
+                                        (d) =>
+                                            d.deployment_id ===
+                                            projectDetails.project
+                                                .current_deployment
                                     ),
                                     projectDetails.deployments.find(
-                                        d => d.deployment_id === projectDetails.project.previous_deployment
-                                    )
+                                        (d) =>
+                                            d.deployment_id ===
+                                            projectDetails.project
+                                                .previous_deployment
+                                    ),
                                 ]
                                     .filter(Boolean)
                                     .map((dep, idx) => (
                                         <div
                                             key={dep.deployment_id}
-                                            className={`rollbackDeploymentItem ${selectedDeployment === dep.deployment_id ? "selected" : ""
-                                                }`}
-                                            onClick={() => setSelectedDeployment(dep.deployment_id)}
+                                            className={`rollbackDeploymentItem ${
+                                                selectedDeployment ===
+                                                dep.deployment_id
+                                                    ? "selected"
+                                                    : ""
+                                            }`}
+                                            onClick={() =>
+                                                setSelectedDeployment(
+                                                    dep.deployment_id
+                                                )
+                                            }
                                         >
                                             <div className="deploymentTitle">
-                                                <strong>{dep.deployment_id}</strong>
+                                                <strong>
+                                                    {dep.deployment_id}
+                                                </strong>
                                                 {idx === 0 ? (
-                                                    <span className="currentLabel">Current</span>
+                                                    <span className="currentLabel">
+                                                        Current
+                                                    </span>
                                                 ) : (
-                                                    <span className="previousLabel">Previous</span>
+                                                    <span className="previousLabel">
+                                                        Previous
+                                                    </span>
                                                 )}
                                             </div>
                                             <div className="deploymentDetails">
                                                 <small>
-                                                    {projectDetails.project.branch}{" "}
-                                                    <FontAwesomeIcon icon={faCodeBranch} /> by {dep.username}
+                                                    {projectDetails.project
+                                                        .branch}{" "}
+                                                    <FontAwesomeIcon
+                                                        icon={faCodeBranch}
+                                                    />{" "}
+                                                    by {dep.username}
                                                 </small>
                                                 <small>
-                                                    Deployed {new Date(dep.created_at).toLocaleDateString()}
+                                                    Deployed{" "}
+                                                    {new Date(
+                                                        dep.created_at
+                                                    ).toLocaleDateString()}
                                                 </small>
                                             </div>
                                         </div>
@@ -1036,7 +1321,9 @@ const StackForgeProjectDetails = () => {
                         <div className="rollbackModalFooter">
                             <button onClick={closeRollbackModal}>Cancel</button>
                             <button
-                                disabled={!selectedDeployment || isRollbackLoading}
+                                disabled={
+                                    !selectedDeployment || isRollbackLoading
+                                }
                                 onClick={confirmRollback}
                             >
                                 Continue
@@ -1054,7 +1341,7 @@ const StackForgeProjectDetails = () => {
                                     background: "rgba(0, 0, 0, 0.5)",
                                     display: "flex",
                                     justifyContent: "center",
-                                    alignItems: "center"
+                                    alignItems: "center",
                                 }}
                             >
                                 <div className="loading-circle" />
@@ -1063,7 +1350,6 @@ const StackForgeProjectDetails = () => {
                     </div>
                 </div>
             )}
-
         </div>
     );
 };

@@ -15,61 +15,59 @@ secretKey = process.env.JWT_SECRET_KEY;
 const router = express.Router();
 
 router.post("/snapshot", authenticateToken, async (req, res, next) => {
-    const { projectID, organizationID, userID } = req.body;
+    const { domainName } = req.body;     //  <-- ONLY the sub‑domain string, e.g. “blog”
     try {
-        const projectResult = await pool.query(
-            "SELECT * FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
-            [projectID, organizationID, userID]
-        );
-        if (projectResult.rows.length === 0)
-            return res.status(404).json({ message: "Project not found or access denied." });
-        const url = projectResult.rows[0].url;
-        const browser = await puppeteer.launch();
+        /* --------------------------- Build the full URL --------------------------- */
+        if (!domainName || typeof domainName !== "string" || !domainName.trim()) {
+            return res
+                .status(400)
+                .json({ message: "domainName (sub‑domain) is required." });
+        }
+
+        const cleanedSub = domainName.trim().toLowerCase();
+        const targetUrl = `https://${cleanedSub}.stackforgeengine.com`;
+
+        /* --------------------------- Generate screenshot --------------------------- */
+        const browser = await puppeteer.launch({ headless: true });
         const page = await browser.newPage();
+
         try {
-            await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+            await page.goto(targetUrl, { waitUntil: "networkidle2", timeout: 30000 });
             const buffer = await page.screenshot();
             await browser.close();
-            res.writeHead(200, { "Content-Type": "image/png", "Content-Length": buffer.length });
+
+            res.writeHead(200, {
+                "Content-Type": "image/png",
+                "Content-Length": buffer.length
+            });
             return res.end(buffer);
         } catch (error) {
             await browser.close();
+
+            /* ---- If the рассматривать site can’t be reached, fall back to the placeholder image --- */
             const defaultImagePath = path.join(__dirname, "../public/StackForgeLogo.png");
             const buffer = fs.readFileSync(defaultImagePath);
-            res.writeHead(200, { "Content-Type": "image/png", "Content-Length": buffer.length });
+
+            res.writeHead(200, {
+                "Content-Type": "image/png",
+                "Content-Length": buffer.length
+            });
             return res.end(buffer);
         }
     } catch (error) {
-        if (!res.headersSent) return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+        if (!res.headersSent) {
+            return res
+                .status(500)
+                .json({ message: "Unexpected server error while generating snapshot." });
+        }
         next(error);
     }
 });
 
-router.post("/git-commits", authenticateToken, async (req, res, next) => {
-    const { userID, owner, repo } = req.body;
-    try {
-        if (!owner || !repo) return res.status(400).json({ message: "Owner and repository are required." });
-        const result = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
-        if (result.rows.length === 0 || !result.rows[0].github_access_token)
-            return res.status(400).json({ message: "GitHub account not connected." });
-        const githubAccessToken = result.rows[0].github_access_token;
-        let repoName = repo;
-        let repoOwner = owner;
-        if (repo.includes("/")) {
-            let parts = repo.split("/");
-            repoOwner = parts[0];
-            repoName = parts[1];
-        }
-        const url = `https://api.github.com/repos/${repoOwner}/${repoName}/commits`;
-        const gitResponse = await axios.get(url, {
-            headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
-        });
-        return res.status(200).json(gitResponse.data);
-    } catch (error) {
-        if (!res.headersSent) return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
-        next(error);
-    }
-});
+
+/* -------------------------------------------------------------------------- */
+/*                         GIT ‑ COMMIT DETAILS (SHA)                         */
+/* -------------------------------------------------------------------------- */
 
 router.post("/git-commit-details", authenticateToken, async (req, res, next) => {
     const { userID, owner, repo, commitSha } = req.body;
@@ -97,6 +95,10 @@ router.post("/git-commit-details", authenticateToken, async (req, res, next) => 
         next(error);
     }
 });
+
+/* -------------------------------------------------------------------------- */
+/*                  GIT ‑ COMMIT DETAILS (FILE CONTENT BY PATH)               */
+/* -------------------------------------------------------------------------- */
 
 router.post("/git-commit-details-file-content", authenticateToken, async (req, res, next) => {
     const { userID, owner, repo, ref, filePath } = req.body;
@@ -139,56 +141,75 @@ router.post("/git-commit-details-file-content", authenticateToken, async (req, r
     }
 });
 
+/* -------------------------------------------------------------------------- */
+/*                               GIT ‑ ANALYTICS                              */
+/* -------------------------------------------------------------------------- */
+
 router.post("/git-analytics", authenticateToken, async (req, res, next) => {
-    const { userID, websiteURL, repository, owner, projectName } = req.body;
+    const { userID, websiteURL, domainName, repository, owner, projectName } = req.body;
     let websiteAnalytics = null;
     let repositoryAnalytics = null;
 
     try {
-        if (!websiteURL && !repository) {
-            return res.status(400).json({ message: "Either websiteURL or repository is required." });
+        if (!websiteURL && !domainName && !repository) {
+            return res.status(400).json({ message: "Either websiteURL/domainName or repository is required." });
         }
 
+        /* ------------------------ Resolve websiteURL by domain ----------------------- */
+        let resolvedWebsiteURL = websiteURL;
+        if (!resolvedWebsiteURL && domainName) {
+            const domainLookup = await pool.query(
+                "SELECT url FROM domains WHERE domain_name = $1",
+                [domainName]
+            );
+            if (domainLookup.rows.length > 0) {
+                resolvedWebsiteURL = domainLookup.rows[0].url;
+            }
+        }
+
+        /* --------------------- Check Deployment Status (Domain) ---------------------- */
         let deploymentStatus = null;
-        if (websiteURL) {
+        if (resolvedWebsiteURL) {
             try {
                 const deploymentResult = await pool.query(
                     "SELECT deployment_id, url FROM deployments WHERE url = $1",
-                    [websiteURL]
+                    [resolvedWebsiteURL]
                 );
 
-                const { deployment_id, url } = deploymentResult.rows[0];
-                const browser = await puppeteer.launch({ headless: true });
-                const page = await browser.newPage();
-                let status = 'inactive';
+                if (deploymentResult.rows.length > 0) {
+                    const { deployment_id } = deploymentResult.rows[0];
+                    const browser = await puppeteer.launch({ headless: true });
+                    const page = await browser.newPage();
+                    let status = 'inactive';
 
-                try {
-                    const response = await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 30000 });
-                    const responseStatus = response ? response.status() : null;
+                    try {
+                        const response = await page.goto(resolvedWebsiteURL, { waitUntil: "networkidle2", timeout: 30000 });
+                        const responseStatus = response ? response.status() : null;
+                        if (responseStatus && responseStatus >= 200 && responseStatus < 300) {
+                            status = 'active';
+                        }
+                    } catch (error) {
+                        status = 'inactive';
+                    } finally {
+                        await browser.close();
+                    }
 
-                    if (responseStatus && responseStatus >= 200 && responseStatus < 300) {
-                        status = 'active';
-                    } else {}
-                } catch (error) {
-                    status = 'inactive';
-                } finally {
-                    await browser.close();
+                    const updateResult = await pool.query(
+                        "UPDATE deployments SET status = $1 WHERE deployment_id = $2 RETURNING status",
+                        [status, deployment_id]
+                    );
+                    deploymentStatus = updateResult.rows[0].status;
                 }
-
-                const updateResult = await pool.query(
-                    "UPDATE deployments SET status = $1 WHERE deployment_id = $2 RETURNING status",
-                    [status, deployment_id]
-                );
-                deploymentStatus = updateResult.rows[0].status;
             } catch (error) {}
-        } else {}
+        }
 
-        if (websiteURL) {
+        /* --------------------------- WEBSITE ANALYTICS --------------------------- */
+        if (resolvedWebsiteURL) {
             try {
                 const startTime = Date.now();
                 let websiteResponse;
                 try {
-                    websiteResponse = await axios.get(websiteURL, { timeout: 30000 });
+                    websiteResponse = await axios.get(resolvedWebsiteURL, { timeout: 30000 });
                 } catch (httpErr) {
                     websiteAnalytics = {
                         status: httpErr.response?.status || 503,
@@ -223,7 +244,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                     try {
                         const browser = await puppeteer.launch({ headless: true });
                         const page = await browser.newPage();
-                        await page.goto(websiteURL, { waitUntil: "networkidle2", timeout: 30000 });
+                        await page.goto(resolvedWebsiteURL, { waitUntil: "networkidle2", timeout: 30000 });
                         await new Promise(resolve => setTimeout(resolve, 2000));
 
                         performanceMetrics = await page.evaluate(() => {
@@ -235,7 +256,6 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                             return { pageLoadTime, scripts, images, links };
                         });
 
-                        const pageContent = await page.content();
                         await browser.close();
                     } catch (puppeteerErr) {
                         performanceMetrics = {
@@ -282,6 +302,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
             }
         }
 
+        /* ------------------------- REPOSITORY ANALYTICS ------------------------- */
         if (repository) {
             try {
                 let repoName = repository;
@@ -367,41 +388,57 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
     }
 });
 
-router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
-    const { userID, organizationID, owner, repo, projectID } = req.body;
+/* -------------------------------------------------------------------------- */
+/*                            GIT ‑ REPO UPDATES                              */
+/* -------------------------------------------------------------------------- */
 
+router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, owner, repo, projectID, domainName } = req.body;
     try {
         if (!owner || !repo || !projectID || !organizationID) {
             return res.status(400).json({ message: "Owner, repository, projectID, and organizationID are required." });
         }
-
         const userResult = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
-
         if (userResult.rows.length === 0 || !userResult.rows[0].github_access_token) {
             return res.status(400).json({ message: "GitHub account not connected." });
         }
-
         const githubAccessToken = userResult.rows[0].github_access_token;
-
         let repoOwner = owner;
         let repoName = repo;
         if (repo.includes("/")) {
             [repoOwner, repoName] = repo.split("/");
         }
-
-        const deploymentResult = await pool.query(
-            `SELECT commit_sha, last_deployed_at
-             FROM deployments
-             WHERE project_id = $1 AND orgid = $2
-             ORDER BY last_deployed_at DESC
-             LIMIT 1`,
-            [projectID, organizationID]
-        );
-
+        let deploymentResult;
+        if (domainName) {
+            const domainLookup = await pool.query(
+                "SELECT domain_id FROM domains WHERE domain_name = $1 AND project_id = $2 AND orgid = $3",
+                [domainName, projectID, organizationID]
+            );
+            if (domainLookup.rows.length === 0) {
+                return res.status(404).json({ message: "Domain not found for this project." });
+            }
+            const domainId = domainLookup.rows[0].domain_id;
+            deploymentResult = await pool.query(
+                `SELECT commit_sha, last_deployed_at
+                 FROM deployments
+                 WHERE project_id = $1 AND orgid = $2 AND domain_id = $3
+                 ORDER BY last_deployed_at DESC
+                 LIMIT 1`,
+                [projectID, organizationID, domainId]
+            );
+        } else {
+            deploymentResult = await pool.query(
+                `SELECT commit_sha, last_deployed_at
+                 FROM deployments
+                 WHERE project_id = $1 AND orgid = $2
+                 ORDER BY last_deployed_at DESC
+                 LIMIT 1`,
+                [projectID, organizationID]
+            );
+        }
         if (deploymentResult.rows.length === 0) {
             return res.status(404).json({ message: "No deployments found for this project." });
         }
-
         const lastDeploymentCommit = deploymentResult.rows[0].commit_sha;
         const lastDeployedAtRaw = deploymentResult.rows[0].last_deployed_at;
         const lastDeployedAtUtc = new Date(Date.UTC(
@@ -413,12 +450,10 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
             lastDeployedAtRaw.getSeconds(),
             lastDeployedAtRaw.getMilliseconds()
         ));
-
         const repoMeta = await axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
             headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
         });
         const defaultBranch = repoMeta.data.default_branch;
-
         const gitResponse = await axios.get(
             `https://api.github.com/repos/${repoOwner}/${repoName}/commits`,
             {
@@ -426,15 +461,12 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
                 params: { sha: defaultBranch, since: lastDeployedAtUtc.toISOString(), per_page: 100 }
             }
         );
-
         if (!gitResponse.data || gitResponse.data.length === 0) {
             return res.status(404).json({ message: "No commits found in the repository since the last deployment." });
         }
         const newCommits = gitResponse.data.filter(c => c.sha !== lastDeploymentCommit);
         const hasUpdates = newCommits.length > 0;
-
         return res.status(200).json({ hasUpdates, lastDeploymentCommit, newCommitsCount: newCommits.length, newCommits });
-
     } catch (error) {
         if (!res.headersSent) {
             return res.status(500).json({ message: `Error checking repository updates: ${error.message}` });
@@ -442,6 +474,60 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
         next(error);
     }
 });
+
+/* -------------------------------------------------------------------------- */
+/*                   NEW  /git‑commits  (full route definition)               */
+/* -------------------------------------------------------------------------- */
+
+router.post("/git-commits", authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, projectID, owner, repo, domainName } = req.body;
+    try {
+        if (!userID || !organizationID || !projectID || !owner || !repo) {
+            return res.status(400).json({ message: "userID, organizationID, projectID, owner, and repo are required." });
+        }
+        const userResult = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
+        if (userResult.rows.length === 0 || !userResult.rows[0].github_access_token) {
+            return res.status(400).json({ message: "GitHub account not connected." });
+        }
+        const githubAccessToken = userResult.rows[0].github_access_token;
+        let repoOwner = owner;
+        let repoName = repo;
+        if (repo.includes("/")) {
+            [repoOwner, repoName] = repo.split("/");
+        }
+        let deploymentQuery = `
+            SELECT commit_sha
+            FROM deployments
+            WHERE project_id = $1 AND orgid = $2
+        `;
+        const queryParams = [projectID, organizationID];
+        if (domainName) {
+            deploymentQuery += ` AND domain_id = (SELECT domain_id FROM domains WHERE domain_name = $3 AND project_id = $1 AND orgid = $2)`;
+            queryParams.push(domainName);
+        }
+        deploymentQuery += ` ORDER BY last_deployed_at DESC LIMIT 50`;
+        const deploymentRows = await pool.query(deploymentQuery, queryParams);
+        const commitShas = [...new Set(deploymentRows.rows.map(r => r.commit_sha))].slice(0, 50);
+        if (commitShas.length === 0) {
+            return res.status(404).json({ message: "No deployments found for the specified criteria." });
+        }
+        const commitPromises = commitShas.map(sha =>
+            axios.get(`https://api.github.com/repos/${repoOwner}/${repoName}/commits/${sha}`, {
+                headers: { Authorization: `token ${githubAccessToken}`, Accept: "application/vnd.github.v3+json" }
+            }).then(res => res.data)
+        );
+        const commits = await Promise.all(commitPromises);
+        return res.status(200).json(commits);
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: `Error fetching commits: ${error.message}` });
+        }
+        next(error);
+    }
+});
+/* -------------------------------------------------------------------------- */
+/*          GIT ‑ REPO UPDATE DETAILS (RELATIVE TO LAST DEPLOYMENT)          */
+/* -------------------------------------------------------------------------- */
 
 router.post("/git-repo-update-details-relative-to-deployment", authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, owner, repo, commitSha } = req.body;
@@ -537,14 +623,31 @@ router.post("/git-repo-update-details-relative-to-deployment", authenticateToken
     }
 });
 
+/* -------------------------------------------------------------------------- */
+/*                       FETCH CURRENT BUILD ‑ INFO                           */
+/* -------------------------------------------------------------------------- */
+
 router.post("/fetch-current-build-info", authenticateToken, async (req, res, next) => {
-    const { userID, organizationID, projectID } = req.body;
+    const { userID, organizationID, projectID, domainName } = req.body;
 
     req.on('close', () => {
         return;
     });
 
     try {
+        let domainIdFilter = null;
+        if (domainName) {
+            const domainLookup = await pool.query(
+                "SELECT domain_id FROM domains WHERE domain_name = $1 AND project_id = $2 AND orgid = $3",
+                [domainName, projectID, organizationID]
+            );
+            if (domainLookup.rows.length > 0) {
+                domainIdFilter = domainLookup.rows[0].domain_id;
+            } else {
+                return res.status(404).json({ message: 'Domain not found for this project.' });
+            }
+        }
+
         const projectInfoFetchQuery = `
             SELECT 
                 root_directory, 
@@ -557,6 +660,7 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
             WHERE orgid = $1
             AND username = $2
             AND project_id = $3
+            ${domainIdFilter ? `AND domain_id = '${domainIdFilter}'` : ''}
             ORDER BY last_deployed_at DESC
             LIMIT 1
         `;
@@ -584,6 +688,9 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
     }
 });
 
+/* -------------------------------------------------------------------------- */
+/*                                RUNTIME LOGS                                */
+/* -------------------------------------------------------------------------- */
 
 router.post("/runtime-logs", authenticateToken, async (req, res, next) => {
     const { organizationID, userID, projectID, deploymentID, timePeriod } = req.body;
@@ -662,6 +769,10 @@ router.post("/runtime-logs", authenticateToken, async (req, res, next) => {
     }
 });
 
+/* -------------------------------------------------------------------------- */
+/*                                 BUILD LOGS                                 */
+/* -------------------------------------------------------------------------- */
+
 router.post("/build-logs", authenticateToken, async (req, res, next) => {
     const { organizationID, userID, deploymentID, timePeriod } = req.body;
     if (!organizationID || !userID || !deploymentID)
@@ -724,6 +835,10 @@ router.post("/build-logs", authenticateToken, async (req, res, next) => {
     }
 });
 
+/* -------------------------------------------------------------------------- */
+/*                          EDIT PROJECT IMAGE (S3)                           */
+/* -------------------------------------------------------------------------- */
+
 router.post('/edit-project-image', authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, image } = req.body;
 
@@ -775,6 +890,10 @@ router.post('/edit-project-image', authenticateToken, async (req, res, next) => 
     }
 });
 
+/* -------------------------------------------------------------------------- */
+/*                          EDIT PROJECT NAME (SQL)                           */
+/* -------------------------------------------------------------------------- */
+
 router.post('/edit-project-name', authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, projectName } = req.body;
 
@@ -809,7 +928,5 @@ router.post('/edit-project-name', authenticateToken, async (req, res, next) => {
         next(error);
     }
 });
-
-
 
 module.exports = router;
