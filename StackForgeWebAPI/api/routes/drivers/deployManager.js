@@ -2209,156 +2209,144 @@ class DeployManager {
         return { certificateArn };
     }
 
-    async rollbackDeployment({ organizationID, userID, projectID, deploymentID }) {
+    async rollbackDeployment({ organizationID, userID, projectID, deploymentID, domainName }) {
         const timestamp = new Date().toISOString();
+    
         const deploymentResult = await pool.query(
-            `SELECT d.*, p.name as project_name, d.url
+            `SELECT d.*, p.name as project_name, d.url, d.commit_sha
              FROM deployments d
              JOIN projects p ON d.project_id = p.project_id
              WHERE d.deployment_id = $1 AND d.orgid = $2 AND d.username = $3`,
             [deploymentID, organizationID, userID]
         );
+    
         if (deploymentResult.rows.length === 0) {
             throw new Error("Deployment not found or access denied.");
         }
+    
         const deployment = deploymentResult.rows[0];
         const projectName = deployment.project_name;
-        const taskDefArn = await this.getTaskDefinitionARN(projectName, deploymentID);
-        const cluster = process.env.ECS_CLUSTER;
-        const serviceName = projectName;
-
-        const depDomainsRes = await pool.query(
-            `SELECT d.domain_name
-             FROM domains d
-             JOIN deployments dep ON d.domain_id = dep.domain_id
-             WHERE dep.deployment_id = $1`,
-            [deploymentID]
+        const subdomain = domainName; 
+        const serviceName = subdomain === projectName ? projectName : `${projectName}-${subdomain.replace(/\./g, '-')}`;
+        const fqdn = subdomain === projectName ? `${projectName}.stackforgeengine.com` : `${subdomain}.stackforgeengine.com`;
+    
+        const domainResult = await pool.query(
+            `SELECT repository, branch, root_directory, install_command, build_command, env_vars, image_tag
+             FROM domains
+             WHERE domain_name = $1 AND project_id = $2 AND orgid = $3`,
+            [subdomain, projectID, organizationID]
         );
-        const activeSubdomains = depDomainsRes.rows.map(r => r.domain_name);
-        const activeFQDNs = activeSubdomains.map(sub =>
-            sub.includes('.') ? sub : `${sub}.stackforgeengine.com`
-        );
-
-        const allDomainsRes = await pool.query(
-            "SELECT domain_name FROM domains WHERE project_id = $1",
-            [projectID]
-        );
-        const allFQDNs = allDomainsRes.rows.map(r =>
-            r.domain_name.includes('.') ? r.domain_name : `${r.domain_name}.stackforgeengine.com`
-        );
-
-        await this.ecs.send(new UpdateServiceCommand({
-            cluster,
-            service: serviceName,
-            taskDefinition: taskDefArn,
-            forceNewDeployment: true
-        }));
-
-        const listeners = [
-            { arn: process.env.ALB_LISTENER_ARN_HTTPS, isHttps: true },
-            { arn: process.env.ALB_LISTENER_ARN_HTTP, isHttps: false }
-        ];
-        const targetGroupArn = await this.ensureTargetGroup(projectName);
-
-        for (const { arn: listenerArn, isHttps } of listeners) {
-            const rulesResp = await this.elbv2.send(new DescribeRulesCommand({
-                ListenerArn: listenerArn
-            }));
-
-            for (const rule of rulesResp.Rules) {
-                const hostCond = rule.Conditions.find(c => c.Field === "host-header");
-                if (hostCond && !activeFQDNs.includes(hostCond.Values[0])) {
-                    await this.elbv2.send(new DeleteRuleCommand({
-                        RuleArn: rule.RuleArn
-                    }));
-                }
-            }
-
-            const updatedRules = await this.elbv2.send(new DescribeRulesCommand({
-                ListenerArn: listenerArn
-            }));
-            const usedPriorities = updatedRules.Rules
-                .map(r => parseInt(r.Priority))
-                .filter(n => !isNaN(n));
-            let nextPriority = usedPriorities.length ? Math.max(...usedPriorities) + 1 : 1;
-
-            for (const domain of activeFQDNs) {
-                const existing = updatedRules.Rules.find(r =>
-                    r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(domain))
-                );
-                const actions = isHttps
-                    ? [{ Type: "forward", TargetGroupArn: targetGroupArn }]
-                    : [{
-                        Type: "redirect",
-                        RedirectConfig: {
-                            Protocol: "HTTPS",
-                            Port: "443",
-                            StatusCode: "HTTP_301",
-                            Host: "#{host}",
-                            Path: "/#{path}",
-                            Query: "#{query}"
-                        }
-                    }];
-
-                if (existing) {
-                    await this.elbv2.send(new ModifyRuleCommand({
-                        RuleArn: existing.RuleArn,
-                        Conditions: [{ Field: "host-header", Values: [domain] }],
-                        Actions: actions
-                    }));
-                } else {
-                    await this.elbv2.send(new CreateRuleCommand({
-                        ListenerArn: listenerArn,
-                        Priority: nextPriority++,
-                        Conditions: [{ Field: "host-header", Values: [domain] }],
-                        Actions: actions
-                    }));
-                }
-            }
+    
+        if (domainResult.rows.length === 0) {
+            throw new Error(`Domain ${subdomain} not found for project ${projectID}.`);
         }
-
+    
+        const domainDetails = domainResult.rows[0];
+        let envVars = [];
+        try {
+            const rawEnvVars = domainDetails.env_vars;
+            if (typeof rawEnvVars === "string") {
+                envVars = JSON.parse(rawEnvVars);
+            } else if (typeof rawEnvVars === "object" && rawEnvVars !== null) {
+                envVars = rawEnvVars;
+            }
+            if (!Array.isArray(envVars)) {
+                envVars = [];
+            }
+        } catch (error) {
+            envVars = [];
+        }
+    
+        const githubAccessToken = (await pool.query(
+            "SELECT github_access_token FROM users WHERE username = $1",
+            [userID]
+        )).rows[0].github_access_token;
+    
+        await this.ensureECRRepo(projectName);
+    
+        await this.createCodeBuildProject({
+            projectName,
+            subdomain,
+            repository: domainDetails.repository,
+            branch: domainDetails.branch,
+            rootDirectory: domainDetails.root_directory,
+            installCommand: domainDetails.install_command,
+            buildCommand: domainDetails.build_command,
+            githubAccessToken
+        });
+    
+        const logDir = path.join("/tmp", `${projectName}-${uuidv4()}`, "logs");
+        fs.mkdirSync(logDir, { recursive: true });
+    
+        let imageUri;
+        try {
+            const buildResult = await this.startCodeBuild({
+                projectName,
+                subdomain,
+                repository: domainDetails.repository,
+                branch: domainDetails.branch,
+                logDir,
+                githubAccessToken
+            });
+            imageUri = buildResult.imageUri;
+        } catch (error) {
+            throw error;
+        }
+    
+        const taskDefArn = await this.createTaskDef({
+            projectName,
+            subdomain,
+            imageUri,
+            envVars
+        });
+    
+        const targetGroupArn = await this.ensureTargetGroup(projectName, subdomain);
+    
+        await this.createOrUpdateService({
+            projectName,
+            subdomain,
+            taskDefArn,
+            targetGroupArn
+        });
+    
+        await this.updateDNSRecord(projectName, [subdomain], targetGroupArn);
+    
         await pool.query(
-            "UPDATE deployments SET status = 'inactive', updated_at = $1 WHERE project_id = $2 AND status = 'active'",
-            [timestamp, projectID]
+            "UPDATE deployments SET status = 'inactive', updated_at = $1 WHERE project_id = $2 AND domain_id = (SELECT domain_id FROM domains WHERE domain_name = $3 AND project_id = $2) AND status = 'active'",
+            [timestamp, projectID, subdomain]
         );
+    
         await pool.query(
-            "UPDATE deployments SET status = 'active', updated_at = $1, last_deployed_at = $1 WHERE deployment_id = $2",
-            [timestamp, deploymentID]
+            "UPDATE deployments SET status = 'active', updated_at = $1, last_deployed_at = $1, task_def_arn = $2 WHERE deployment_id = $3",
+            [timestamp, taskDefArn, deploymentID]
         );
-
+    
         await pool.query(
-            `UPDATE projects
-             SET previous_deployment = current_deployment,
-                 current_deployment = $1,
-                 updated_at = $2
-             WHERE project_id = $3`,
-            [deploymentID, timestamp, projectID]
+            `UPDATE domains
+             SET is_primary = true,
+                 deployment_id = $1,
+                 updated_at = $2,
+                 env_vars = $3
+             WHERE domain_name = $4 AND project_id = $5`,
+            [deploymentID, timestamp, JSON.stringify(envVars), subdomain, projectID]
         );
-
-        await pool.query(
-            "UPDATE domains SET is_primary = false WHERE project_id = $1",
-            [projectID]
-        );
-        await pool.query(
-            "UPDATE domains SET is_primary = true WHERE project_id = $1 AND domain_name = ANY($2)",
-            [projectID, activeSubdomains]
-        );
-
+    
         await pool.query(
             `INSERT INTO deployment_logs
              (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address)
              VALUES ($1, $2, $3, $4, 'rollback', $5, $6, '127.0.0.1')`,
             [organizationID, userID, projectID, projectName, deploymentID, timestamp]
         );
-
-        await this.recordRuntimeLogs(organizationID, userID, deploymentID, projectName);
-
+    
+        await this.recordRuntimeLogs(organizationID, userID, deploymentID, projectName, subdomain);
+    
         return {
-            message: `Successfully rolled back to deployment ${deploymentID}.`,
-            url: deployment.url,
+            message: `Successfully rolled back deployment ${deploymentID} for subdomain ${subdomain}.`,
+            url: `https://${fqdn}`,
             deploymentId: deploymentID
         };
     }
+    
 
     async deleteProject({ organizationID, userID, projectID, projectName, domainName }) {
         const timestamp = new Date().toISOString();
@@ -2875,4 +2863,6 @@ class DeployManager {
 }
 
 module.exports = new DeployManager();
+
+
 

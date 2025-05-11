@@ -507,6 +507,7 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
             }
             const domainDetails = domainDetailsResult.rows[0];
             const domainId = domainDetails.domain_id;
+
             const config = {
                 repository: repository || domainDetails.repository,
                 branch: branch || domainDetails.branch || "main",
@@ -705,11 +706,11 @@ router.post("/delete-project", authenticateToken, async (req, res, next) => {
 });
 
 router.post("/rollback-deployment", authenticateToken, async (req, res, next) => {
-    const { organizationID, userID, projectID, deploymentID } = req.body;
+    const { organizationID, userID, projectID, deploymentID, domainName } = req.body;
 
-    if (!organizationID || !userID || !projectID || !deploymentID) {
+    if (!organizationID || !userID || !projectID || !deploymentID || !domainName) {
         return res.status(400).json({
-            message: "Missing required parameters: organizationID, userID, projectID, and deploymentID are required."
+            message: "Missing required parameters: organizationID, userID, projectID, deploymentID, and domainName are required."
         });
     }
 
@@ -718,7 +719,8 @@ router.post("/rollback-deployment", authenticateToken, async (req, res, next) =>
             organizationID,
             userID,
             projectID,
-            deploymentID
+            deploymentID,
+            domainName
         });
         res.status(200).json(result);
     } catch (error) {
@@ -772,9 +774,8 @@ router.post("/status", authenticateToken, async (req, res, next) => {
         next(error);
     }
 });
-
 router.post("/project-details", authenticateToken, async (req, res, next) => {
-    const { organizationID, userID, projectID } = req.body;
+    const { organizationID, userID, projectID, domainName } = req.body;
     try {
         const projectResult = await pool.query(
             "SELECT * FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
@@ -783,21 +784,40 @@ router.post("/project-details", authenticateToken, async (req, res, next) => {
         if (projectResult.rows.length === 0)
             return res.status(404).json({ message: "Project not found or access denied." });
         const project = projectResult.rows[0];
-        const domainsResult = await pool.query("SELECT * FROM domains WHERE project_id = $1 AND orgid = $2", [
-            projectID,
-            organizationID
-        ]);
-        const deploymentsResult = await pool.query("SELECT * FROM deployments WHERE project_id = $1 AND orgid = $2", [
-            projectID,
-            organizationID
-        ]);
-        return res.status(200).json({ project, domains: domainsResult.rows, deployments: deploymentsResult.rows });
+
+        const domainsResult = await pool.query(
+            "SELECT * FROM domains WHERE project_id = $1 AND orgid = $2",
+            [projectID, organizationID]
+        );
+        const allDomains = domainsResult.rows;
+
+        let deploymentsResult;
+        if (domainName) {
+            const domainMatch = allDomains.find(d => d.domain_name === domainName);
+            if (!domainMatch)
+                return res.status(404).json({ message: "Subdomain not found for this project." });
+
+            deploymentsResult = await pool.query(
+                "SELECT * FROM deployments WHERE project_id = $1 AND orgid = $2 AND domain_id = $3",
+                [projectID, organizationID, domainMatch.domain_id]
+            );
+        } else {
+            deploymentsResult = await pool.query(
+                "SELECT * FROM deployments WHERE project_id = $1 AND orgid = $2",
+                [projectID, organizationID]
+            );
+        }
+
+        return res.status(200).json({
+            project,
+            domains: allDomains,
+            deployments: deploymentsResult.rows
+        });
     } catch (error) {
         if (!res.headersSent) return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         next(error);
     }
 });
-
 
 
 

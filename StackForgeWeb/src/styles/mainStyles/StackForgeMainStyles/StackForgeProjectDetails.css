@@ -201,8 +201,7 @@
     overflow: hidden;
 }
 
-.projectDetailsSearchContainer, 
-.projectDetailsSearchContainerSearchMode {
+.projectDetailsSearchContainer {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -215,7 +214,7 @@
     width: fit-content;         
     min-width: max-content;
     padding: 0 2rem;
-    gap: 1rem; 
+    gap: 1rem;
 }
 
 .projectDetailsSearchContainer small {
@@ -264,6 +263,7 @@
     box-sizing: border-box;
     background-color: rgba(255, 255, 255, 0.0); 
     border: none; 
+    flex: 0 0 auto;
 }
 
 .projectDetailsSearchIcon,
@@ -299,6 +299,8 @@
     color: #8b8b8b;
     font-size: 0.7rem;
     font-weight: 800;
+    flex: 0 0 auto;
+    opacity: 1.0 !important;
 }
 
 .projectDetailsNavContainer {
