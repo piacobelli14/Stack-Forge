@@ -127,20 +127,20 @@ class DeployManager {
         if (!projectName || typeof projectName !== "string" || !projectName.trim()) {
             throw new Error(`Invalid projectName: ${projectName}.`);
         }
-
+    
         const p0 = projectName.toLowerCase();
         let s0 = subdomain ? subdomain.toLowerCase() : null;
-        if (s0 === p0) s0 = null;                       
-
+        if (s0 === p0) s0 = null;
+    
         const baseName = s0 ? `${p0}-${s0.replace(/\./g, "-")}`.slice(0, 26)
             : p0.slice(0, 26);
-
+    
         const vpcId = process.env.VPC_ID;
         const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
         if (!vpcId || !listenerArn) {
             throw new Error("VPC_ID or ALB_LISTENER_ARN_HTTPS missing in env.");
         }
-
+    
         const desired = {
             Protocol: "HTTP",
             Port: 80,
@@ -154,11 +154,11 @@ class DeployManager {
             HealthyThresholdCount: 5,
             UnhealthyThresholdCount: 2
         };
-
+    
         const hostHeader = s0
             ? `${s0}.stackforgeengine.com`
             : `${p0}.stackforgeengine.com`;
-
+    
         const isCompatible = (tg) =>
             tg.Protocol === desired.Protocol &&
             tg.Port === desired.Port &&
@@ -171,11 +171,34 @@ class DeployManager {
             tg.HealthCheckTimeoutSeconds === desired.HealthCheckTimeoutSeconds &&
             tg.HealthyThresholdCount === desired.HealthyThresholdCount &&
             tg.UnhealthyThresholdCount === desired.UnhealthyThresholdCount;
-
+    
         let tgName = baseName;
         let tgArn = undefined;
-        let version = 0;              
-
+        let version = 0;
+    
+        // List all target groups to clean up old ones
+        const allTgs = await this.elbv2.send(new DescribeTargetGroupsCommand({}));
+        const oldTgs = allTgs.TargetGroups.filter(tg =>
+            tg.TargetGroupName.startsWith(baseName) && !tg.TargetGroupName.includes('-v')
+        );
+    
+        for (const oldTg of oldTgs) {
+            if (oldTg.TargetGroupName === tgName) continue;
+            try {
+                const rules = await this.elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+                for (const r of rules.Rules ?? []) {
+                    if (!r.IsDefault && r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === oldTg.TargetGroupArn)) {
+                        await this.elbv2.send(new DeleteRuleCommand({ RuleArn: r.RuleArn }));
+                    }
+                }
+                await this.elbv2.send(new DeleteTargetGroupCommand({ TargetGroupArn: oldTg.TargetGroupArn }));
+                console.log(`Deleted old target group: ${oldTg.TargetGroupName}`);
+            } catch (error) {
+                if (error.name !== "ResourceInUseException") throw error;
+                console.warn(`Could not delete target group ${oldTg.TargetGroupName}: ${error.message}`);
+            }
+        }
+    
         while (true) {
             let existingTg;
             try {
@@ -186,12 +209,12 @@ class DeployManager {
             } catch (error) {
                 if (error.name !== "TargetGroupNotFoundException") throw error;
             }
-
+    
             if (existingTg && isCompatible(existingTg)) {
                 tgArn = existingTg.TargetGroupArn;
                 break;
             }
-
+    
             if (existingTg) {
                 tgArn = existingTg.TargetGroupArn;
                 try {
@@ -205,7 +228,7 @@ class DeployManager {
                         }
                     }
                     await this.elbv2.send(new DeleteTargetGroupCommand({ TargetGroupArn: tgArn }));
-                    tgArn = undefined;                  
+                    tgArn = undefined;
                 } catch (error) {
                     if (error.name === "ResourceInUseException") {
                         version += 1;
@@ -216,16 +239,17 @@ class DeployManager {
                     }
                 }
             }
-
+    
             if (!tgArn) {
                 const c = await this.elbv2.send(
                     new CreateTargetGroupCommand({ Name: tgName, ...desired })
                 );
                 tgArn = c.TargetGroups[0].TargetGroupArn;
+                console.log(`Created target group: ${tgName}, ARN: ${tgArn}`);
                 break;
             }
-        } 
-
+        }
+    
         const { Rules } = await this.elbv2.send(
             new DescribeRulesCommand({ ListenerArn: listenerArn })
         );
@@ -233,16 +257,17 @@ class DeployManager {
             !r.IsDefault &&
             r.Conditions.some(
                 c => c.Field === "host-header" && c.Values.includes(hostHeader)
-            )
+            ) &&
+            r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === tgArn)
         );
-
+    
         if (!already) {
             const used = new Set(
                 Rules.filter(r => !r.IsDefault).map(r => Number(r.Priority))
             );
-            let priority = 10000;          
+            let priority = 10000;
             while (used.has(priority)) priority += 1;
-
+    
             await this.elbv2.send(
                 new CreateRuleCommand({
                     ListenerArn: listenerArn,
@@ -251,8 +276,9 @@ class DeployManager {
                     Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
                 })
             );
-        } 
-        
+            console.log(`Created ALB rule for ${hostHeader} with priority ${priority}`);
+        }
+    
         return tgArn;
     }
 
@@ -458,16 +484,16 @@ class DeployManager {
         const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
         const elbClient = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
         const cfClient = new CloudFrontClient({ region: process.env.AWS_REGION });
-
+    
         ["ECS_CLUSTER_ARN", "ECS_CLUSTER", "SUBNET_IDS",
             "SECURITY_GROUP_IDS", "ALB_LISTENER_ARN_HTTPS", "AWS_REGION"]
             .forEach(k => { if (!process.env[k]) throw new Error(`Missing env ${k}.`); });
-
+    
         const serviceName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
         const containerName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
         const fqdn = subdomain ? `${subdomain}.stackforgeengine.com`
             : `${projectName}.stackforgeengine.com`;
-
+    
         const ruleExists = async (listenerArn, targetGroupArn) => {
             const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
             const rule = Rules.find(r =>
@@ -506,7 +532,7 @@ class DeployManager {
                 Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
             }));
         }
-
+    
         const td = await ecsClient.send(
             new DescribeTaskDefinitionCommand({ taskDefinition: taskDefArn })
         );
@@ -516,7 +542,7 @@ class DeployManager {
             if (!cont) throw new Error(`No containers found in task definition ${taskDefArn}.`);
         }
         const port = cont.portMappings?.[0]?.containerPort || 3000;
-
+    
         const svcBase = {
             cluster: process.env.ECS_CLUSTER_ARN,
             taskDefinition: taskDefArn,
@@ -535,13 +561,13 @@ class DeployManager {
             }],
             healthCheckGracePeriodSeconds: 60
         };
-
+    
         const { services } = await ecsClient.send(new DescribeServicesCommand({
             cluster: process.env.ECS_CLUSTER_ARN,
             services: [serviceName]
         }));
         const existing = services?.[0];
-
+    
         if (existing && existing.status === "ACTIVE") {
             await ecsClient.send(new UpdateServiceCommand({
                 ...svcBase,
@@ -549,7 +575,7 @@ class DeployManager {
                 forceNewDeployment: true
             }));
             await waitUntilServicesStable(
-                { client: ecsClient, maxWaitTime: 600, minDelay: 10, maxDelay: 30 },
+                { client: ecsClient, maxWaitTime: 900, minDelay: 10, maxDelay: 30 },
                 { cluster: process.env.ECS_CLUSTER_ARN, services: [serviceName] }
             );
         } else {
@@ -562,11 +588,11 @@ class DeployManager {
                 ...svcBase, serviceName, launchType: "FARGATE"
             }));
             await waitUntilServicesStable(
-                { client: ecsClient, maxWaitTime: 600, minDelay: 10, maxDelay: 30 },
+                { client: ecsClient, maxWaitTime: 900, minDelay: 10, maxDelay: 30 },
                 { cluster: process.env.ECS_CLUSTER_ARN, services: [serviceName] }
             );
         }
-
+    
         const serviceDesc = await ecsClient.send(
             new DescribeServicesCommand({
                 cluster: process.env.ECS_CLUSTER_ARN,
@@ -583,15 +609,30 @@ class DeployManager {
         if (!targetHealth.TargetHealthDescriptions.some(t => t.TargetHealth.State === 'healthy')) {
             throw new Error(`No healthy targets in target group ${targetGroupArn}.`);
         }
-
+    
         if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
-            await cfClient.send(new CreateInvalidationCommand({
-                DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
-                InvalidationBatch: {
-                    CallerReference: `ecs-${serviceName}-${Date.now()}`,
-                    Paths: { Quantity: 2, Items: ["/", "/*"] }
+            const maxRetries = 3;
+            let attempt = 1;
+            let invalidationId = null;
+            while (attempt <= maxRetries) {
+                try {
+                    const invalidation = await cfClient.send(new CreateInvalidationCommand({
+                        DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
+                        InvalidationBatch: {
+                            CallerReference: `ecs-${serviceName}-${Date.now()}`,
+                            Paths: { Quantity: 3, Items: ["/", "/*", "/*/*"] }
+                        }
+                    }));
+                    invalidationId = invalidation.Invalidation.Id;
+                    console.log(`CloudFront invalidation created: ${invalidationId}`);
+                    break;
+                } catch (error) {
+                    console.error(`Invalidation attempt ${attempt} failed: ${error.message}`);
+                    if (attempt === maxRetries) throw new Error(`Failed to create CloudFront invalidation: ${error.message}`);
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    attempt++;
                 }
-            }));
+            }
         }
     }
 
@@ -743,7 +784,7 @@ class DeployManager {
 
     async startCodeBuild({
         projectName,
-        subdomain,             
+        subdomain,
         repository,
         branch,
         logDir,
@@ -752,25 +793,26 @@ class DeployManager {
         const codeBuildProjectName = subdomain
             ? `${projectName}-${subdomain.replace(/\./g, '-')}`
             : projectName;
-
+    
         const logGroupName = `/aws/codebuild/${codeBuildProjectName}`;
         const repoUrl = /^https?:\/\//i.test(repository) || /^git@/i.test(repository)
             ? repository
             : `https://github.com/${repository}.git`;
-
+    
         if (!githubAccessToken) {
             throw new Error("GitHub access token is required for CodeBuild.");
         }
         await this.validateGitHubToken(githubAccessToken, repository);
-
+    
         const imageTag = subdomain
             ? `${subdomain.replace(/\./g, '-')}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}`
             : "latest";
-
+        console.log(`Using image tag: ${imageTag}`);
+    
         try {
             await cloudWatchLogsClient.send(new CreateLogGroupCommand({ logGroupName }));
         } catch (_) {}
-
+    
         const startResp = await codeBuildClient.send(new StartBuildCommand({
             projectName: codeBuildProjectName,
             environmentVariablesOverride: [
@@ -783,26 +825,26 @@ class DeployManager {
             ]
         }));
         const buildId = startResp.build.id;
-
+    
         let logStreamName = startResp.build.logs?.cloudWatchLogs?.logStreamName || null;
         if (!logStreamName) {
             for (let i = 0; i < 10 && !logStreamName; i++) {
-                await new Promise(r => setTimeout(r, 3000)); 
+                await new Promise(r => setTimeout(r, 3000));
                 const info = await codeBuildClient.send(new BatchGetBuildsCommand({ ids: [buildId] }));
                 logStreamName = info.builds?.[0]?.logs?.cloudWatchLogs?.logStreamName || null;
             }
         }
-
+    
         if (!logStreamName) logStreamName = buildId.split(":")[1];
-
+    
         if (!logStreamName) {
-            throw new Error("CodeBuild did not return a CloudWatch log‑stream name.");
+            throw new Error("CodeBuild did not return a CloudWatch log-stream name.");
         }
-
+    
         const logFile = path.join(logDir, `codebuild-${buildId.replace(/:/g, "-")}.log`);
         fs.mkdirSync(path.dirname(logFile), { recursive: true });
-        fs.writeFileSync(logFile, "");               
-
+        fs.writeFileSync(logFile, "");
+    
         let nextToken;
         let buildStatus = "IN_PROGRESS";
         while (buildStatus === "IN_PROGRESS") {
@@ -816,19 +858,20 @@ class DeployManager {
                 fs.appendFileSync(logFile, event.message + "\n");
             }
             nextToken = logs.nextForwardToken;
-
+    
             const buildInfo = await codeBuildClient.send(new BatchGetBuildsCommand({ ids: [buildId] }));
             buildStatus = buildInfo.builds[0].buildStatus;
-
-            await new Promise(r => setTimeout(r, 4000));   
+    
+            await new Promise(r => setTimeout(r, 4000));
         }
-
+    
         if (buildStatus !== "SUCCEEDED") {
             const lastLine = fs.readFileSync(logFile, "utf-8").trim().split("\n").pop();
             throw new Error(`Build failed (status: ${buildStatus}) – ${lastLine || "no details"}.`);
         }
-
+    
         const imageUri = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}:${imageTag}`;
+        console.log(`Image pushed: ${imageUri}`);
         return { imageUri, logFile };
     }
 
@@ -2009,9 +2052,9 @@ class DeployManager {
             ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`;
         if (!hostedZoneId || !albZoneId || !albDns)
             throw new Error("Route-53 / ALB env vars are missing.");
-
+    
         projectName = projectName.toLowerCase();
-
+    
         const fqdnSet = new Set();
         (Array.isArray(subdomains) ? subdomains : []).forEach(raw => {
             const s = raw.trim().toLowerCase();
@@ -2026,7 +2069,7 @@ class DeployManager {
         let certificateArn = process.env.CERTIFICATE_ARN || "arn:aws:acm:us-east-1:913524945973:certificate/d84f519d-2502-477f-8512-3d060065ed78";
         const { Certificate } = await acmClient.send(new DescribeCertificateCommand({ CertificateArn: certificateArn }));
         const certDomains = Certificate.SubjectAlternativeNames || [];
-
+    
         if (!certDomains.includes(wildcardSubdomain) && fqdnList.some(fqdn => fqdn !== `${projectName}.stackforgeengine.com`)) {
             try {
                 const certResponse = await acmClient.send(new RequestCertificateCommand({
@@ -2038,7 +2081,7 @@ class DeployManager {
                     ValidationMethod: "DNS"
                 }));
                 certificateArn = certResponse.CertificateArn;
-
+    
                 for (let i = 0; i < 30; i++) {
                     const { Certificate } = await acmClient.send(new DescribeCertificateCommand({ CertificateArn: certificateArn }));
                     const domainValidation = Certificate.DomainValidationOptions?.find(opt => opt.DomainName === wildcardSubdomain);
@@ -2061,7 +2104,7 @@ class DeployManager {
                     }
                     await new Promise(resolve => setTimeout(resolve, 10000));
                 }
-
+    
                 for (let i = 0; i < 60; i++) {
                     const { Certificate } = await acmClient.send(new DescribeCertificateCommand({ CertificateArn: certificateArn }));
                     if (Certificate.Status === "ISSUED") {
@@ -2076,7 +2119,7 @@ class DeployManager {
                 throw error;
             }
         }
-
+    
         const deletesMap = new Map();
         for (const fqdn of fqdnList) {
             let next = null;
@@ -2098,7 +2141,7 @@ class DeployManager {
                     : null;
             } while (next);
         }
-
+    
         const upsertsMap = new Map();
         for (const fqdn of fqdnList) {
             const apex = fqdn === `${projectName}.stackforgeengine.com`;
@@ -2118,7 +2161,7 @@ class DeployManager {
             };
             upsertsMap.set(`${rec.Name}|${rec.Type}`, { Action: "UPSERT", ResourceRecordSet: rec });
         }
-
+    
         for (const k of upsertsMap.keys()) {
             const del = deletesMap.get(k);
             if (del && JSON.stringify(del.ResourceRecordSet) === JSON.stringify(upsertsMap.get(k).ResourceRecordSet)) {
@@ -2126,7 +2169,7 @@ class DeployManager {
                 upsertsMap.delete(k);
             }
         }
-
+    
         const sendBatch = async (changes) => {
             if (changes.length === 0) return;
             try {
@@ -2136,7 +2179,9 @@ class DeployManager {
                         ChangeBatch: { Changes: changes }
                     })
                 );
+                console.log(`DNS batch applied: ${JSON.stringify(changes.map(c => c.ResourceRecordSet.Name))}`);
             } catch (error) {
+                console.error(`DNS batch failed: ${error.message}`);
                 throw error;
             }
         };
@@ -2144,7 +2189,7 @@ class DeployManager {
         for (let i = 0; i < delArr.length; i += 100) await sendBatch(delArr.slice(i, i + 100));
         const upArr = Array.from(upsertsMap.values());
         for (let i = 0; i < upArr.length; i += 100) await sendBatch(upArr.slice(i, i + 100));
-
+    
         for (const fqdn of fqdnList) {
             try {
                 const { ResourceRecordSets } = await route53Client.send(
@@ -2155,10 +2200,12 @@ class DeployManager {
                     })
                 );
                 const record = ResourceRecordSets.find(rec => rec.Name.replace(/\.$/, "") === fqdn);
-    
-            } catch (error) {}
+                console.log(`DNS record verified for ${fqdn}: ${JSON.stringify(record)}`);
+            } catch (error) {
+                console.error(`DNS verification failed for ${fqdn}: ${error.message}`);
+            }
         }
-
+    
         if (targetGroupArn) {
             const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
             const pickPriority = async () => {
@@ -2167,7 +2214,7 @@ class DeployManager {
                 for (let p = 1; p <= 50000; p++) if (!used.has(p)) return p;
                 throw new Error("No free ALB priority.");
             };
-
+    
             for (const fqdn of fqdnList) {
                 const ruleExists = async () => {
                     const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
@@ -2178,7 +2225,7 @@ class DeployManager {
                     );
                     return rule ? rule.RuleArn : null;
                 };
-
+    
                 const existingRuleArn = await ruleExists();
                 if (existingRuleArn) {
                     await elbClient.send(new ModifyRuleCommand({
@@ -2186,6 +2233,7 @@ class DeployManager {
                         Conditions: [{ Field: "host-header", Values: [fqdn] }],
                         Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
                     }));
+                    console.log(`ALB rule modified for ${fqdn}: ${existingRuleArn}`);
                 } else {
                     const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
                     const outdatedRule = Rules.find(r =>
@@ -2194,6 +2242,7 @@ class DeployManager {
                     );
                     if (outdatedRule) {
                         await elbClient.send(new DeleteRuleCommand({ RuleArn: outdatedRule.RuleArn }));
+                        console.log(`Outdated ALB rule deleted for ${fqdn}: ${outdatedRule.RuleArn}`);
                     }
                     const priority = await pickPriority();
                     await elbClient.send(new CreateRuleCommand({
@@ -2202,10 +2251,11 @@ class DeployManager {
                         Conditions: [{ Field: "host-header", Values: [fqdn] }],
                         Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
                     }));
+                    console.log(`ALB rule created for ${fqdn}: priority ${priority}`);
                 }
             }
         }
-
+    
         return { certificateArn };
     }
 
@@ -2863,6 +2913,4 @@ class DeployManager {
 }
 
 module.exports = new DeployManager();
-
-
 
