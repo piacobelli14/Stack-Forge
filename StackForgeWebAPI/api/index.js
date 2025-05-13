@@ -1,8 +1,8 @@
-const express = require('express');   
-const cors = require('cors'); 
+const express = require('express');
+const cors = require('cors');
 const path = require('path');
 const compression = require('compression');
-const bodyParser = require('body-parser'); 
+const bodyParser = require('body-parser');
 const { pool } = require('./config/db');
 const errorLogger = require('./middleware/errorLogger');
 const authenticationRoutes = require('./routes/stackforge-authentication');
@@ -10,16 +10,18 @@ const profileRoutes = require('./routes/stackforge-profile');
 const builderRoutes = require('./routes/stackforge-builder');
 const projectRoutes = require('./routes/stackforge-project');
 const domainRoutes = require('./routes/stackforge-domains');
+const analyticsRoutes = require('./routes/stackforge-analytics');
+const cron = require('node-cron');
 
 require('dotenv').config();
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(compression());
-app.use(cors({ 
-  optionsSuccessStatus: 200, 
-  methods: ['POST', 'GET'],
-  allowedHeaders: ['Content-Type', 'Authorization'] 
+app.use(cors({
+  optionsSuccessStatus: 200,
+  methods: ['POST','GET'],
+  allowedHeaders: ['Content-Type','Authorization']
 }));
 app.use(bodyParser.json({ limit: '1gb' }));
 app.use(errorLogger);
@@ -28,6 +30,7 @@ app.use(profileRoutes);
 app.use(builderRoutes);
 app.use(projectRoutes);
 app.use(domainRoutes);
+app.use(analyticsRoutes);
 
 app.set('trust proxy', 1);
 
@@ -42,14 +45,14 @@ const shutdown = () => {
     console.log('Closed all remaining connections.');
     pool.end(() => {
       console.log('PostgreSQL pool has been closed.');
-      process.exit(0); 
+      process.exit(0);
     });
   });
 };
 
-process.on('SIGINT', shutdown); 
+process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
 });
 process.on('uncaughtException', (error) => {

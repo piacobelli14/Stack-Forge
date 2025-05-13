@@ -176,7 +176,6 @@ class DeployManager {
         let tgArn = undefined;
         let version = 0;
     
-        // List all target groups to clean up old ones
         const allTgs = await this.elbv2.send(new DescribeTargetGroupsCommand({}));
         const oldTgs = allTgs.TargetGroups.filter(tg =>
             tg.TargetGroupName.startsWith(baseName) && !tg.TargetGroupName.includes('-v')
@@ -192,10 +191,8 @@ class DeployManager {
                     }
                 }
                 await this.elbv2.send(new DeleteTargetGroupCommand({ TargetGroupArn: oldTg.TargetGroupArn }));
-                console.log(`Deleted old target group: ${oldTg.TargetGroupName}`);
             } catch (error) {
                 if (error.name !== "ResourceInUseException") throw error;
-                console.warn(`Could not delete target group ${oldTg.TargetGroupName}: ${error.message}`);
             }
         }
     
@@ -245,7 +242,6 @@ class DeployManager {
                     new CreateTargetGroupCommand({ Name: tgName, ...desired })
                 );
                 tgArn = c.TargetGroups[0].TargetGroupArn;
-                console.log(`Created target group: ${tgName}, ARN: ${tgArn}`);
                 break;
             }
         }
@@ -276,7 +272,6 @@ class DeployManager {
                     Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
                 })
             );
-            console.log(`Created ALB rule for ${hostHeader} with priority ${priority}`);
         }
     
         return tgArn;
@@ -624,10 +619,8 @@ class DeployManager {
                         }
                     }));
                     invalidationId = invalidation.Invalidation.Id;
-                    console.log(`CloudFront invalidation created: ${invalidationId}`);
                     break;
                 } catch (error) {
-                    console.error(`Invalidation attempt ${attempt} failed: ${error.message}`);
                     if (attempt === maxRetries) throw new Error(`Failed to create CloudFront invalidation: ${error.message}`);
                     await new Promise(resolve => setTimeout(resolve, 5000));
                     attempt++;
@@ -648,13 +641,13 @@ class DeployManager {
         githubAccessToken
     }) {
         if (!repository || typeof repository !== "string" || !repository.trim()) {
-            throw new Error("Invalid repository: must be a non‑empty string.");
+            throw new Error("Invalid repository: must be a non-empty string.");
         }
         if (!githubAccessToken || typeof githubAccessToken !== "string" || !githubAccessToken.trim()) {
             throw new Error("Invalid GitHub access token.");
         }
         await this.validateGitHubToken(githubAccessToken, repository);
-
+    
         let repoUrl;
         if (/^https?:\/\//i.test(repository) || /^git@/i.test(repository)) {
             repoUrl = repository;
@@ -662,12 +655,12 @@ class DeployManager {
             const clean = repository.trim().replace(/^\/+|\/+$/g, "");
             repoUrl = `https://github.com/${clean}.git`;
         }
-
+    
         const rootDir = rootDirectory || ".";
         const imageTag = subdomain
             ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}`
             : "latest";
-
+    
         const buildspec = {
             version: "0.2",
             phases: {
@@ -684,10 +677,14 @@ class DeployManager {
                         'git config --global credential.helper \'!f() { echo username=x-oauth-basic; echo password=$GITHUB_TOKEN; }; f\'',
                         'echo "Cloning repository into $CODEBUILD_SRC_DIR"',
                         'git clone --branch $REPO_BRANCH $REPO_URL $CODEBUILD_SRC_DIR || { echo "Git clone failed: $?"; exit 1; }',
-                        'echo "Listing cloned files"', 'ls -la $CODEBUILD_SRC_DIR',
-                        'echo "Entering root directory: $ROOT_DIRECTORY"', `cd $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
-                        'echo "Listing files in $ROOT_DIRECTORY"', `ls -la $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
-                        'echo "Installing dependencies"', installCommand || "npm install"
+                        'echo "Listing cloned files"',
+                        'ls -la $CODEBUILD_SRC_DIR',
+                        'echo "Entering root directory: $ROOT_DIRECTORY"',
+                        `cd $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
+                        'echo "Listing files in $ROOT_DIRECTORY"',
+                        `ls -la $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
+                        'echo "Installing dependencies"',
+                        installCommand || "npm install"
                     ]
                 },
                 build: {
@@ -695,7 +692,8 @@ class DeployManager {
                         'echo "Starting build phase"',
                         `cd $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
                         'echo "Current directory: $(pwd)"',
-                        'echo "Listing files before build"', 'ls -la',
+                        'echo "Listing files before build"',
+                        'ls -la',
                         'echo "No build step required for Node.js app"'
                     ]
                 },
@@ -704,7 +702,10 @@ class DeployManager {
                         'echo "Starting post_build phase"',
                         `cd $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
                         'echo "Current directory: $(pwd)"',
-                        'echo "Listing files before Docker build"', 'ls -la',
+                        'echo "Listing files before Docker build"',
+                        'ls -la',
+                        'echo "Injecting monitoring script into HTML files"',
+                        `find $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY -name '*.html' -exec sed -i 's|</head>|<script src="http://localhost:3000/z-analytics-injection.js"></script></head>|g' {} \\;`,
                         'echo "Building Docker image"',
                         'echo "FROM node:20" > Dockerfile',
                         'echo "WORKDIR /app" >> Dockerfile',
@@ -712,11 +713,12 @@ class DeployManager {
                         'echo "RUN npm install" >> Dockerfile',
                         'echo "COPY api/ ./api/" >> Dockerfile',
                         'echo "CMD [\\"node\\", \\"api/index.js\\"]" >> Dockerfile',
-                        'echo "Listing files in current directory after Dockerfile creation"', 'ls -la', 'cat Dockerfile',
+                        'echo "Listing files in current directory after Dockerfile creation"',
+                        'ls -la',
+                        'cat Dockerfile',
                         '[ -n "$DOCKER_HUB_USERNAME" ] && [ -n "$DOCKER_HUB_PASSWORD" ] && ' +
                         'echo "$DOCKER_HUB_PASSWORD" | docker login --username "$DOCKER_HUB_USERNAME" --password-stdin || ' +
-                        'echo "Skipping Docker‑Hub login (no creds)"',
-
+                        'echo "Skipping Docker-Hub login (no creds)"',
                         'docker build -t $REPO_URI:$IMAGE_TAG .',
                         'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI',
                         'docker push $REPO_URI:$IMAGE_TAG'
@@ -725,7 +727,7 @@ class DeployManager {
             },
             artifacts: { files: ["**/*"], "discard-paths": "yes" }
         };
-
+    
         const envVars = [
             { name: "ROOT_DIRECTORY", value: rootDir, type: "PLAINTEXT" },
             { name: "INSTALL_COMMAND", value: installCommand || "npm install", type: "PLAINTEXT" },
@@ -740,7 +742,7 @@ class DeployManager {
             { name: "DOCKER_HUB_USERNAME", value: process.env.DOCKER_HUB_USERNAME || "", type: "PLAINTEXT" },
             { name: "DOCKER_HUB_PASSWORD", value: process.env.DOCKER_HUB_PASSWORD || "", type: "PLAINTEXT" }
         ];
-
+    
         const params = {
             name: subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName,
             source: { type: "NO_SOURCE", buildspec: JSON.stringify(buildspec) },
@@ -760,7 +762,7 @@ class DeployManager {
                 }
             }
         };
-
+    
         try {
             await codeBuildClient.send(new CreateProjectCommand(params));
         } catch (error) {
@@ -770,13 +772,13 @@ class DeployManager {
                 throw new Error(`Failed to create CodeBuild project: ${error.message}.`);
             }
         }
-
+    
         if (subdomain) {
             await pool.query(
                 `UPDATE domains
-                SET image_tag = $1
-                WHERE domain_name = $2
-                AND project_id  = (SELECT project_id FROM projects WHERE name = $3)`,
+                 SET image_tag = $1
+                 WHERE domain_name = $2
+                   AND project_id = (SELECT project_id FROM projects WHERE name = $3)`,
                 [imageTag, subdomain, projectName]
             );
         }
@@ -807,7 +809,6 @@ class DeployManager {
         const imageTag = subdomain
             ? `${subdomain.replace(/\./g, '-')}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}`
             : "latest";
-        console.log(`Using image tag: ${imageTag}`);
     
         try {
             await cloudWatchLogsClient.send(new CreateLogGroupCommand({ logGroupName }));
@@ -871,7 +872,6 @@ class DeployManager {
         }
     
         const imageUri = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}:${imageTag}`;
-        console.log(`Image pushed: ${imageUri}`);
         return { imageUri, logFile };
     }
 
@@ -2179,9 +2179,7 @@ class DeployManager {
                         ChangeBatch: { Changes: changes }
                     })
                 );
-                console.log(`DNS batch applied: ${JSON.stringify(changes.map(c => c.ResourceRecordSet.Name))}`);
             } catch (error) {
-                console.error(`DNS batch failed: ${error.message}`);
                 throw error;
             }
         };
@@ -2200,10 +2198,7 @@ class DeployManager {
                     })
                 );
                 const record = ResourceRecordSets.find(rec => rec.Name.replace(/\.$/, "") === fqdn);
-                console.log(`DNS record verified for ${fqdn}: ${JSON.stringify(record)}`);
-            } catch (error) {
-                console.error(`DNS verification failed for ${fqdn}: ${error.message}`);
-            }
+            } catch (error) {}
         }
     
         if (targetGroupArn) {
@@ -2233,7 +2228,6 @@ class DeployManager {
                         Conditions: [{ Field: "host-header", Values: [fqdn] }],
                         Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
                     }));
-                    console.log(`ALB rule modified for ${fqdn}: ${existingRuleArn}`);
                 } else {
                     const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
                     const outdatedRule = Rules.find(r =>
@@ -2242,7 +2236,6 @@ class DeployManager {
                     );
                     if (outdatedRule) {
                         await elbClient.send(new DeleteRuleCommand({ RuleArn: outdatedRule.RuleArn }));
-                        console.log(`Outdated ALB rule deleted for ${fqdn}: ${outdatedRule.RuleArn}`);
                     }
                     const priority = await pickPriority();
                     await elbClient.send(new CreateRuleCommand({
@@ -2251,7 +2244,6 @@ class DeployManager {
                         Conditions: [{ Field: "host-header", Values: [fqdn] }],
                         Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
                     }));
-                    console.log(`ALB rule created for ${fqdn}: priority ${priority}`);
                 }
             }
         }
@@ -2913,4 +2905,3 @@ class DeployManager {
 }
 
 module.exports = new DeployManager();
-
