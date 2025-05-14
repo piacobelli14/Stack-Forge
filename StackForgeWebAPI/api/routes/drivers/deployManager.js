@@ -705,7 +705,7 @@ class DeployManager {
                         'echo "Listing files before Docker build"',
                         'ls -la',
                         'echo "Injecting monitoring script into HTML files"',
-                        `find $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY -name '*.html' -exec sed -i 's|</head>|<script src="http://localhost:3000/z-analytics-injection.js"></script></head>|g' {} \\;`,
+                        `find $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY -name '*.html' -exec sed -i 's|</head>|<script src="http://localhost:3000/z-analytics-inject.js"></script></head>|g' {} \\;`,
                         'echo "Building Docker image"',
                         'echo "FROM node:20" > Dockerfile',
                         'echo "WORKDIR /app" >> Dockerfile',
