@@ -310,9 +310,34 @@ CREATE TABLE runtime_logs (
 DROP INDEX IF EXISTS idx_runtime_logs;
 CREATE INDEX idx_runtime_logs ON build_logs (orgid, username, deployment_id);
 
+DROP TABLE IF EXISTS metrics_events; 
+CREATE TABLE metrics_events (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  domain        TEXT    NOT NULL,
+  session_id    TEXT    NOT NULL,
+  url           TEXT    NOT NULL,
+  pageviews     INT     NOT NULL,
+  load_time_ms  DOUBLE PRECISION NOT NULL,
+  lcp_ms        DOUBLE PRECISION NOT NULL,
+  bounce        BOOLEAN NOT NULL,
+  event_time    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip_address    TEXT,
+  user_agent    TEXT,
+  latitude      DOUBLE PRECISION,
+  longitude     DOUBLE PRECISION,
+  city          TEXT,
+  region        TEXT,
+  country       TEXT
+);
 
-
-
-
-
-
+DROP TABLE IF EXISTS metrics_daily; 
+CREATE TABLE metrics_daily (
+  domain        TEXT    NOT NULL,
+  day           DATE    NOT NULL,
+  pageviews     BIGINT  NOT NULL,
+  unique_visitors BIGINT NOT NULL,
+  bounce_rate   DOUBLE PRECISION NOT NULL,
+  avg_load_time DOUBLE PRECISION,
+  p75_lcp       DOUBLE PRECISION,
+  PRIMARY KEY(domain, day)
+);

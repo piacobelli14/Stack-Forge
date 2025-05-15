@@ -184,6 +184,21 @@
     }
 }
 
+.projectsTopBarControls p {
+    font-size: 1.2rem; 
+    font-weight: 800; 
+    color: #f5f5f5; 
+    font-style: italic; 
+    padding: 0; 
+    margin: 0; 
+    width: 100%; 
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 1rem;
+}
+
 .viewControlButtonWrapper {
     display: flex;
     justify-content: center;
@@ -1234,5 +1249,144 @@
     background: rgba(255, 255, 255, 0.2);
 }
 
+.activityLogsFlexWrapper {
+    display: flex; 
+    flex-direction: column; 
+    justify-content: flex-start !important; 
+    align-items: flex-start !important;
+    min-height: calc(100% - 80px); 
+    max-height: calc(100% - 80px);
+    width: 100%;  
+    overflow: scroll;
+    box-sizing: border-box; 
+    padding: 20px 60px; 
+    padding-bottom: 10vw; 
+}
+
+.activityLogItemWrapper {
+    width: 100%; 
+    background-color: rgba(255, 255, 255, 0.05);
+    display: flex; 
+    justify-content: flex-start;
+    align-items: center;
+    box-sizing: border-box;
+    padding: 1rem 2vw;
+    margin-bottom: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.1); 
+    border-radius: 6px; 
+    box-shadow: 0 0 20px black;
+}
+
+.activityLogItemWrapperImage {
+    width: 50px; 
+    height: 50px; 
+    object-fit: cover;
+    border-radius: 8px; 
+    margin-right: 1rem;
+}
+
+.activitylogItemWrapperTitleStack {
+    flex: 1; 
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.activitylogItemWrapperTitleStack strong {
+    font-size: 0.9rem; 
+    font-weight: 700; 
+    font-style: italic;
+    padding: 0; 
+    margin: 0; 
+}
+
+.activitylogItemWrapperTitleStack p {
+    font-size: 0.7rem; 
+    font-weight: 700; 
+    font-style: italic;
+    padding: 0; 
+    margin: 0; 
+}
 
 
+.activityLogsNoResults {
+    width: 100%; 
+    height: calc(100vh - 180px); 
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.activityLogsNoResultsIcon {
+    font-size: 1.6rem; 
+    color: #c1c1c1; 
+    margin-bottom: 1rem; 
+}
+
+.activityLogsNoResultsText {
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    font-style: italic; 
+    margin-bottom: 1rem;;
+    width: 80%; 
+    text-align: center;
+}
+
+.activityLogsNoResultsButtons {
+    display: flex; 
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+}
+
+@media (max-width: 700px) {
+    .activityLogsNoResultsButtons {
+        flex-direction: column;
+    }
+}
+
+.activityLogsNoResultsReset, 
+.activityLogsNoResultsRefresh {
+    background-color: #c1c1c1; 
+    padding: 0.4rem 0.8rem; 
+    border: 1px solid #A3A3A3; 
+    border-radius: 6px; 
+    box-shadow: 0 0 10px black; 
+    font-size: 0.8rem; 
+    font-weight: 700;
+    color: #222222;
+    width: 150px;
+    outline: none; 
+}
+
+.activityLogsNoResultsReset:hover, 
+.activityLogsNoResultsRefresh:hover {
+    opacity: 0.6;
+    border: 1px solid #A3A3A3; 
+    outline: none;
+}
+
+.activityLogsNoResultsReset:focus, 
+.activityLogsNoResultsRefreshfocus {
+    border: 1px solid #A3A3A3; 
+    outline: none;
+}
+
+.activityLogsNoResultCell {
+    background-color: rgba(0,0,0,0.4); 
+    padding: 40px 40px; 
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+    border-radius: 6px; 
+    display: flex; 
+    flex-direction: column;
+    align-items: center;
+}
+
+@media (max-width: 700px) {
+    .activityLogsNoResultCell {
+        padding: 20px 5px; 
+    }
+}

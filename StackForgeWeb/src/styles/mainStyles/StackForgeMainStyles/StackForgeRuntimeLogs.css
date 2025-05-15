@@ -433,6 +433,7 @@
     font-weight: 700;
     color: #222222;
     width: 150px;
+    outline: none; 
 }
 
 .runtimeLogsNoResultsReset:hover, 
@@ -451,7 +452,7 @@
 .runtimeLogsNoResultCell {
     background-color: rgba(0,0,0,0.4); 
     padding: 40px 60px; 
-    box-shadow: 0 0 10px black;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
     border-radius: 6px; 
     display: flex; 
     flex-direction: column;

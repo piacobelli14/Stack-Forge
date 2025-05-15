@@ -12,7 +12,8 @@ import {
   faCodeBranch,
   faGlobe,
   faXmark,
-  faFolderOpen
+  faFolderOpen,
+  faListUl
 } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeProjects.css";
@@ -44,7 +45,12 @@ const StackForgeProjects = () => {
   const [selectedDomainProject, setSelectedDomainProject] = useState(null);
   const [domainName, setDomainName] = useState("");
   const [isAddingDomain, setIsAddingDomain] = useState(false);
-
+  const [activities, setActivities] = useState([]);
+  const [activityPage, setActivityPage] = useState(0);
+  const [activityLimit] = useState(10);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+  const [activitySearchText, setActivitySearchText] = useState("");
+  const debounceTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (!loading && !token) navigate("/login");
@@ -113,6 +119,43 @@ const StackForgeProjects = () => {
     }
   }, [addNewOpen]);
 
+  useEffect(() => {
+    const fetchActivityLogs = async () => {
+      if (projectsPage !== "activity" || !token) return;
+      try {
+        const response = await fetch("http://localhost:3000/get-activity-data", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            userID,
+            organizationID,
+            limit: activityLimit,
+            offset: activityPage * activityLimit,
+            search: activitySearchText,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setActivities(data.data || []);
+      } catch (error) {
+        setActivities([]);
+        await showDialog({
+          title: "Error",
+          message: "Failed to load activity logs. Please try again.",
+          showCancel: false,
+        });
+      } finally {
+        setIsLoadingActivities(false);
+      }
+    };
+    fetchActivityLogs();
+  }, [projectsPage, token, userID, organizationID, activityPage, activityLimit, activitySearchText]);
+
   const getProjects = async () => {
     const token = localStorage.getItem("token");
     try {
@@ -136,6 +179,55 @@ const StackForgeProjects = () => {
 
   const handleSearchChange = (e) => {
     setSearchText(e.target.value);
+  };
+
+  const handleActivitySearchChange = (e) => {
+    const searchValue = e.target.value;
+    setActivitySearchText(searchValue);
+    setIsLoadingActivities(true);
+    setActivityPage(0);
+
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    debounceTimeoutRef.current = setTimeout(() => {
+    }, 300);
+  };
+
+  const refreshActivityLogs = async () => {
+    if (!token || isLoadingActivities) return;
+    setIsLoadingActivities(true);
+    try {
+      const response = await fetch("http://localhost:3000/get-activity-data", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userID,
+          organizationID,
+          limit: activityLimit,
+          offset: activityPage * activityLimit,
+          search: activitySearchText,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setActivities(data.data || []);
+    } catch (error) {
+      setActivities([]);
+      await showDialog({
+        title: "Error",
+        message: "Failed to refresh activity logs. Please try again.",
+        showCancel: false,
+      });
+    } finally {
+      setIsLoadingActivities(false);
+    }
   };
 
   const toggleAddNewDropdown = () => {
@@ -198,7 +290,6 @@ const StackForgeProjects = () => {
     }
   };
 
-
   const closeDomainSearchModal = () => {
     setDomainSearchModal(false);
     setDomainSearchTerm("");
@@ -220,6 +311,9 @@ const StackForgeProjects = () => {
     );
   });
 
+  const filteredActivities = activities.filter((activity) =>
+    activity.description.toLowerCase().includes(activitySearchText.toLowerCase())
+  );
 
   return (
     <div
@@ -291,161 +385,161 @@ const StackForgeProjects = () => {
           </div>
 
           {projectsPage === "projects" && (
-            <div className="projectsTopBar">
-              <div className="projectsTopBarSearchContainer">
-                <div className="searchBarWrapper">
-                  <FontAwesomeIcon icon={faSearch} className="searchIcon" />
-                  <input
-                    type="text"
-                    className="searchInput"
-                    value={searchText}
-                    onChange={handleSearchChange}
-                    placeholder="Search Projects..."
-                  />
-                  <FontAwesomeIcon icon={faCircleInfo} className="searchIconSupplement" />
-                </div>
-              </div>
-              <div className="projectsTopBarControls">
-                <div className="viewControlButtonWrapper">
-                  <button
-                    className={`viewControlButton ${displayMode === "grid" ? "active" : ""}`}
-                    onClick={() => {
-                      setDisplayMode("grid");
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faGrip} />
-                  </button>
-                  <button
-                    className={`viewControlButton ${displayMode === "list" ? "active" : ""}`}
-                    onClick={() => {
-                      setDisplayMode("list");
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faList} />
-                  </button>
-                </div>
-                <div className="addNewWrapper" ref={addNewRef}>
-                  <button className="addNewButton" onClick={toggleAddNewDropdown}>
-                    Add New...
-                    <FontAwesomeIcon
-                      icon={faCaretDown}
-                      className="addNewCaretIcon"
-                      style={{
-                        transform: addNewOpen ? "rotate(180deg)" : "rotate(0deg)",
-                        transition: "transform 0.3s ease"
-                      }}
+            <>
+              <div className="projectsTopBar">
+                <div className="projectsTopBarSearchContainer">
+                  <div className="searchBarWrapper">
+                    <FontAwesomeIcon icon={faSearch} className="searchIcon" />
+                    <input
+                      type="text"
+                      className="searchInput"
+                      value={searchText}
+                      onChange={handleSearchChange}
+                      placeholder="Search Projects..."
                     />
-                  </button>
+                    <FontAwesomeIcon icon={faCircleInfo} className="searchIconSupplement" />
+                  </div>
+                </div>
+                <div className="projectsTopBarControls">
+                  <div className="viewControlButtonWrapper">
+                    <button
+                      className={`viewControlButton ${displayMode === "grid" ? "active" : ""}`}
+                      onClick={() => {
+                        setDisplayMode("grid");
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faGrip} />
+                    </button>
+                    <button
+                      className={`viewControlButton ${displayMode === "list" ? "active" : ""}`}
+                      onClick={() => {
+                        setDisplayMode("list");
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faList} />
+                    </button>
+                  </div>
+                  <div className="addNewWrapper" ref={addNewRef}>
+                    <button className="addNewButton" onClick={toggleAddNewDropdown}>
+                      Add New...
+                      <FontAwesomeIcon
+                        icon={faCaretDown}
+                        className="addNewCaretIcon"
+                        style={{
+                          transform: addNewOpen ? "rotate(180deg)" : "rotate(0deg)",
+                          transition: "transform 0.3s ease"
+                        }}
+                      />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          {projectsPage === "projects" && (
-            <div
-              className={`deploymentsContainer ${displayMode}`}
-              style={{ opacity: addNewOpen ? "0.6" : "1.0" }}
-            >
-              {filteredProjects.map((project) => (
-                <div
-                  key={project.project_id}
-                  className="deploymentCell"
-                  onClick={() => {
-                    navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository } });
-                  }}
-                >
-                  <div className="deploymentCellHeaderTop">
-                    <div className="deploymentCellHeaderLeft">
-                      <div className="deploymentCellHeaderLeftTop">
-                        <img
-                          src={project.image || "StackForgeLogo.png"}
-                          className="deploymentCellProjectImage"
-                        />
-                        <div className="deploymentCellHeaderInfo">
-                          <div className="deploymentCellHeaderProjectName">
-                            {project.name || 'Unnamed Project'}
-                          </div>
-                          <div className="deploymentCellHeaderLink">
-                            <a
-                              href={project.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              {project.url}
-                            </a>
+              <div
+                className={`deploymentsContainer ${displayMode}`}
+                style={{ opacity: addNewOpen ? "0.6" : "1.0" }}
+              >
+                {filteredProjects.map((project) => (
+                  <div
+                    key={project.project_id}
+                    className="deploymentCell"
+                    onClick={() => {
+                      navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository } });
+                    }}
+                  >
+                    <div className="deploymentCellHeaderTop">
+                      <div className="deploymentCellHeaderLeft">
+                        <div className="deploymentCellHeaderLeftTop">
+                          <img
+                            src={project.image || "StackForgeLogo.png"}
+                            className="deploymentCellProjectImage"
+                          />
+                          <div className="deploymentCellHeaderInfo">
+                            <div className="deploymentCellHeaderProjectName">
+                              {project.name || 'Unnamed Project'}
+                            </div>
+                            <div className="deploymentCellHeaderLink">
+                              <a
+                                href={project.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {project.url}
+                              </a>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      {project.repository ? (
-                        <a className="deploymentCellHeaderGithub" href={project.repository}>
-                          <FontAwesomeIcon icon={faGithub} />
-                          <p>{project.repository}</p>
-                        </a>
-                      ) : (
-                        <a className="deploymentCellHeaderGithub" href={project.repository}>
-                          <FontAwesomeIcon icon={faGithub} />
-                          <p>No repository connected.</p>
-                        </a>
-                      )}
-                    </div>
-                    <div className="deploymentCellHeaderRight">
-                      <div className="threeDotMenuContainer">
-                        <button
-                          className="threeDotMenuButton"
-                          onClick={(e) => handleThreeDotClick(e, project.project_id)}
-                        >
-                          <FontAwesomeIcon icon={faEllipsisH} />
-                        </button>
-                        {openMenuId === project.project_id && (
-                          <div className="threeDotDropdownMenu">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.open(project.url, "_blank");
-                              }}
-                            >
-                              Visit Website
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository } });
-                              }}
-                            >
-                              View Project Details
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate("/project-settings", { state: { project } });
-                              }}
-                            >
-                              Settings
-                            </button>
-                          </div>
+                        {project.repository ? (
+                          <a className="deploymentCellHeaderGithub" href={project.repository}>
+                            <FontAwesomeIcon icon={faGithub} />
+                            <p>{project.repository}</p>
+                          </a>
+                        ) : (
+                          <a className="deploymentCellHeaderGithub" href={project.repository}>
+                            <FontAwesomeIcon icon={faGithub} />
+                            <p>No repository connected.</p>
+                          </a>
                         )}
                       </div>
+                      <div className="deploymentCellHeaderRight">
+                        <div className="threeDotMenuContainer">
+                          <button
+                            className="threeDotMenuButton"
+                            onClick={(e) => handleThreeDotClick(e, project.project_id)}
+                          >
+                            <FontAwesomeIcon icon={faEllipsisH} />
+                          </button>
+                          {openMenuId === project.project_id && (
+                            <div className="threeDotDropdownMenu">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(project.url, "_blank");
+                                }}
+                              >
+                                Visit Website
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository } });
+                                }}
+                              >
+                                View Project Details
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate("/project-settings", { state: { project } });
+                                }}
+                              >
+                                Settings
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="deploymentCellHeaderBottom">
+                      <div className="deploymentCellHeaderLeftBottom">
+                        <p>
+                          <span>Project ID:</span>
+                          <br />
+                          {project.project_id}
+                        </p>
+                      </div>
+                      <div className="deploymentCellHeaderUpdate">
+                        <strong>Last updated:</strong>
+                        <span>{new Date(project.updated_at).toLocaleDateString()}</span>
+                        <a>
+                          <FontAwesomeIcon icon={faCodeBranch} /> main
+                        </a>
+                      </div>
                     </div>
                   </div>
-                  <div className="deploymentCellHeaderBottom">
-                    <div className="deploymentCellHeaderLeftBottom">
-                      <p>
-                        <span>Project ID:</span>
-                        <br />
-                        {project.project_id}
-                      </p>
-                    </div>
-                    <div className="deploymentCellHeaderUpdate">
-                      <strong>Last updated:</strong>
-                      <span>{new Date(project.updated_at).toLocaleDateString()}</span>
-                      <a>
-                        <FontAwesomeIcon icon={faCodeBranch} /> main
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           )}
 
           {projectsPage === "domains" && (
@@ -463,6 +557,87 @@ const StackForgeProjects = () => {
                 </button>
               </div>
             </div>
+          )}
+
+          {projectsPage === "activity" && (
+            <>
+              <div className="projectsTopBar">
+                <div className="projectsTopBarControls"> 
+                    <p> 
+                      Your Activity Logs
+                    </p>
+                </div>
+                <div className="projectsTopBarSearchContainer">
+                  <div className="searchBarWrapper">
+                    <FontAwesomeIcon icon={faSearch} className="searchIcon" />
+                    <input
+                      type="text"
+                      className="searchInput"
+                      placeholder="Search Logs..."
+                      value={activitySearchText}
+                      onChange={handleActivitySearchChange}
+                    />
+                    <FontAwesomeIcon icon={faCircleInfo} className="searchIconSupplement" />
+                  </div>
+                </div>
+
+              </div>
+
+              <div className="activityLogsFlexWrapper">
+              
+                  {isLoadingActivities ? (
+                    <div className="loading-wrapper" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                      <div className="loading-circle" />
+                    </div>
+                  ) : filteredActivities.length === 0 ? (
+                      <div className="activityLogsNoResults">
+                        <div className="activityLogsNoResultCell">
+                            <FontAwesomeIcon
+                            icon={faListUl}
+                            size="3x"
+                            className="activityLogsNoResultsIcon"
+                            />
+                            <div className="activityLogsNoResultsText">
+                            No logs found for the selected filters. 
+                            </div>
+                            <div className="activityLogsNoResultsButtons">
+                            <button
+                                className="activityLogsNoResultsRefresh"
+                                onClick={refreshActivityLogs}
+                                disabled={isLoadingActivities}
+                            >
+                                Refresh Logs
+                            </button>
+                            </div>
+                        </div>
+                      </div>
+                  ) : (
+                    <>
+                      {filteredActivities.map((activity, index) => (
+                        <div
+                          className="activityLogItemWrapper"
+                          key={index}
+                        >
+                          <img
+                            className="activityLogItemWrapperImage "
+                            src={activity.userImage || "StackForgeLogo.png"}
+                            alt=""
+                          />
+                          <div className="activitylogItemWrapperTitleStack">
+                            <strong>
+                              {activity.description}
+                            </strong>
+                            <p style={{ color: '#aaaaaa', fontSize: '0.9em', margin: '5px 0 0 0' }}>
+                              {new Date(activity.timestamp).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      
+                    </>
+                  )}
+              </div>
+            </>
           )}
 
         </div>
