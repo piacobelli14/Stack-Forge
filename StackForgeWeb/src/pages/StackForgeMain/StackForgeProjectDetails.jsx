@@ -316,9 +316,6 @@ const StackForgeProjectDetails = () => {
                 <FontAwesomeIcon icon={faGithub} />
                 <p>GitHub Repository</p>
               </button>
-              <button>
-                <p>Usage</p>
-              </button>
               <button
                 onClick={() => {
                   navigate("/project-settings", {

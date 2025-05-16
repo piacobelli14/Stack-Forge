@@ -7,6 +7,7 @@ const { v4: uuidv4 } = require("uuid");
 const fs = require("fs");
 const path = require("path");
 const dns = require("dns").promises;
+const jwt = require('jsonwebtoken');
 const {
     Route53Client,
     ChangeResourceRecordSetsCommand,
@@ -1161,7 +1162,8 @@ class DeployManager {
         outputDirectory,
         buildCommand,
         installCommand,
-        envVars
+        envVars,
+        deploymentProtection = false 
     }) {
         const deploymentId = uuidv4();
         const timestamp = new Date().toISOString();
@@ -1170,11 +1172,11 @@ class DeployManager {
         let projectID;
         let isNewProject = false;
         const domainIds = {};
-
+    
         if (!Array.isArray(domainNames) || domainNames.length === 0) {
             throw new Error("domainNames must be a non-empty array of subdomains.");
         }
-
+    
         const tokenResult = await pool.query(
             "SELECT github_access_token FROM users WHERE username = $1",
             [userID]
@@ -1183,7 +1185,7 @@ class DeployManager {
             throw new Error("GitHub account not connected.");
         }
         const githubAccessToken = tokenResult.rows[0].github_access_token;
-
+    
         let commitSha;
         try {
             commitSha = await this.getLatestCommitSha(repository, branch, githubAccessToken);
@@ -1194,12 +1196,12 @@ class DeployManager {
             );
             throw error;
         }
-
+    
         const existingProjRes = await pool.query(
             "SELECT project_id FROM projects WHERE orgid = $1 AND username = $2 AND name = $3",
             [organizationID, userID, projectName]
         );
-
+    
         if (existingProjRes.rows.length > 0) {
             projectID = existingProjRes.rows[0].project_id;
             isNewProject = false;
@@ -1207,7 +1209,7 @@ class DeployManager {
             isNewProject = true;
             projectID = uuidv4();
         }
-
+    
         const taskDefArns = {};
         const urls = [];
         for (const domainName of domainNames) {
@@ -1234,7 +1236,7 @@ class DeployManager {
                     };
                 }
             }
-
+    
             if (!isNewProject) {
                 const existingDomainResult = await pool.query(
                     "SELECT domain_id FROM domains WHERE project_id = $1 AND domain_name = $2",
@@ -1244,16 +1246,37 @@ class DeployManager {
                     domainId = existingDomainResult.rows[0].domain_id;
                     await pool.query(
                         `UPDATE domains
-                         SET updated_at = $1, deployment_id = $2, repository = $3, branch = $4, root_directory = $5, output_directory = $6, build_command = $7, install_command = $8, env_vars = $9
-                         WHERE domain_id = $10`,
-                        [timestamp, deploymentId, repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, JSON.stringify(envVars), domainId]
+                         SET updated_at = $1, 
+                             deployment_id = $2, 
+                             repository = $3, 
+                             branch = $4, 
+                             root_directory = $5, 
+                             output_directory = $6, 
+                             build_command = $7, 
+                             install_command = $8, 
+                             env_vars = $9,
+                             deployment_protection = $10
+                         WHERE domain_id = $11`,
+                        [
+                            timestamp, 
+                            deploymentId, 
+                            repository, 
+                            branch, 
+                            rootDirectory, 
+                            outputDirectory, 
+                            buildCommand, 
+                            installCommand, 
+                            JSON.stringify(envVars),
+                            deploymentProtection,
+                            domainId
+                        ]
                     );
                 } else {
                     domainId = uuidv4();
                     await pool.query(
                         `INSERT INTO domains 
-                         (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars) 
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+                         (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection) 
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
                         [
                             organizationID,
                             userID,
@@ -1271,7 +1294,8 @@ class DeployManager {
                             outputDirectory,
                             buildCommand,
                             installCommand,
-                            JSON.stringify(envVars)
+                            JSON.stringify(envVars),
+                            deploymentProtection
                         ]
                     );
                 }
@@ -1280,7 +1304,7 @@ class DeployManager {
                 domainId = uuidv4();
                 domainIds[subdomain] = domainId;
             }
-
+    
             await this.ensureECRRepo(projectName);
             await this.createCodeBuildProject({
                 projectName,
@@ -1292,7 +1316,7 @@ class DeployManager {
                 buildCommand: domainDetails.buildCommand,
                 githubAccessToken
             });
-
+    
             const { imageUri } = await this.startCodeBuild({
                 projectName,
                 subdomain,
@@ -1301,7 +1325,7 @@ class DeployManager {
                 logDir,
                 githubAccessToken
             });
-
+    
             const taskDefArn = await this.createTaskDef({
                 projectName,
                 subdomain,
@@ -1309,9 +1333,9 @@ class DeployManager {
                 envVars: domainDetails.envVars
             });
             taskDefArns[subdomain] = taskDefArn;
-
+    
             const targetGroupArn = await this.ensureTargetGroup(projectName, subdomain);
-
+    
             await this.updateDNSRecord(projectName, [subdomain], targetGroupArn);
             await this.createOrUpdateService({
                 projectName,
@@ -1325,12 +1349,18 @@ class DeployManager {
                  WHERE deployment_id = $5`,
                 [domainDetails.rootDirectory, domainDetails.buildCommand, domainDetails.installCommand, JSON.stringify(domainDetails.envVars), deploymentId]
             );
-
+    
             if (subdomain !== projectName) {
                 await pool.query(
                     `UPDATE domains
-                     SET repository = $1, branch = $2, root_directory = $3, install_command = $4, build_command = $5, env_vars = $6
-                     WHERE domain_name = $7 AND project_id = (SELECT project_id FROM projects WHERE name = $8)`,
+                     SET repository = $1, 
+                         branch = $2, 
+                         root_directory = $3, 
+                         install_command = $4, 
+                         build_command = $5, 
+                         env_vars = $6,
+                         deployment_protection = $7
+                     WHERE domain_name = $8 AND project_id = (SELECT project_id FROM projects WHERE name = $9)`,
                     [
                         domainDetails.repository,
                         domainDetails.branch,
@@ -1338,16 +1368,17 @@ class DeployManager {
                         domainDetails.installCommand,
                         domainDetails.buildCommand,
                         JSON.stringify(domainDetails.envVars),
+                        deploymentProtection,
                         subdomain,
                         projectName
                     ]
                 );
             }
         }
-
+    
         try {
             await this.updateDNSRecord(projectName, domainNames);
-
+    
             const records = {};
             for (const domainName of domainNames) {
                 const fqdn = `${domainName}.stackforgeengine.com`;
@@ -1374,7 +1405,7 @@ class DeployManager {
                         });
                 } catch (error) { }
             }
-
+    
             if (isNewProject) {
                 await pool.query(
                     `INSERT INTO projects 
@@ -1398,14 +1429,14 @@ class DeployManager {
                         null
                     ]
                 );
-
+    
                 for (const domainName of domainNames) {
                     const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
                     const domainId = domainIds[subdomain];
                     await pool.query(
                         `INSERT INTO domains 
-                         (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, dns_records) 
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+                         (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection, dns_records) 
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
                         [
                             organizationID,
                             userID,
@@ -1424,11 +1455,12 @@ class DeployManager {
                             buildCommand,
                             installCommand,
                             JSON.stringify(envVars),
+                            deploymentProtection,
                             JSON.stringify(records[`${subdomain}.stackforgeengine.com`] || [])
                         ]
                     );
                 }
-
+    
                 await pool.query(
                     `INSERT INTO deployments 
                      (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
@@ -1454,7 +1486,7 @@ class DeployManager {
                         JSON.stringify(envVars)
                     ]
                 );
-
+    
                 await pool.query(
                     `INSERT INTO deployment_logs 
                      (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
@@ -1476,7 +1508,7 @@ class DeployManager {
                     "UPDATE deployments SET status = $1, updated_at = $2 WHERE project_id = $3 AND status = $4",
                     ["inactive", now, projectID, "active"]
                 );
-
+    
                 await pool.query(
                     `INSERT INTO deployments 
                      (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
@@ -1502,16 +1534,16 @@ class DeployManager {
                         JSON.stringify(envVars)
                     ]
                 );
-
+    
                 for (const domainName of domainNames) {
                     const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
                     await pool.query(
-                        "UPDATE domains SET dns_records = $1 WHERE domain_id = $2",
-                        [JSON.stringify(records[`${subdomain}.stackforgeengine.com`] || []), domainIds[subdomain]]
+                        "UPDATE domains SET dns_records = $1, deployment_protection = $2 WHERE domain_id = $3",
+                        [JSON.stringify(records[`${subdomain}.stackforgeengine.com`] || []), deploymentProtection, domainIds[subdomain]]
                     );
                 }
             }
-
+    
             await this.recordBuildLogs(organizationID, userID, deploymentId, logDir);
             await this.recordRuntimeLogs(organizationID, userID, deploymentId, projectName);
             return { urls, deploymentId, logPath: logDir, taskDefArns };

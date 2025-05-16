@@ -21,8 +21,10 @@ app.use(compression());
 app.use(cors({
   optionsSuccessStatus: 200,
   methods: ['POST','GET'],
-  allowedHeaders: ['Content-Type','Authorization']
+  allowedHeaders: ['Content-Type','Authorization','X-Visitor-Id']
 }));
+
+
 app.use(bodyParser.json({ limit: '1gb' }));
 app.use(errorLogger);
 app.use(authenticationRoutes);
