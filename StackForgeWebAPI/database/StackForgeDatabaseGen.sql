@@ -341,3 +341,20 @@ CREATE TABLE metrics_daily (
   p75_lcp       DOUBLE PRECISION,
   PRIMARY KEY(domain, day)
 );
+
+DROP TABLE IF EXISTS metrics_edge_requests; 
+CREATE TABLE metrics_edge_requests (
+  id SERIAL PRIMARY KEY,
+  domain VARCHAR(255) NOT NULL,
+  visitor_id VARCHAR(36) NOT NULL,
+  page_url TEXT NOT NULL,
+  request_url TEXT NOT NULL,
+  method VARCHAR(10),
+  status INTEGER,
+  duration INTEGER,
+  type VARCHAR(50),
+  timing_dns INTEGER,
+  timing_connect INTEGER,
+  timing_response INTEGER,
+  event_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

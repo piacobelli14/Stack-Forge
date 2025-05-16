@@ -54,6 +54,7 @@ const BarChart = ({ data, startDate, endDate, visibleSeries }) => {
         pageviews: existing.pageviews || 0,
         uniqueVisitors: existing.uniqueVisitors || 0,
         bounceRate: existing.bounceRate || 0,
+        edgeRequests: existing.edgeRequests || 0,
       };
     });
 
@@ -61,6 +62,7 @@ const BarChart = ({ data, startDate, endDate, visibleSeries }) => {
     const pageViews = mergedData.map((item) => item.pageviews);
     const uniqueVisitors = mergedData.map((item) => item.uniqueVisitors);
     const bounceRates = mergedData.map((item) => item.bounceRate * 100);
+    const edgeRequests = mergedData.map((item) => item.edgeRequests);
     const { fontSize, grid, barWidth, lineWidth, symbolSize, gridLineWidth, tooltipFontSize } =
       getResponsiveOptions(screenSize);
 
@@ -143,6 +145,9 @@ const BarChart = ({ data, startDate, endDate, visibleSeries }) => {
         visibleSeries.bounceRate
           ? { name: "Bounce Rate", type: "bar", yAxisIndex: 1, data: bounceRates, barWidth, itemStyle: { color: "rgba(155, 89, 182, 0.6)", borderRadius: [4, 4, 0, 0] } }
           : { name: "Bounce Rate", type: "bar", yAxisIndex: 1, data: [], barWidth, itemStyle: { color: "rgba(155, 89, 182, 0.6)", borderRadius: [4, 4, 0, 0] } },
+        visibleSeries.edgeRequests
+          ? { name: "Edge Requests", type: "bar", yAxisIndex: 0, data: edgeRequests, barWidth, itemStyle: { color: "rgba(138, 86, 222, 0.8)", borderRadius: [4, 4, 0, 0] } }
+          : { name: "Edge Requests", type: "bar", yAxisIndex: 0, data: [], barWidth, itemStyle: { color: "rgba(138, 86, 222, 0.8)", borderRadius: [4, 4, 0, 0] } },
       ],
     };
 

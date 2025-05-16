@@ -3,27 +3,27 @@ const fetch   = require('node-fetch');
 const { pool } = require('../config/db');
 const router   = express.Router();
 const { authenticateToken } = require('../middleware/auth');
-
 router.post('/metrics', async (req, res) => {
   try {
     const { domain, visitorId, url, metrics, userAgent } = req.body;
-    const sessionId   = typeof visitorId === 'string' && visitorId.trim()
-                      ? visitorId
-                      : 'unknown-session';
-    const pv          = 1;
-    const loadTimeMs  = typeof metrics.loadTimeMs === 'number' ? metrics.loadTimeMs : 0;
-    const lcpMs       = typeof metrics.lcpMs     === 'number' ? metrics.lcpMs      : 0;
-    const bounce      = typeof metrics.bounce    === 'boolean'? metrics.bounce    : false;
+    const sessionId = typeof visitorId === 'string' && visitorId.trim()
+                     ? visitorId
+                     : 'unknown-session';
+    const pv = 1;
+    const loadTimeMs = typeof metrics.loadTimeMs === 'number' ? metrics.loadTimeMs : 0;
+    const lcpMs = typeof metrics.lcpMs === 'number' ? metrics.lcpMs : 0;
+    const bounce = typeof metrics.bounce === 'boolean' ? metrics.bounce : false;
+    const edgeRequests = Array.isArray(metrics.edgeRequests) ? metrics.edgeRequests : [];
     const ip = req.headers['x-forwarded-for']?.split(',')[0].trim()
-             || req.connection.remoteAddress
-             || null;
+              || req.connection.remoteAddress
+              || null;
 
     const apiKey = process.env.IPGEO_API_KEY;
     let latitude = null,
         longitude = null,
-        city      = null,
-        region    = null,
-        country   = null;
+        city = null,
+        region = null,
+        country = null;
 
     if (ip && apiKey) {
       try {
@@ -31,11 +31,11 @@ router.post('/metrics', async (req, res) => {
           `https://api.ipgeolocation.io/ipgeo?apiKey=${apiKey}&ip=${ip}`
         );
         const geoJson = await geoRes.json();
-        latitude  = geoJson.latitude  ? parseFloat(geoJson.latitude)  : null;
+        latitude = geoJson.latitude ? parseFloat(geoJson.latitude) : null;
         longitude = geoJson.longitude ? parseFloat(geoJson.longitude) : null;
-        city      = geoJson.city       || null;
-        region    = geoJson.state_prov || null;
-        country   = geoJson.country_name || null;
+        city = geoJson.city || null;
+        region = geoJson.state_prov || null;
+        country = geoJson.country_name || null;
       } catch (error) {}
     }
 
@@ -71,6 +71,33 @@ router.post('/metrics', async (req, res) => {
     const { rows } = await pool.query(insertText, insertValues);
     const eventTime = rows[0].event_time;
 
+    if (edgeRequests.length > 0) {
+      const edgeInsertText = `
+        INSERT INTO metrics_edge_requests
+          (domain, visitor_id, page_url, request_url, method, status, duration, type,
+           timing_dns, timing_connect, timing_response, event_time)
+        VALUES
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+      `;
+      for (const req of edgeRequests) {
+        try {
+          await pool.query(edgeInsertText, [
+            domain,
+            sessionId,
+            url,
+            typeof req.url === 'string' ? req.url : '',
+            typeof req.method === 'string' ? req.method.toUpperCase().slice(0, 10) : 'GET',
+            typeof req.status === 'number' ? req.status : 0,
+            typeof req.duration === 'number' ? Math.round(req.duration) : 0,
+            typeof req.type === 'string' ? req.type.slice(0, 50) : 'unknown',
+            req.timing && typeof req.timing.dns === 'number' ? Math.round(req.timing.dns) : 0,
+            req.timing && typeof req.timing.connect === 'number' ? Math.round(req.timing.connect) : 0,
+            req.timing && typeof req.timing.response === 'number' ? Math.round(req.timing.response) : 0
+          ]);
+        } catch (error) {}
+      }
+    }
+
     const day = eventTime.toISOString().split('T')[0];
     const aggText = `
       WITH agg AS (
@@ -83,7 +110,7 @@ router.post('/metrics', async (req, res) => {
         FROM metrics_events
         WHERE domain = $1
           AND event_time >= $2::date
-          AND event_time <  ($2::date + INTERVAL '1 day')
+          AND event_time < ($2::date + INTERVAL '1 day')
       )
       INSERT INTO metrics_daily
         (domain, day, pageviews, unique_visitors, bounce_rate, avg_load_time, p75_lcp)
@@ -98,11 +125,11 @@ router.post('/metrics', async (req, res) => {
       FROM agg
       ON CONFLICT (domain, day)
       DO UPDATE SET
-        pageviews       = EXCLUDED.pageviews,
+        pageviews = EXCLUDED.pageviews,
         unique_visitors = EXCLUDED.unique_visitors,
-        bounce_rate     = EXCLUDED.bounce_rate,
-        avg_load_time   = EXCLUDED.avg_load_time,
-        p75_lcp         = EXCLUDED.p75_lcp;
+        bounce_rate = EXCLUDED.bounce_rate,
+        avg_load_time = EXCLUDED.avg_load_time,
+        p75_lcp = EXCLUDED.p75_lcp;
     `;
     await pool.query(aggText, [domain, day]);
 
@@ -334,39 +361,58 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
 
     let metricsQuery = `
       SELECT
-        DATE_TRUNC($1, day) AS period,
-        SUM(pageviews) AS total_pageviews,
-        SUM(unique_visitors) AS total_unique_visitors,
-        AVG(bounce_rate) AS avg_bounce_rate,
-        AVG(avg_load_time) AS avg_load_time,
-        AVG(p75_lcp) AS avg_p75_lcp
-      FROM metrics_daily
-      WHERE day >= $2
-        AND day <= $3
+        DATE_TRUNC($1, md.day) AS period,
+        SUM(md.pageviews) AS total_pageviews,
+        SUM(md.unique_visitors) AS total_unique_visitors,
+        AVG(md.bounce_rate) AS avg_bounce_rate,
+        AVG(md.avg_load_time) AS avg_load_time,
+        AVG(md.p75_lcp) AS avg_p75_lcp,
+        COALESCE(SUM(er.count), 0) AS total_edge_requests,
+        COALESCE(AVG(er.avg_duration), 0) AS avg_edge_duration
+      FROM metrics_daily md
+      LEFT JOIN (
+        SELECT
+          DATE_TRUNC($1, event_time) AS period,
+          domain,
+          COUNT(*) AS count,
+          AVG(duration) AS avg_duration
+        FROM metrics_edge_requests
+        WHERE event_time >= $2
+          AND event_time <= $3
+          ${domain !== 'all_domains' ? 'AND domain = $' + paramIndex : ''}
+        GROUP BY DATE_TRUNC($1, event_time), domain
+      ) er ON DATE_TRUNC($1, md.day) = er.period
+          AND (md.domain = er.domain OR er.domain IS NULL)
+      WHERE md.day >= $2
+        AND md.day <= $3
     `;
     const queryParams = [dateTrunc, start, end];
 
     let paramIndex = 4;
     if (domain !== 'all_domains') {
-      metricsQuery += ` AND domain = $${paramIndex}`;
+      metricsQuery += ` AND md.domain = $${paramIndex}`;
       queryParams.push(domain);
       paramIndex++;
     }
 
     metricsQuery += `
-      GROUP BY DATE_TRUNC($1, day)
+      GROUP BY DATE_TRUNC($1, md.day)
       ORDER BY period ASC
     `;
 
     const metricsResult = await pool.query(metricsQuery, queryParams);
-    const metricsInfo = metricsResult.rows.map(row => ({
-      period: row.period.toISOString().split('T')[0],
-      pageviews: parseInt(row.total_pageviews || 0, 10),
-      uniqueVisitors: parseInt(row.total_unique_visitors || 0, 10),
-      bounceRate: parseFloat((row.avg_bounce_rate || 0).toFixed(2)),
-      avgLoadTime: parseFloat((row.avg_load_time || 0).toFixed(2)),
-      p75Lcp: parseFloat((row.avg_p75_lcp || 0).toFixed(2))
-    }));
+    const metricsInfo = metricsResult.rows.map(row => {
+      return {
+        period: row.period.toISOString().split('T')[0],
+        pageviews: parseInt(row.total_pageviews || 0, 10),
+        uniqueVisitors: parseInt(row.total_unique_visitors || 0, 10),
+        bounceRate: parseFloat((row.avg_bounce_rate || 0).toFixed(2)),
+        avgLoadTime: parseFloat((row.avg_load_time || 0).toFixed(2)),
+        p75Lcp: parseFloat((row.avg_p75_lcp || 0).toFixed(2)),
+        edgeRequests: parseInt(row.total_edge_requests || 0, 10),
+        avgEdgeDuration: parseFloat(parseFloat(row.avg_edge_duration || 0).toFixed(2))
+      };
+    });
 
     const message = metricsInfo.length > 0
       ? 'Aggregate metrics retrieved successfully.'

@@ -59,7 +59,7 @@ const StackForgeProjects = () => {
   const [isLoadingMonitoring, setIsLoadingMonitoring] = useState(false);
   const [selectedDomain, setSelectedDomain] = useState("");
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
-    const today = new Date("2025-05-15");
+    const today = new Date();
     const dayOfWeek = today.getDay(); 
     const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     const monday = new Date(today);
@@ -75,6 +75,7 @@ const StackForgeProjects = () => {
     pageViews: true,
     visitors: true,
     bounceRate: true,
+    edgeRequests: true,
   });
 
   useEffect(() => {
@@ -429,7 +430,7 @@ const StackForgeProjects = () => {
   const handleNextWeek = () => {
     const newStart = new Date(currentWeekStart);
     newStart.setDate(currentWeekStart.getDate() + 7);
-    const today = new Date("2025-05-15");
+    const today = new Date();
     const currentWeekMonday = new Date(today);
     const dayOfWeek = today.getDay();
     const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -842,6 +843,19 @@ const StackForgeProjects = () => {
                         : '0%'}
                     </p>
                   </div>
+                  <div
+                    className="monitoringAnalyticsFlexWrapperTopBarItem"
+                    onClick={() => toggleSeries("edgeRequests")}
+                    style={{
+                      cursor: "pointer",
+                      backgroundColor: visibleSeries.edgeRequests ? "rgba(138, 86, 222, 0.2)" : "transparent",
+                    }}
+                  >
+                    <h3>Edge Requests</h3>
+                    <p>
+                      {monitoringData.length > 0 ? monitoringData.reduce((sum, item) => sum + item.edgeRequests, 0) : 0}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="monitoringAnalyticsFlexWrapperTopBarSupplement">
@@ -903,7 +917,7 @@ const StackForgeProjects = () => {
                       <button
                         onClick={handleNextWeek}
                         disabled={(() => {
-                          const today = new Date("2025-05-15");
+                          const today = new Date();
                           const currentWeekMonday = new Date(today);
                           const dayOfWeek = today.getDay();
                           const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -919,8 +933,10 @@ const StackForgeProjects = () => {
                 </div>
 
                 {isLoadingMonitoring ? (
-                  <div className="loading-wrapper" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-                    <div className="loading-circle" />
+                  <div className="monitoringAnalyticsFlexWrapperBarPlot">
+                    <div className="loading-wrapper" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                      <div className="loading-circle" />
+                    </div>
                   </div>
                 ) : (
                   <div className="monitoringAnalyticsFlexWrapperBarPlot">
@@ -976,7 +992,7 @@ const StackForgeProjects = () => {
         <div className="domainSearchModalOverlay">
           <div className="domainSearchModalContainer">
             <div className="domainSearchModalHeader">
-              <h2>Add Domain</h2>
+              <h3>Add Domain</h3>
               <button onClick={closeDomainSearchModal}>
                 <FontAwesomeIcon icon={faXmark} />
               </button>
@@ -1063,7 +1079,7 @@ const StackForgeProjects = () => {
             )}
 
             <div className="domainSearchModalHeader">
-              <h2>Enter Domain</h2>
+              <h3>Enter Domain</h3>
               <button onClick={closeDomainSearchModal}>
                 <FontAwesomeIcon icon={faXmark} />
               </button>
