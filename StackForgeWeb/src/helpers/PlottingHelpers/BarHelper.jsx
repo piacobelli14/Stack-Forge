@@ -16,13 +16,13 @@ const BarChart = ({ data, startDate, endDate, visibleSeries }) => {
     } else if (size >= 1300 && size <= 1699) {
       return { fontSize: 12, grid: { left: 100, right: 100, bottom: 15, top: 45, containLabel: true }, barWidth: "20%", lineWidth: 4, symbolSize: 10, gridLineWidth: 2.5, tooltipFontSize: 12 };
     } else if (size >= 1700 && size <= 2199) {
-        return { fontSize: 12, grid: { left: 100, right: 100, bottom: 15, top: 45, containLabel: true }, barWidth: "20%", lineWidth: 4, symbolSize: 10, gridLineWidth: 2.5, tooltipFontSize: 12 };
+      return { fontSize: 12, grid: { left: 100, right: 100, bottom: 15, top: 45, containLabel: true }, barWidth: "20%", lineWidth: 4, symbolSize: 10, gridLineWidth: 2.5, tooltipFontSize: 12 };
     } else if (size >= 2200 && size <= 2599) {
-        return { fontSize: 12, grid: { left: 100, right: 100, bottom: 15, top: 45, containLabel: true }, barWidth: "20%", lineWidth: 4, symbolSize: 10, gridLineWidth: 2.5, tooltipFontSize: 12 };
+      return { fontSize: 12, grid: { left: 100, right: 100, bottom: 15, top: 45, containLabel: true }, barWidth: "20%", lineWidth: 4, symbolSize: 10, gridLineWidth: 2.5, tooltipFontSize: 12 };
     } else if (size >= 2600 && size <= 3899) {
-        return { fontSize: 12, grid: { left: 100, right: 100, bottom: 15, top: 45, containLabel: true }, barWidth: "10%", lineWidth: 4, symbolSize: 10, gridLineWidth: 2.5, tooltipFontSize: 12 };
+      return { fontSize: 12, grid: { left: 100, right: 100, bottom: 15, top: 45, containLabel: true }, barWidth: "10%", lineWidth: 4, symbolSize: 10, gridLineWidth: 2.5, tooltipFontSize: 12 };
     } else if (size >= 3900 && size <= 5299) {
-        return { fontSize: 12, grid: { left: 100, right: 100, bottom: 15, top: 45, containLabel: true }, barWidth: "10%", lineWidth: 4, symbolSize: 10, gridLineWidth: 2.5, tooltipFontSize: 12 };
+      return { fontSize: 12, grid: { left: 100, right: 100, bottom: 15, top: 45, containLabel: true }, barWidth: "10%", lineWidth: 4, symbolSize: 10, gridLineWidth: 2.5, tooltipFontSize: 12 };
     } else {
       return { fontSize: 0, grid: { left: 0, right: 0, bottom: 0, top: 0, containLabel: true }, barWidth: "10%", lineWidth: 0, symbolSize: 0, gridLineWidth: 0, tooltipFontSize: 0 };
     }
@@ -121,7 +121,7 @@ const BarChart = ({ data, startDate, endDate, visibleSeries }) => {
           nameGap: 30,
           axisLine: { show: false },
           axisTick: { show: false, length: 6, lineStyle: { width: gridLineWidth, color: "#f5f5f5" } },
-          axisLabel: { color: "#c1c1c1", fontSize, fontWeight: "700" },
+          axisLabel: { color: "#c1c1c1", fontSize, fontWeight: "700", hideOverlap: true },
           splitLine: { show: true, lineStyle: { color: "#444", width: gridLineWidth, type: "dashed" } },
         },
         {
@@ -131,7 +131,7 @@ const BarChart = ({ data, startDate, endDate, visibleSeries }) => {
           nameGap: 30,
           axisLine: { show: false },
           axisTick: { show: false, length: 6, lineStyle: { width: gridLineWidth, color: "#f5f5f5" } },
-          axisLabel: { color: "#c1c1c1", fontSize, fontWeight: "700", formatter: "{value}%" },
+          axisLabel: { color: "#c1c1c1", fontSize, fontWeight: "700", formatter: "{value}%", hideOverlap: true },
           splitLine: { show: false },
         },
       ],

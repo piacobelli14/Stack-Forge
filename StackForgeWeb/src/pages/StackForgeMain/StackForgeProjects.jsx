@@ -26,6 +26,7 @@ import { showDialog } from "../../helpers/StackForgeAlert.jsx";
 import useAuth from "../../UseAuth.jsx";
 import useIsTouchDevice from "../../TouchDevice.jsx";
 import BarChart from "../../helpers/PlottingHelpers/BarHelper.jsx";
+import LineChart from "../../helpers/PlottingHelpers/LineHelper.jsx";
 
 const StackForgeProjects = () => {
   const navigate = useNavigate();
@@ -56,6 +57,18 @@ const StackForgeProjects = () => {
   const [activitySearchText, setActivitySearchText] = useState("");
   const debounceTimeoutRef = useRef(null);
   const [monitoringData, setMonitoringData] = useState([]);
+  const [individualMetrics, setIndividualMetrics] = useState({
+    pageViews: [],
+    uniqueVisitors: [],
+    bounceRate: [],
+    edgeRequests: [],
+  });
+  const [visibleSeries, setVisibleSeries] = useState({
+    pageViews: true,
+    visitors: true,
+    bounceRate: true,
+    edgeRequests: true,
+  });
   const [isLoadingMonitoring, setIsLoadingMonitoring] = useState(false);
   const [selectedDomain, setSelectedDomain] = useState("");
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
@@ -71,12 +84,6 @@ const StackForgeProjects = () => {
   const domainSelectRef = useRef(null);
   const domainDropdownRef = useRef(null);
   const [domainDropdownPosition, setDomainDropdownPosition] = useState({ top: 0, left: 0 });
-  const [visibleSeries, setVisibleSeries] = useState({
-    pageViews: true,
-    visitors: true,
-    bounceRate: true,
-    edgeRequests: true,
-  });
 
   useEffect(() => {
     if (!loading && !token) navigate("/login");
@@ -209,11 +216,11 @@ const StackForgeProjects = () => {
 
   useEffect(() => {
     const fetchMonitoringData = async () => {
-      if (projectsPage !== "monitoring" || !token) return;
+      if (!["monitoring", "usage"].includes(projectsPage) || !token) return;
       setIsLoadingMonitoring(true);
       try {
         const weekEnd = new Date(currentWeekStart);
-        weekEnd.setDate(currentWeekStart.getDate() + 6); 
+        weekEnd.setDate(currentWeekStart.getDate() + 6);
         const response = await fetch("http://localhost:3000/get-aggregate-metrics", {
           method: "POST",
           headers: {
@@ -233,8 +240,54 @@ const StackForgeProjects = () => {
         }
         const data = await response.json();
         setMonitoringData(data.data || []);
+  
+        const transformMetrics = (metrics) => {
+          return metrics.map(item => {
+            if (!item.date || typeof item.date !== "string") {
+              return { date: "Invalid Date", value: item.value || 0 };
+            }
+  
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (!dateRegex.test(item.date)) {
+              return { date: "Invalid Date", value: item.value || 0 };
+            }
+  
+            const testDate = new Date(item.date);
+            if (isNaN(testDate.getTime())) {
+              return { date: "Invalid Date", value: item.value || 0 };
+            }
+  
+            return {
+              date: item.date, 
+              value: item.value
+            };
+          });
+        };
+  
+        const transformedMetrics = {
+          pageViews: data.individualMetrics?.pageViews
+            ? transformMetrics(data.individualMetrics.pageViews)
+            : [],
+          uniqueVisitors: data.individualMetrics?.uniqueVisitors
+            ? transformMetrics(data.individualMetrics.uniqueVisitors)
+            : [],
+          bounceRate: data.individualMetrics?.bounceRate
+            ? transformMetrics(data.individualMetrics.bounceRate)
+            : [],
+          edgeRequests: data.individualMetrics?.edgeRequests
+            ? transformMetrics(data.individualMetrics.edgeRequests)
+            : [],
+        };
+
+        setIndividualMetrics(transformedMetrics);
       } catch (error) {
         setMonitoringData([]);
+        setIndividualMetrics({
+          pageViews: [],
+          uniqueVisitors: [],
+          bounceRate: [],
+          edgeRequests: [],
+        });
         await showDialog({
           title: "Error",
           message: "Failed to load monitoring data. Please try again.",
@@ -952,6 +1005,109 @@ const StackForgeProjects = () => {
                     />
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {projectsPage === "usage" && (
+            <div className="usageAnalyticsFlexWrapper">
+              <div className="usageAnalyticsFlexCellWrapper"> 
+                <div className="usageAnalyticsFlexCell"> 
+                 
+                  {isLoadingMonitoring ? (
+                    <div className="loading-wrapper">
+                      <div className="loading-circle" />
+                    </div>
+                  ) : (
+                    <>
+                      <span>
+                        <label> 
+                          Page Visits
+                        </label>
+                        <p> 
+                          Last 7 Days
+                        </p>
+                      </span>
+
+                      <LineChart
+                        data={individualMetrics.pageViews}
+                        color="rgba(84, 112, 198, 0.6)"
+                      />
+                    </>
+                  )}
+                </div>
+
+                <div className="usageAnalyticsFlexCell"> 
+                  {isLoadingMonitoring ? (
+                    <div className="loading-wrapper" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                      <div className="loading-circle" />
+                    </div>
+                  ) : (
+                    <>
+                      <span>
+                        <label> 
+                          Unique Visitors
+                        </label>
+                        <p> 
+                          Last 7 Days
+                        </p>
+                      </span>
+                      <LineChart
+                        data={individualMetrics.uniqueVisitors}
+                        color="rgba(86, 222, 163, 0.6)"
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="usageAnalyticsFlexCellWrapper"> 
+                <div className="usageAnalyticsFlexCell"> 
+                  {isLoadingMonitoring ? (
+                    <div className="loading-wrapper" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                      <div className="loading-circle" />
+                    </div>
+                  ) : (
+                    <>
+                      <span>
+                        <label> 
+                          Bounce Rate
+                        </label>
+                        <p> 
+                          Last 7 Days
+                        </p>
+                      </span>
+                      <LineChart
+                        data={individualMetrics.bounceRate}
+                        color="rgba(155, 89, 182, 0.6)"
+                        yAxisFormatter={(value) => `${(value * 100).toFixed(1)}%`}
+                      />
+                    </>
+                  )}
+                </div>
+                <div className="usageAnalyticsFlexCell"> 
+                  
+                  {isLoadingMonitoring ? (
+                    <div className="loading-wrapper" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                      <div className="loading-circle" />
+                    </div>
+                  ) : (
+                    <>
+                      <span>
+                        <label> 
+                          Edge Requests
+                        </label>
+                        <p> 
+                          Last 7 Days
+                        </p>
+                      </span>
+                      <LineChart
+                        data={individualMetrics.edgeRequests}
+                        color="rgba(138, 86, 222, 0.8)"
+                      />
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           )}

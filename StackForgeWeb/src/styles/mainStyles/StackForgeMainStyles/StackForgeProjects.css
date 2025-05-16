@@ -1437,7 +1437,7 @@
     box-shadow: 0 0 10px black;
     position: relative;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     width: 100%;
     height: 100%;  
@@ -1515,13 +1515,13 @@
 }
 
 .monitoringAnalyticsFlexWrapperBarPlot {
-    position: absolute; 
-    top: 180px; 
-    right: 0; 
-    left: 0; 
+    position: absolute;
+    top: 180px;
+    right: 0;
+    left: 0;
+    bottom: 0; 
     height: calc(100% - 180px); 
     width: 100%;
-
 }
 
 .selectDomainsMonitoringFlex {
@@ -1739,4 +1739,65 @@
     min-height: 40px;
     max-height: 40px;
     box-shadow: 0 0 8px black;
+}
+
+.usageAnalyticsFlexWrapper {
+    display: flex; 
+    flex-direction: column; 
+    align-items: center;
+    justify-content: space-between;
+    box-sizing: border-box;
+    height: calc(100% - 40px); 
+    width: 100%; 
+    padding: 1vw 4vw 1vw 4vw;
+}
+
+.usageAnalyticsFlexCellWrapper {
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    width: 100%; 
+    height: 50%; 
+    box-sizing: border-box;
+    padding: 1.5vw 0 ;
+}
+
+.usageAnalyticsFlexCell {
+    background-color: rgba(255, 255, 255, 0.05); 
+    height: 100%;
+    width: 48%; 
+    border: 1px solid rgba(255, 255, 255, 0.1); 
+    border-radius: 6px; 
+    box-shadow: 0 0 20px black;
+    overflow: scroll;
+}
+
+.usageAnalyticsFlexCell span {
+    display: flex; 
+    flex-direction: column; 
+    align-items: flex-start;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 1rem;
+}
+
+.usageAnalyticsFlexCell span label {
+    font-size: 0.8rem; 
+    font-weight: 700; 
+    color: #f1f1f1;
+    padding: 0;
+    margin: 0;
+}
+
+.usageAnalyticsFlexCell span p {
+    font-size: 0.6rem; 
+    font-weight: 600; 
+    color: #c1c1c1;
+    padding: 0; 
+    margin: 0; 
+}
+
+.usageAnalyticsFlexCellPlot {
+    flex: 1; 
+    overflow: hidden !important;
 }

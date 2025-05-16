@@ -346,6 +346,19 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
       return res.status(400).json({ message: 'startDate must be before endDate' });
     }
 
+    const sevenDaysInMs = 6 * 24 * 60 * 60 * 1000; 
+    const dateDiffInMs = end.getTime() - start.getTime();
+    if (dateDiffInMs !== sevenDaysInMs) {
+      return res.status(400).json({ message: 'The date range must be exactly 7 days (endDate - startDate = 6 days)' });
+    }
+
+    const dateRange = [];
+    let currentDate = new Date(start);
+    while (currentDate <= end) {
+      dateRange.push(new Date(currentDate).toISOString().split('T')[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
     let dateTrunc;
     switch (groupBy) {
       case 'week':
@@ -379,7 +392,7 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
         FROM metrics_edge_requests
         WHERE event_time >= $2
           AND event_time <= $3
-          ${domain !== 'all_domains' ? 'AND domain = $' + paramIndex : ''}
+          ${domain !== 'all_domains' ? 'AND domain = $' + (4) : ''}
         GROUP BY DATE_TRUNC($1, event_time), domain
       ) er ON DATE_TRUNC($1, md.day) = er.period
           AND (md.domain = er.domain OR er.domain IS NULL)
@@ -414,13 +427,97 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
       };
     });
 
-    const message = metricsInfo.length > 0
-      ? 'Aggregate metrics retrieved successfully.'
+    let individualMetricsQuery = `
+      SELECT
+        md.day AS period,
+        md.pageviews,
+        md.unique_visitors,
+        md.bounce_rate
+      FROM metrics_daily md
+      WHERE md.day >= $1
+        AND md.day <= $2
+    `;
+    const individualQueryParams = [start, end];
+    let individualParamIndex = 3;
+
+    if (domain !== 'all_domains') {
+      individualMetricsQuery += ` AND md.domain = $${individualParamIndex}`;
+      individualQueryParams.push(domain);
+      individualParamIndex++;
+    }
+
+    individualMetricsQuery += `
+      ORDER BY md.day ASC
+    `;
+
+    const individualMetricsResult = await pool.query(individualMetricsQuery, individualQueryParams);
+    const individualMetricsData = individualMetricsResult.rows;
+
+    let edgeQuery = `
+      SELECT
+        DATE_TRUNC('day', event_time) AS period,
+        COUNT(*) AS edge_requests
+      FROM metrics_edge_requests
+      WHERE event_time >= $1
+        AND event_time <= $2
+    `;
+    if (domain !== 'all_domains') {
+      edgeQuery += ` AND domain = $${individualParamIndex}`;
+    }
+    edgeQuery += `
+      GROUP BY DATE_TRUNC('day', event_time)
+      ORDER BY period ASC
+    `;
+
+    const edgeResult = await pool.query(edgeQuery, individualQueryParams);
+    const edgeData = edgeResult.rows;
+    const pageViewsData = dateRange.map(date => {
+      const entry = individualMetricsData.find(row => row.period.toISOString().split('T')[0] === date);
+      return {
+        date,
+        value: entry ? parseInt(entry.pageviews || 0, 10) : 0
+      };
+    });
+
+    const uniqueVisitorsData = dateRange.map(date => {
+      const entry = individualMetricsData.find(row => row.period.toISOString().split('T')[0] === date);
+      return {
+        date,
+        value: entry ? parseInt(entry.unique_visitors || 0, 10) : 0
+      };
+    });
+
+    const bounceRateData = dateRange.map(date => {
+      const entry = individualMetricsData.find(row => row.period.toISOString().split('T')[0] === date);
+      return {
+        date,
+        value: entry ? parseFloat((entry.bounce_rate || 0).toFixed(2)) : 0
+      };
+    });
+
+    const edgeRequestsData = dateRange.map(date => {
+      const entry = edgeData.find(row => row.period.toISOString().split('T')[0] === date);
+      return {
+        date,
+        value: entry ? parseInt(entry.edge_requests || 0, 10) : 0
+      };
+    });
+
+    const individualMetrics = {
+      pageViews: pageViewsData,
+      uniqueVisitors: uniqueVisitorsData,
+      bounceRate: bounceRateData,
+      edgeRequests: edgeRequestsData
+    };
+
+    const message = metricsInfo.length > 0 || Object.values(individualMetrics).some(metric => metric.some(entry => entry.value > 0))
+      ? 'Aggregate and individual metrics retrieved successfully.'
       : 'No metrics found for the specified criteria.';
 
     return res.status(200).json({
       message,
-      data: metricsInfo
+      data: metricsInfo,
+      individualMetrics 
     });
 
   } catch (error) {
@@ -430,5 +527,6 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
     next(error);
   }
 });
+
 
 module.exports = router;
