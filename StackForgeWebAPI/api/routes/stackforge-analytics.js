@@ -292,5 +292,97 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
   }
 });
 
+router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) => {
+  const { domain, startDate, endDate, groupBy = 'day' } = req.body;
+
+  req.on('close', () => {
+    return;
+  });
+
+  try {
+    if (!domain || (domain !== 'all_domains' && !domain)) {
+      return res.status(400).json({ message: 'domain is required' });
+    }
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: 'startDate and endDate are required' });
+    }
+    if (!['day', 'week', 'month'].includes(groupBy)) {
+      return res.status(400).json({ message: 'groupBy must be "day", "week", or "month"' });
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ message: 'Invalid date format for startDate or endDate' });
+    }
+    if (start > end) {
+      return res.status(400).json({ message: 'startDate must be before endDate' });
+    }
+
+    let dateTrunc;
+    switch (groupBy) {
+      case 'week':
+        dateTrunc = 'week';
+        break;
+      case 'month':
+        dateTrunc = 'month';
+        break;
+      case 'day':
+      default:
+        dateTrunc = 'day';
+    }
+
+    let metricsQuery = `
+      SELECT
+        DATE_TRUNC($1, day) AS period,
+        SUM(pageviews) AS total_pageviews,
+        SUM(unique_visitors) AS total_unique_visitors,
+        AVG(bounce_rate) AS avg_bounce_rate,
+        AVG(avg_load_time) AS avg_load_time,
+        AVG(p75_lcp) AS avg_p75_lcp
+      FROM metrics_daily
+      WHERE day >= $2
+        AND day <= $3
+    `;
+    const queryParams = [dateTrunc, start, end];
+
+    let paramIndex = 4;
+    if (domain !== 'all_domains') {
+      metricsQuery += ` AND domain = $${paramIndex}`;
+      queryParams.push(domain);
+      paramIndex++;
+    }
+
+    metricsQuery += `
+      GROUP BY DATE_TRUNC($1, day)
+      ORDER BY period ASC
+    `;
+
+    const metricsResult = await pool.query(metricsQuery, queryParams);
+    const metricsInfo = metricsResult.rows.map(row => ({
+      period: row.period.toISOString().split('T')[0],
+      pageviews: parseInt(row.total_pageviews || 0, 10),
+      uniqueVisitors: parseInt(row.total_unique_visitors || 0, 10),
+      bounceRate: parseFloat((row.avg_bounce_rate || 0).toFixed(2)),
+      avgLoadTime: parseFloat((row.avg_load_time || 0).toFixed(2)),
+      p75Lcp: parseFloat((row.avg_p75_lcp || 0).toFixed(2))
+    }));
+
+    const message = metricsInfo.length > 0
+      ? 'Aggregate metrics retrieved successfully.'
+      : 'No metrics found for the specified criteria.';
+
+    return res.status(200).json({
+      message,
+      data: metricsInfo
+    });
+
+  } catch (error) {
+    if (!res.headersSent) {
+      return res.status(500).json({ message: 'Error retrieving aggregate metrics.', error: error.message });
+    }
+    next(error);
+  }
+});
 
 module.exports = router;

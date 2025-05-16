@@ -13,7 +13,10 @@ import {
   faGlobe,
   faXmark,
   faFolderOpen,
-  faListUl
+  faListUl,
+  faArrowsRotate,
+  faArrowLeft,
+  faArrowRight,
 } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeProjects.css";
@@ -22,6 +25,7 @@ import StackForgeNav from "../../helpers/StackForgeNav.jsx";
 import { showDialog } from "../../helpers/StackForgeAlert.jsx";
 import useAuth from "../../UseAuth.jsx";
 import useIsTouchDevice from "../../TouchDevice.jsx";
+import BarChart from "../../helpers/PlottingHelpers/BarHelper.jsx";
 
 const StackForgeProjects = () => {
   const navigate = useNavigate();
@@ -51,6 +55,27 @@ const StackForgeProjects = () => {
   const [isLoadingActivities, setIsLoadingActivities] = useState(false);
   const [activitySearchText, setActivitySearchText] = useState("");
   const debounceTimeoutRef = useRef(null);
+  const [monitoringData, setMonitoringData] = useState([]);
+  const [isLoadingMonitoring, setIsLoadingMonitoring] = useState(false);
+  const [selectedDomain, setSelectedDomain] = useState("");
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const today = new Date("2025-05-15");
+    const dayOfWeek = today.getDay(); 
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - daysToMonday);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  });
+  const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
+  const domainSelectRef = useRef(null);
+  const domainDropdownRef = useRef(null);
+  const [domainDropdownPosition, setDomainDropdownPosition] = useState({ top: 0, left: 0 });
+  const [visibleSeries, setVisibleSeries] = useState({
+    pageViews: true,
+    visitors: true,
+    bounceRate: true,
+  });
 
   useEffect(() => {
     if (!loading && !token) navigate("/login");
@@ -70,6 +95,7 @@ const StackForgeProjects = () => {
     const handleResize = () => {
       setIsLoaded(false);
       setAddNewOpen(false);
+      setDomainDropdownOpen(false); 
       setScreenSize(window.innerWidth);
       setResizeTrigger((prev) => !prev);
       setTimeout(() => setIsLoaded(true), 300);
@@ -88,10 +114,18 @@ const StackForgeProjects = () => {
       ) {
         setAddNewOpen(false);
       }
+      if (
+        domainSelectRef.current &&
+        !domainSelectRef.current.contains(event.target) &&
+        domainDropdownRef.current &&
+        !domainDropdownRef.current.contains(event.target)
+      ) {
+        setDomainDropdownOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [addNewRef, dropdownRef]);
+  }, [addNewRef, dropdownRef, domainSelectRef, domainDropdownRef]);
 
   useEffect(() => {
     const handleClickOutsideCellMenu = (event) => {
@@ -118,6 +152,22 @@ const StackForgeProjects = () => {
       setDropdownPosition({ top: newTop, left: newLeft });
     }
   }, [addNewOpen]);
+
+  useEffect(() => {
+    if (domainDropdownOpen && domainSelectRef.current && domainDropdownRef.current) {
+      const buttonRect = domainSelectRef.current.getBoundingClientRect();
+      const dropdownRect = domainDropdownRef.current.getBoundingClientRect();
+      let newTop = buttonRect.bottom + 5;
+      let newLeft = buttonRect.right - dropdownRect.width; 
+      if (newTop + dropdownRect.height > window.innerHeight) {
+        newTop = window.innerHeight - dropdownRect.height;
+      }
+      if (newLeft < 0) {
+        newLeft = 0;
+      }
+      setDomainDropdownPosition({ top: newTop * 1.02, left: newLeft });
+    }
+  }, [domainDropdownOpen]);
 
   useEffect(() => {
     const fetchActivityLogs = async () => {
@@ -155,6 +205,46 @@ const StackForgeProjects = () => {
     };
     fetchActivityLogs();
   }, [projectsPage, token, userID, organizationID, activityPage, activityLimit, activitySearchText]);
+
+  useEffect(() => {
+    const fetchMonitoringData = async () => {
+      if (projectsPage !== "monitoring" || !token) return;
+      setIsLoadingMonitoring(true);
+      try {
+        const weekEnd = new Date(currentWeekStart);
+        weekEnd.setDate(currentWeekStart.getDate() + 6); 
+        const response = await fetch("http://localhost:3000/get-aggregate-metrics", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            organizationID,
+            domain: selectedDomain || "all_domains",
+            startDate: currentWeekStart.toISOString().split('T')[0],
+            endDate: weekEnd.toISOString().split('T')[0],
+            groupBy: 'day'
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        setMonitoringData(data.data || []);
+      } catch (error) {
+        setMonitoringData([]);
+        await showDialog({
+          title: "Error",
+          message: "Failed to load monitoring data. Please try again.",
+          showCancel: false,
+        });
+      } finally {
+        setIsLoadingMonitoring(false);
+      }
+    };
+    fetchMonitoringData();
+  }, [projectsPage, token, organizationID, selectedDomain, currentWeekStart]);
 
   const getProjects = async () => {
     const token = localStorage.getItem("token");
@@ -314,6 +404,68 @@ const StackForgeProjects = () => {
   const filteredActivities = activities.filter((activity) =>
     activity.description.toLowerCase().includes(activitySearchText.toLowerCase())
   );
+
+  const getUniqueDomains = () => {
+    const domains = projects
+      .map(project => project.url)
+      .filter(url => url)
+      .map(url => {
+        try {
+          return new URL(url).hostname;
+        } catch {
+          return null;
+        }
+      })
+      .filter(domain => domain);
+    return [...new Set(domains)]; 
+  };
+
+  const handlePreviousWeek = () => {
+    const newStart = new Date(currentWeekStart);
+    newStart.setDate(currentWeekStart.getDate() - 7);
+    setCurrentWeekStart(newStart);
+  };
+
+  const handleNextWeek = () => {
+    const newStart = new Date(currentWeekStart);
+    newStart.setDate(currentWeekStart.getDate() + 7);
+    const today = new Date("2025-05-15");
+    const currentWeekMonday = new Date(today);
+    const dayOfWeek = today.getDay();
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    currentWeekMonday.setDate(today.getDate() - daysToMonday);
+    currentWeekMonday.setHours(0, 0, 0, 0);
+    if (newStart <= currentWeekMonday) {
+      setCurrentWeekStart(newStart);
+    }
+  };
+
+  const handleDomainSelect = (domain) => {
+    setSelectedDomain(domain);
+    setDomainDropdownOpen(false);
+  };
+
+  const toggleDomainDropdown = () => {
+    setDomainDropdownOpen((prev) => !prev);
+  };
+
+  const toggleSeries = (series) => {
+    setVisibleSeries((prev) => {
+      const newState = { ...prev, [series]: !prev[series] };
+      const visibleCount = Object.values(newState).filter(Boolean).length;
+      if (visibleCount === 0) {
+        return prev;
+      }
+      return newState;
+    });
+  };
+
+  const formatWeekDisplay = () => {
+    const start = currentWeekStart;
+    const end = new Date(currentWeekStart);
+    end.setDate(start.getDate() + 6);
+    return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+  };
 
   return (
     <div
@@ -563,6 +715,7 @@ const StackForgeProjects = () => {
             <>
               <div className="projectsTopBar">
                 <div className="projectsTopBarControls"> 
+                    <FontAwesomeIcon icon={faListUl}/>
                     <p> 
                       Your Activity Logs
                     </p>
@@ -579,67 +732,213 @@ const StackForgeProjects = () => {
                     />
                     <FontAwesomeIcon icon={faCircleInfo} className="searchIconSupplement" />
                   </div>
-                </div>
 
+                  <button
+                    onClick={refreshActivityLogs}
+                    disabled={isLoadingActivities}
+                  >
+                    <FontAwesomeIcon icon={faArrowsRotate}/>
+                  </button>
+                </div>
               </div>
 
               <div className="activityLogsFlexWrapper">
-              
-                  {isLoadingActivities ? (
-                    <div className="loading-wrapper" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-                      <div className="loading-circle" />
+                {isLoadingActivities ? (
+                  <div className="loading-wrapper" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                    <div className="loading-circle" />
+                  </div>
+                ) : filteredActivities.length === 0 ? (
+                  <div className="activityLogsNoResults">
+                    <div className="activityLogsNoResultCell">
+                      <FontAwesomeIcon
+                        icon={faListUl}
+                        size="3x"
+                        className="activityLogsNoResultsIcon"
+                      />
+                      <div className="activityLogsNoResultsText">
+                        No logs found for the selected filters. 
+                      </div>
+                      <div className="activityLogsNoResultsButtons">
+                        <button
+                          className="activityLogsNoResultsRefresh"
+                          onClick={refreshActivityLogs}
+                          disabled={isLoadingActivities}
+                        >
+                          Refresh Logs
+                        </button>
+                      </div>
                     </div>
-                  ) : filteredActivities.length === 0 ? (
-                      <div className="activityLogsNoResults">
-                        <div className="activityLogsNoResultCell">
-                            <FontAwesomeIcon
-                            icon={faListUl}
-                            size="3x"
-                            className="activityLogsNoResultsIcon"
-                            />
-                            <div className="activityLogsNoResultsText">
-                            No logs found for the selected filters. 
-                            </div>
-                            <div className="activityLogsNoResultsButtons">
-                            <button
-                                className="activityLogsNoResultsRefresh"
-                                onClick={refreshActivityLogs}
-                                disabled={isLoadingActivities}
-                            >
-                                Refresh Logs
-                            </button>
-                            </div>
+                  </div>
+                ) : (
+                  <>
+                    {filteredActivities.map((activity, index) => (
+                      <div
+                        className="activityLogItemWrapper"
+                        key={index}
+                      >
+                        <img
+                          className="activityLogItemWrapperImage "
+                          src={activity.userImage || "StackForgeLogo.png"}
+                          alt=""
+                        />
+                        <div className="activitylogItemWrapperTitleStack">
+                          <strong>
+                            {activity.description}
+                          </strong>
+                          <p style={{ color: '#aaaaaa', fontSize: '0.9em', margin: '5px 0 0 0' }}>
+                            {new Date(activity.timestamp).toLocaleString()}
+                          </p>
                         </div>
                       </div>
-                  ) : (
-                    <>
-                      {filteredActivities.map((activity, index) => (
-                        <div
-                          className="activityLogItemWrapper"
-                          key={index}
-                        >
-                          <img
-                            className="activityLogItemWrapperImage "
-                            src={activity.userImage || "StackForgeLogo.png"}
-                            alt=""
-                          />
-                          <div className="activitylogItemWrapperTitleStack">
-                            <strong>
-                              {activity.description}
-                            </strong>
-                            <p style={{ color: '#aaaaaa', fontSize: '0.9em', margin: '5px 0 0 0' }}>
-                              {new Date(activity.timestamp).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                      
-                    </>
-                  )}
+                    ))}
+                  </>
+                )}
               </div>
             </>
           )}
 
+          {projectsPage === "monitoring" && (
+            <div className="monitoringAnalyticsFlexWrapper">
+              <div className="monitoringAnalyticsFlexCell">
+                <div className="monitoringAnalyticsFlexWrapperTopBar">
+                  <div
+                    className="monitoringAnalyticsFlexWrapperTopBarItem"
+                    onClick={() => toggleSeries("pageViews")}
+                    style={{
+                      cursor: "pointer",
+                      backgroundColor: visibleSeries.pageViews ? "rgba(84, 112, 198, 0.2)" : "transparent",
+                    }}
+                  >
+                    <h3>Page Views</h3>
+                    <p>
+                      {monitoringData.length > 0 ? monitoringData.reduce((sum, item) => sum + item.pageviews, 0) : 0}
+                    </p>
+                  </div>
+                  <div
+                    className="monitoringAnalyticsFlexWrapperTopBarItem"
+                    onClick={() => toggleSeries("visitors")}
+                    style={{
+                      cursor: "pointer",
+                      backgroundColor: visibleSeries.visitors ? "rgba(86, 222, 163, 0.2)" : "transparent",
+                    }}
+                  >
+                    <h3>Visitors</h3>
+                    <p>
+                      {monitoringData.length > 0 ? monitoringData.reduce((sum, item) => sum + item.uniqueVisitors, 0) : 0}
+                    </p>
+                  </div>
+                  <div
+                    className="monitoringAnalyticsFlexWrapperTopBarItem"
+                    onClick={() => toggleSeries("bounceRate")}
+                    style={{
+                      cursor: "pointer",
+                      backgroundColor: visibleSeries.bounceRate ? "rgba(155, 89, 182, 0.2)" : "transparent",
+                    }}
+                  >
+                    <h3>Bounce Rate</h3>
+                    <p>
+                      {monitoringData.length > 0
+                        ? `${(monitoringData.reduce((sum, item) => sum + item.bounceRate, 0) / monitoringData.length * 100).toFixed(1)}%`
+                        : '0%'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="monitoringAnalyticsFlexWrapperTopBarSupplement">
+                  <div className="selectDomainsMonitoringFlex">
+                    <label> 
+                      Select a Domain
+                    </label>
+
+                    <div className="selectDomainsMonitoringWrapper" ref={domainSelectRef}>
+                      <button className="addDomainMonitoringButton" onClick={toggleDomainDropdown}>
+                        <p>{selectedDomain || "All Domains"}</p>
+                        <FontAwesomeIcon
+                          icon={faCaretDown}
+                          className="addDomainMonitoringCaretIcon"
+                          style={{
+                            transform: domainDropdownOpen ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.3s ease"
+                          }}
+                        />
+                      </button>
+                    </div>
+                    {domainDropdownOpen && (
+                      <div
+                        className="addDomainMonitoringCaretIconDropdownMenu"
+                        ref={domainDropdownRef}
+                        style={{
+                          top: domainDropdownPosition.top,
+                          left: domainDropdownPosition.left,
+                          zIndex: 1000
+                        }}
+                      >
+                        <button onClick={() => handleDomainSelect("")}>
+                          <i>All Domains</i>
+                        </button>
+                        {getUniqueDomains().map((domain, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleDomainSelect(domain)}
+                          >
+                            <i>{domain}</i>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="monitoringDateEntry">
+                    <label> 
+                      Select a Data Period
+                    </label>
+
+                    <div className="monitoringDateEntryDateFlex"> 
+                      <button
+                        onClick={handlePreviousWeek}
+                      >
+                        <FontAwesomeIcon icon={faArrowLeft} />
+                      </button>
+                      <span>{formatWeekDisplay()}</span>
+                      <button
+                        onClick={handleNextWeek}
+                        disabled={(() => {
+                          const today = new Date("2025-05-15");
+                          const currentWeekMonday = new Date(today);
+                          const dayOfWeek = today.getDay();
+                          const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                          currentWeekMonday.setDate(today.getDate() - daysToMonday);
+                          currentWeekMonday.setHours(0, 0, 0, 0);
+                          return currentWeekStart.getTime() >= currentWeekMonday.getTime();
+                        })()}
+                      >
+                        <FontAwesomeIcon icon={faArrowRight} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {isLoadingMonitoring ? (
+                  <div className="loading-wrapper" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                    <div className="loading-circle" />
+                  </div>
+                ) : (
+                  <div className="monitoringAnalyticsFlexWrapperBarPlot">
+                    <BarChart
+                      data={monitoringData}
+                      startDate={currentWeekStart}
+                      endDate={(() => {
+                        const end = new Date(currentWeekStart);
+                        end.setDate(currentWeekStart.getDate() + 6);
+                        return end;
+                      })()}
+                      visibleSeries={visibleSeries}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
       {!isLoaded && (
