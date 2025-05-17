@@ -131,13 +131,19 @@ class DeployManager {
     
         const p0 = projectName.toLowerCase();
         let s0 = subdomain ? subdomain.toLowerCase() : null;
-        if (s0 === p0) s0 = null;
+        if (s0 === p0) s0 = null;                      
     
-        const baseName = s0 ? `${p0}-${s0.replace(/\./g, "-")}`.slice(0, 26)
+        const baseName = s0
+            ? `${p0}-${s0.replace(/\./g, "-")}`.slice(0, 26)
             : p0.slice(0, 26);
     
-        const vpcId = process.env.VPC_ID;
-        const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
+        const matchOld = new RegExp(`^${baseName}(?:-v\\d+)?$`);
+        let tgName  = baseName;
+        let tgArn   = undefined;
+        let version = 0;
+
+        const vpcId      = process.env.VPC_ID;
+        const listenerArn= process.env.ALB_LISTENER_ARN_HTTPS;
         if (!vpcId || !listenerArn) {
             throw new Error("VPC_ID or ALB_LISTENER_ARN_HTTPS missing in env.");
         }
@@ -173,68 +179,75 @@ class DeployManager {
             tg.HealthyThresholdCount === desired.HealthyThresholdCount &&
             tg.UnhealthyThresholdCount === desired.UnhealthyThresholdCount;
     
-        let tgName = baseName;
-        let tgArn = undefined;
-        let version = 0;
-    
         const allTgs = await this.elbv2.send(new DescribeTargetGroupsCommand({}));
         const oldTgs = allTgs.TargetGroups.filter(tg =>
-            tg.TargetGroupName.startsWith(baseName) && !tg.TargetGroupName.includes('-v')
+            matchOld.test(tg.TargetGroupName) && tg.TargetGroupName !== tgName
         );
     
         for (const oldTg of oldTgs) {
-            if (oldTg.TargetGroupName === tgName) continue;
             try {
-                const rules = await this.elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+                const rules = await this.elbv2.send(
+                    new DescribeRulesCommand({ ListenerArn: listenerArn })
+                );
                 for (const r of rules.Rules ?? []) {
-                    if (!r.IsDefault && r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === oldTg.TargetGroupArn)) {
+                    if (
+                        !r.IsDefault &&
+                        r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === oldTg.TargetGroupArn)
+                    ) {
                         await this.elbv2.send(new DeleteRuleCommand({ RuleArn: r.RuleArn }));
                     }
                 }
-                await this.elbv2.send(new DeleteTargetGroupCommand({ TargetGroupArn: oldTg.TargetGroupArn }));
+                await this.elbv2.send(
+                    new DeleteTargetGroupCommand({ TargetGroupArn: oldTg.TargetGroupArn })
+                );
             } catch (error) {
                 if (error.name !== "ResourceInUseException") throw error;
             }
         }
     
-        while (true) {
-            let existingTg;
+        const getExisting = async (name) => {
             try {
                 const d = await this.elbv2.send(
-                    new DescribeTargetGroupsCommand({ Names: [tgName] })
+                    new DescribeTargetGroupsCommand({ Names: [name] })
                 );
-                existingTg = d.TargetGroups?.[0];
-            } catch (error) {
-                if (error.name !== "TargetGroupNotFoundException") throw error;
+                return d.TargetGroups?.[0];
+            } catch (err) {
+                if (err.name === "TargetGroupNotFoundException") return null;
+                throw err;
             }
+        };
     
-            if (existingTg && isCompatible(existingTg)) {
-                tgArn = existingTg.TargetGroupArn;
+        while (true) {
+            const existing = await getExisting(tgName);
+    
+            if (existing && isCompatible(existing)) {
+                tgArn = existing.TargetGroupArn;
                 break;
             }
     
-            if (existingTg) {
-                tgArn = existingTg.TargetGroupArn;
+            if (existing) {
                 try {
-                    const { Rules } = await this.elbv2.send(
+                    const rules = await this.elbv2.send(
                         new DescribeRulesCommand({ ListenerArn: listenerArn })
                     );
-                    for (const r of Rules ?? []) {
-                        if (!r.IsDefault &&
-                            r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === tgArn)) {
+                    for (const r of rules.Rules ?? []) {
+                        if (
+                            !r.IsDefault &&
+                            r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === existing.TargetGroupArn)
+                        ) {
                             await this.elbv2.send(new DeleteRuleCommand({ RuleArn: r.RuleArn }));
                         }
                     }
-                    await this.elbv2.send(new DeleteTargetGroupCommand({ TargetGroupArn: tgArn }));
-                    tgArn = undefined;
-                } catch (error) {
-                    if (error.name === "ResourceInUseException") {
+                    await this.elbv2.send(
+                        new DeleteTargetGroupCommand({ TargetGroupArn: existing.TargetGroupArn })
+                    );
+                } catch (err) {
+                    if (err.name === "ResourceInUseException") {
                         version += 1;
-                        tgName = `${baseName}-v${version + 1}`.slice(0, 32);
-                        tgArn = undefined;
-                    } else {
-                        throw error;
+                        tgName = `${baseName}-v${version}`.slice(0, 32);
+                        continue;
                     }
+                    throw err;
                 }
             }
     
@@ -250,15 +263,13 @@ class DeployManager {
         const { Rules } = await this.elbv2.send(
             new DescribeRulesCommand({ ListenerArn: listenerArn })
         );
-        const already = Rules?.find(r =>
+        const exists = Rules?.find(r =>
             !r.IsDefault &&
-            r.Conditions.some(
-                c => c.Field === "host-header" && c.Values.includes(hostHeader)
-            ) &&
+            r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(hostHeader)) &&
             r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === tgArn)
         );
     
-        if (!already) {
+        if (!exists) {
             const used = new Set(
                 Rules.filter(r => !r.IsDefault).map(r => Number(r.Priority))
             );
@@ -277,6 +288,8 @@ class DeployManager {
     
         return tgArn;
     }
+    
+    
 
     async ensureLogGroup(logGroupName) {
         const listResp = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({
@@ -476,159 +489,193 @@ class DeployManager {
         taskDefArn,
         targetGroupArn,
         healthCheckPath = "/"
-    }) {
+      }) {
         const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
         const elbClient = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
         const cfClient = new CloudFrontClient({ region: process.env.AWS_REGION });
     
         ["ECS_CLUSTER_ARN", "ECS_CLUSTER", "SUBNET_IDS",
-            "SECURITY_GROUP_IDS", "ALB_LISTENER_ARN_HTTPS", "AWS_REGION"]
-            .forEach(k => { if (!process.env[k]) throw new Error(`Missing env ${k}.`); });
+          "SECURITY_GROUP_IDS", "ALB_LISTENER_ARN_HTTPS", "AWS_REGION"]
+          .forEach(k => { if (!process.env[k]) throw new Error(`Missing env ${k}.`); });
     
         const serviceName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
         const containerName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
         const fqdn = subdomain ? `${subdomain}.stackforgeengine.com`
-            : `${projectName}.stackforgeengine.com`;
+          : `${projectName}.stackforgeengine.com`;
     
-        const ruleExists = async (listenerArn, targetGroupArn) => {
-            const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
-            const rule = Rules.find(r =>
-                !r.IsDefault &&
-                r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(fqdn)) &&
-                r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === targetGroupArn)
-            );
-            return rule ? rule.RuleArn : null;
+        const checkTargetGroupHealth = async () => {
+          const { TargetHealthDescriptions } = await elbClient.send(
+            new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn })
+          );
+          return TargetHealthDescriptions.some(t => t.TargetHealth.State === 'healthy');
         };
+    
         const pickPriority = async (listenerArn) => {
-            const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
-            const used = new Set(Rules.filter(r => !r.IsDefault).map(r => parseInt(r.Priority, 10)));
-            for (let p = 1; p <= 50000; p++) if (!used.has(p)) return p;
-            throw new Error("No free ALB priority.");
+          const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+          const used = new Set(Rules.filter(r => !r.IsDefault).map(r => parseInt(r.Priority, 10)));
+          for (let p = 1; p <= 50000; p++) if (!used.has(p)) return p;
+          throw new Error("No free ALB priority.");
         };
-        const existingRuleArn = await ruleExists(process.env.ALB_LISTENER_ARN_HTTPS, targetGroupArn);
-        if (existingRuleArn) {
+    
+        const updateALBRules = async () => {
+          const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
+          const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+          const existingRule = Rules.find(r =>
+            !r.IsDefault &&
+            r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(fqdn)) &&
+            r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === targetGroupArn)
+          );
+    
+          if (existingRule) {
             await elbClient.send(new ModifyRuleCommand({
-                RuleArn: existingRuleArn,
-                Conditions: [{ Field: "host-header", Values: [fqdn] }],
-                Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
+              RuleArn: existingRule.RuleArn,
+              Conditions: [{ Field: "host-header", Values: [fqdn] }],
+              Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
             }));
-        } else {
-            const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: process.env.ALB_LISTENER_ARN_HTTPS }));
+          } else {
             const outdatedRule = Rules.find(r =>
-                !r.IsDefault &&
-                r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(fqdn))
+              !r.IsDefault &&
+              r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(fqdn))
             );
             if (outdatedRule) {
-                await elbClient.send(new DeleteRuleCommand({ RuleArn: outdatedRule.RuleArn }));
+              await elbClient.send(new DeleteRuleCommand({ RuleArn: outdatedRule.RuleArn }));
             }
             await elbClient.send(new CreateRuleCommand({
-                ListenerArn: process.env.ALB_LISTENER_ARN_HTTPS,
-                Priority: await pickPriority(process.env.ALB_LISTENER_ARN_HTTPS),
-                Conditions: [{ Field: "host-header", Values: [fqdn] }],
-                Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
+              ListenerArn: listenerArn,
+              Priority: await pickPriority(listenerArn),
+              Conditions: [{ Field: "host-header", Values: [fqdn] }],
+              Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
             }));
-        }
+          }
+        };
     
         const td = await ecsClient.send(
-            new DescribeTaskDefinitionCommand({ taskDefinition: taskDefArn })
+          new DescribeTaskDefinitionCommand({ taskDefinition: taskDefArn })
         );
         let cont = td.taskDefinition.containerDefinitions.find(c => c.name === containerName);
         if (!cont) {
-            cont = td.taskDefinition.containerDefinitions[0];
-            if (!cont) throw new Error(`No containers found in task definition ${taskDefArn}.`);
+          cont = td.taskDefinition.containerDefinitions[0];
+          if (!cont) throw new Error(`No containers found in task definition ${taskDefArn}.`);
         }
         const port = cont.portMappings?.[0]?.containerPort || 3000;
     
         const svcBase = {
-            cluster: process.env.ECS_CLUSTER_ARN,
-            taskDefinition: taskDefArn,
-            desiredCount: 1,
-            networkConfiguration: {
-                awsvpcConfiguration: {
-                    subnets: process.env.SUBNET_IDS.split(","),
-                    securityGroups: process.env.SECURITY_GROUP_IDS.split(","),
-                    assignPublicIp: "ENABLED"
-                }
-            },
-            loadBalancers: [{
-                targetGroupArn: targetGroupArn,
-                containerName: cont.name,
-                containerPort: port
-            }],
-            healthCheckGracePeriodSeconds: 60
+          cluster: process.env.ECS_CLUSTER_ARN,
+          taskDefinition: taskDefArn,
+          desiredCount: 1,
+          networkConfiguration: {
+            awsvpcConfiguration: {
+              subnets: process.env.SUBNET_IDS.split(","),
+              securityGroups: process.env.SECURITY_GROUP_IDS.split(","),
+              assignPublicIp: "ENABLED"
+            }
+          },
+          loadBalancers: [{
+            targetGroupArn: targetGroupArn,
+            containerName: cont.name,
+            containerPort: port
+          }],
+          healthCheckGracePeriodSeconds: 60
         };
     
         const { services } = await ecsClient.send(new DescribeServicesCommand({
-            cluster: process.env.ECS_CLUSTER_ARN,
-            services: [serviceName]
+          cluster: process.env.ECS_CLUSTER_ARN,
+          services: [serviceName]
         }));
         const existing = services?.[0];
     
         if (existing && existing.status === "ACTIVE") {
-            await ecsClient.send(new UpdateServiceCommand({
-                ...svcBase,
-                service: serviceName,
-                forceNewDeployment: true
-            }));
-            await waitUntilServicesStable(
-                { client: ecsClient, maxWaitTime: 900, minDelay: 10, maxDelay: 30 },
-                { cluster: process.env.ECS_CLUSTER_ARN, services: [serviceName] }
-            );
+          await ecsClient.send(new UpdateServiceCommand({
+            ...svcBase,
+            service: serviceName,
+            forceNewDeployment: true
+          }));
+          await waitUntilServicesStable(
+            { client: ecsClient, maxWaitTime: 1200, minDelay: 15, maxDelay: 60 },
+            { cluster: process.env.ECS_CLUSTER_ARN, services: [serviceName] }
+          );
         } else {
-            if (existing) {
-                await ecsClient.send(new DeleteServiceCommand({
-                    cluster: process.env.ECS_CLUSTER_ARN, service: serviceName, force: true
-                }));
-            }
-            await ecsClient.send(new CreateServiceCommand({
-                ...svcBase, serviceName, launchType: "FARGATE"
+          if (existing) {
+            await ecsClient.send(new DeleteServiceCommand({
+              cluster: process.env.ECS_CLUSTER_ARN, service: serviceName, force: true
             }));
-            await waitUntilServicesStable(
-                { client: ecsClient, maxWaitTime: 900, minDelay: 10, maxDelay: 30 },
-                { cluster: process.env.ECS_CLUSTER_ARN, services: [serviceName] }
-            );
+          }
+          await ecsClient.send(new CreateServiceCommand({
+            ...svcBase, serviceName, launchType: "FARGATE"
+          }));
+          await waitUntilServicesStable(
+            { client: ecsClient, maxWaitTime: 1200, minDelay: 15, maxDelay: 60 },
+            { cluster: process.env.ECS_CLUSTER_ARN, services: [serviceName] }
+          );
         }
     
         const serviceDesc = await ecsClient.send(
-            new DescribeServicesCommand({
-                cluster: process.env.ECS_CLUSTER_ARN,
-                services: [serviceName]
-            })
+          new DescribeServicesCommand({
+            cluster: process.env.ECS_CLUSTER_ARN,
+            services: [serviceName]
+          })
         );
         const service = serviceDesc.services?.[0];
         if (!service || service.status !== 'ACTIVE' || service.runningCount < 1) {
-            throw new Error(`Service ${serviceName} is not healthy: status=${service?.status}, runningCount=${service?.runningCount}.`);
-        }
-        const targetHealth = await elbClient.send(
-            new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn })
-        );
-        if (!targetHealth.TargetHealthDescriptions.some(t => t.TargetHealth.State === 'healthy')) {
-            throw new Error(`No healthy targets in target group ${targetGroupArn}.`);
+          throw new Error(`Service ${serviceName} is not healthy: status=${service?.status}, runningCount=${service?.runningCount}.`);
         }
     
-        if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
-            const maxRetries = 3;
-            let attempt = 1;
-            let invalidationId = null;
-            while (attempt <= maxRetries) {
-                try {
-                    const invalidation = await cfClient.send(new CreateInvalidationCommand({
-                        DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
-                        InvalidationBatch: {
-                            CallerReference: `ecs-${serviceName}-${Date.now()}`,
-                            Paths: { Quantity: 3, Items: ["/", "/*", "/*/*"] }
-                        }
-                    }));
-                    invalidationId = invalidation.Invalidation.Id;
-                    break;
-                } catch (error) {
-                    if (attempt === maxRetries) throw new Error(`Failed to create CloudFront invalidation: ${error.message}`);
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                    attempt++;
-                }
-            }
+        let healthCheckRetries = 5;
+        let isTgHealthy = false;
+        while (healthCheckRetries > 0) {
+          isTgHealthy = await checkTargetGroupHealth();
+          if (isTgHealthy) break;
+          await new Promise(resolve => setTimeout(resolve, 10000)); 
+          healthCheckRetries--;
         }
-    }
+        if (!isTgHealthy) {
+          throw new Error(`No healthy targets in target group ${targetGroupArn} after deployment.`);
+        }
+    
+        await updateALBRules();
+
+        if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
+          let invalidationSuccess = false;
+          let invalidationId = null;
+          const callerReference = `ecs-${serviceName}-${Date.now()}`;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const { Invalidation } = await cfClient.send(new CreateInvalidationCommand({
+                DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
+                InvalidationBatch: {
+                  CallerReference: callerReference,
+                  Paths: {
+                    Quantity: 4,
+                    Items: ["/", "/*", "/*/*", "/assets/*"] 
+                  }
+                }
+              }));
+              invalidationId = Invalidation.Id;
+              invalidationSuccess = true;
+              break;
+            } catch (error) {
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+          }
+    
+          if (invalidationSuccess && invalidationId) {
+            let statusRetries = 10;
+            while (statusRetries > 0) {
+              try {
+                const { Invalidation } = await cfClient.send(new GetInvalidationCommand({
+                  DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
+                  Id: invalidationId
+                }));
+                if (Invalidation.Status === "Completed") {
+                  break;
+                }
+              } catch (error) {}
+              await new Promise(resolve => setTimeout(resolve, 10000)); 
+              statusRetries--;
+            }
+          }
+        }
+      }
 
     async createCodeBuildProject({
         projectName,
@@ -2937,3 +2984,6 @@ class DeployManager {
 }
 
 module.exports = new DeployManager();
+
+
+

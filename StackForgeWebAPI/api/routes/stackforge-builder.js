@@ -822,10 +822,4 @@ router.post("/project-details", authenticateToken, async (req, res, next) => {
 
 
 
-
-
-
-
-
-
 module.exports = router;
