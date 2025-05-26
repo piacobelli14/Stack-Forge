@@ -92,6 +92,17 @@ CREATE TABLE signin_logs
 DROP INDEX IF EXISTS idx_signin_logs; 
 CREATE INDEX idx_signin_logs ON signin_logs (orgid, username, signin_timestamp);
 
+DROP TABLE IF EXISTS visitor_sessions; 
+CREATE TABLE visitor_sessions (
+  visitor_id     TEXT PRIMARY KEY,
+  username       TEXT    NOT NULL,
+  orgid          TEXT    NOT NULL,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  last_seen_at   TIMESTAMPTZ DEFAULT NOW()
+);
+DROP INDEX IF EXISTS idx_visitor_sessions; 
+CREATE INDEX idx_visitor_sessions ON visitor_sessions (visitor_id);
+
 DROP TABLE IF EXISTS permission_logs;
 CREATE TABLE permission_logs
 	(
@@ -221,6 +232,7 @@ CREATE TABLE domains
     dns_records JSONB,
     checked_at TIMESTAMP,
     is_primary BOOLEAN DEFAULT FALSE,
+    previous_deployment TEXT,
     redirect_target TEXT, 
     environment TEXT, 
     repository TEXT,

@@ -1,9 +1,15 @@
 (function(){
-  let visitorId = localStorage.getItem('sf_visitor_id');
-  if (!visitorId) {
-    visitorId = crypto.randomUUID();
-    localStorage.setItem('sf_visitor_id', visitorId);
+  // generate or read a single cookie on .stackforgeengine.com
+  function getVisitorId(){
+    const m = document.cookie.match(/(?:^|; )sf_visitor_id=([^;]+)/);
+    if(m) return m[1];
+    const id = crypto.randomUUID();
+    document.cookie =
+      `sf_visitor_id=${id};` +
+      `path=/;domain=.stackforgeengine.com;SameSite=None;Secure`;
+    return id;
   }
+  const visitorId = getVisitorId();
 
   async function checkAuth() {
     try {
@@ -13,23 +19,23 @@
           'Content-Type': 'application/json',
           'X-Visitor-Id': visitorId
         },
-        keepalive: true, 
+        keepalive: true,
         body: JSON.stringify({
           domain: location.hostname
         })
       });
-      
+
       const data = await response.json();
-      
+
       if (response.status === 403 || (data.protected && !data.isAuthenticated)) {
         const loginUrl = `http://localhost:5173/login?return=${encodeURIComponent(window.location.href)}`;
         window.location.href = loginUrl;
         return false;
       }
-      
+
       return true;
     } catch (error) {
-      return false; 
+      return false;
     }
   }
 
@@ -66,7 +72,7 @@
 
     const MAX_REQUESTS = 50;
     let edgeRequests = [];
-    
+
     const originalFetch = window.fetch;
     window.fetch = async function(input, init) {
       const start = performance.now();
@@ -82,7 +88,7 @@
             status: response.status,
             duration,
             type: 'fetch',
-            timing: { response: duration } 
+            timing: { response: duration }
           });
         }
         return response;
@@ -103,7 +109,7 @@
 
     const isEdgeRequest = (url) => {
       const edgeDomains = [
-        'cdn.', 
+        'cdn.',
         'cloudflare.com',
         'fastly.net',
         'akamai.net',
@@ -112,7 +118,7 @@
       try {
         const parsedUrl = new URL(url);
         return edgeDomains.some(domain => parsedUrl.hostname.includes(domain)) ||
-               parsedUrl.hostname !== location.hostname; 
+               parsedUrl.hostname !== location.hostname;
       } catch {
         return false;
       }
@@ -127,7 +133,7 @@
               isEdgeRequest(entry.name)) {
             edgeRequests.push({
               url: entry.name,
-              method: entry.initiatorType === 'fetch' || entry.initiatorType === 'xmlhttprequest' ? 'GET' : 'GET',
+              method: 'GET',
               status: entry.responseStatus || 0,
               duration: Math.round(entry.duration),
               type: entry.initiatorType,
@@ -166,7 +172,7 @@
       setInterval(checkResources, 1000);
     }
 
-    const THRESHOLD_MS = 5000; 
+    const THRESHOLD_MS = 5000;
     const sendMetrics = () => {
       const timeSpent = performance.now() - startTime;
       const isBounce = !engaged && timeSpent < THRESHOLD_MS;

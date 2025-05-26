@@ -76,7 +76,7 @@ const StackForgeProjectDetails = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      await fetchProjectInfo(null); 
+      await fetchProjectInfo(null);
       setIsLoaded(true);
     };
     if (!loading && token) fetchData();
@@ -86,7 +86,7 @@ const StackForgeProjectDetails = () => {
     if (projectDetails?.domains?.length > 0 && !selectedSubdomain) {
       const initialSubdomain = projectDetails.domains[0].domain_name;
       setSelectedSubdomain(initialSubdomain);
-      fetchAllData(initialSubdomain); 
+      fetchAllData(initialSubdomain);
     }
   }, [projectDetails]);
 
@@ -218,11 +218,36 @@ const StackForgeProjectDetails = () => {
     setAnalytics(null);
     setCommits([]);
     setUpdateMismatch(null);
+    setSelectedDeployment(null);
     fetchAllData(subdomain);
   };
 
   const openRollbackModal = () => {
-    setSelectedDeployment(projectDetails.project.previous_deployment);
+    if (projectDetails && selectedSubdomain) {
+      const dom = projectDetails.domains.find(
+        (d) => d.domain_name === selectedSubdomain
+      );
+      if (dom) {
+        const deploymentsForDom = projectDetails.deployments
+          ?.filter((d) => d.domain_id === dom.domain_id)
+          .sort((a, b) => {
+            if (a.status === "active" && b.status !== "active") return -1;
+            if (b.status === "active" && a.status !== "active") return 1;
+            const ta = new Date(b.last_deployed_at || b.created_at).getTime();
+            const tb = new Date(a.last_deployed_at || a.created_at).getTime();
+            return ta - tb;
+          });
+        if (deploymentsForDom && deploymentsForDom.length > 1) {
+          setSelectedDeployment(deploymentsForDom[1].deployment_id);
+        } else {
+          setSelectedDeployment(null);
+        }
+      } else {
+        setSelectedDeployment(null);
+      }
+    } else {
+      setSelectedDeployment(null);
+    }
     setRollbackModalOpen(true);
   };
 
@@ -945,54 +970,66 @@ const StackForgeProjectDetails = () => {
               <div className="rollbackDeploymentList">
                 {projectDetails?.deployments?.length > 0 ? (
                   (() => {
-                    const selectedDomain = projectDetails.domains.find(
-                      (d) => d.domain_name === selectedSubdomain
-                    );
-                    const selectedDomainId = selectedDomain?.domain_id;
-                    const filteredDeployments = selectedDomainId
-                      ? projectDetails.deployments
-                          .filter((d) => d.domain_id === selectedDomainId)
-                          .sort(
-                            (a, b) => new Date(b.created_at) - new Date(a.created_at)
-                          )
-                          .slice(0, 2)
-                      : [];
+                    const filteredDeployments = (() => {
+                      if (!projectDetails?.deployments || !selectedSubdomain) return [];
+                      const dom = projectDetails.domains.find(
+                        (d) => d.domain_name === selectedSubdomain
+                      );
+                      if (!dom) return [];
+                      return projectDetails.deployments
+                        .filter((d) => d.domain_id === dom.domain_id)
+                        .sort((a, b) => {
+                          if (a.status === "active" && b.status !== "active") return -1;
+                          if (b.status === "active" && a.status !== "active") return 1;
+                          const ta = new Date(b.last_deployed_at || b.created_at).getTime();
+                          const tb = new Date(a.last_deployed_at || a.created_at).getTime();
+                          return ta - tb;
+                        });
+                    })();
 
                     return filteredDeployments.length > 0 ? (
-                      filteredDeployments.map((dep, idx) => (
-                        <div
-                          key={dep.deployment_id}
-                          className={`rollbackDeploymentItem ${
-                            selectedDeployment === dep.deployment_id
-                              ? "selected"
-                              : ""
-                          }`}
-                          onClick={() => setSelectedDeployment(dep.deployment_id)}
-                        >
-                          <div className="deploymentTitle">
-                            <strong>{dep.deployment_id}</strong>
-                            {idx === 0 ? (
-                              <span className="currentLabel">Current</span>
-                            ) : (
-                              <span className="previousLabel">Previous</span>
-                            )}
+                      filteredDeployments.map((dep, idx) => {
+                        const isCurrent = idx === 0;
+                        return (
+                          <div
+                            key={dep.deployment_id}
+                            className={`rollbackDeploymentItem ${
+                              selectedDeployment === dep.deployment_id
+                                ? "selected"
+                                : ""
+                            }`}
+                            style={{
+                              opacity: isCurrent ? 0.6 : 1,
+                              pointerEvents: isCurrent ? "none" : "auto"
+                            }}
+                            onClick={() =>
+                              !isCurrent && setSelectedDeployment(dep.deployment_id)
+                            }
+                          >
+                            <div className="deploymentTitle">
+                              <strong>{dep.deployment_id}</strong>
+                              {isCurrent ? (
+                                <span className="currentLabel">Current</span>
+                              ) : (
+                                <span className="previousLabel">Previous</span>
+                              )}
+                            </div>
+                            <div className="deploymentDetails">
+                              <small>
+                                {projectDetails.project.branch}{" "}
+                                <FontAwesomeIcon icon={faCodeBranch} /> by{" "}
+                                {dep.username}
+                              </small>
+                              <small>
+                                Deployed{" "}
+                                {new Date(dep.created_at).toLocaleDateString()}
+                              </small>
+                            </div>
                           </div>
-                          <div className="deploymentDetails">
-                            <small>
-                              {projectDetails.project.branch}{" "}
-                              <FontAwesomeIcon icon={faCodeBranch} /> by{" "}
-                              {dep.username}
-                            </small>
-                            <small>
-                              Deployed{" "}
-                              {new Date(dep.created_at).toLocaleDateString()}
-                            </small>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="noDeploymentsAvailable">
-                        <FontAwesomeIcon icon={faExclamationTriangle} />
                         <p>No deployments found for subdomain: {selectedSubdomain}</p>
                       </div>
                     );

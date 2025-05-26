@@ -1,5 +1,6 @@
 const express = require('express');
-const fetch   = require('node-fetch');          
+const fetch   = require('node-fetch');  
+const { v4: uuidv4 } = require('uuid');         
 const { pool } = require('../config/db');
 const router   = express.Router();
 const { authenticateToken } = require('../middleware/auth');
@@ -531,46 +532,46 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
 
 router.post('/auth/check', async (req, res) => {
   try {
-    let { domain } = req.body;          
-    domain = domain
-      .toLowerCase()
-      .replace(/\.stackforgeengine\.com$/, '');  
+      const { domain } = req.body;
+      const visitorId = req.cookies.sf_visitor_id || req.headers['x-visitor-id'];
 
-    const domainResult = await pool.query(
-      'SELECT deployment_protection, orgid FROM domains WHERE domain_name = $1',
-      [domain]
-    );
-
-    if (domainResult.rows.length === 0)
-      return res.status(404).json({ error: 'Domain not found' });
-
-    const { deployment_protection, orgid } = domainResult.rows[0];
-
-    if (!deployment_protection)
-      return res.json({ protected: false, isAuthenticated: true });
-
-    const visitorId = req.headers['x-visitor-id'];     
-    const userResult = await pool.query(
-      'SELECT orgid FROM users WHERE github_id = $1 OR github_username = $1',
-      [visitorId]
-    );
-
-    if (userResult.rows.length === 0 || userResult.rows[0].orgid !== orgid) {
-      const recentSignin = await pool.query(
-        `SELECT 1 FROM signin_logs
-         WHERE orgid = $1 AND signin_timestamp > NOW() - INTERVAL '1 hour' LIMIT 1`,
-        [orgid]
+      const domainResult = await pool.query(
+          'SELECT deployment_protection, orgid FROM domains WHERE domain_name = $1',
+          [domain.split('.')[0]]
       );
-      if (recentSignin.rows.length === 0)
-        return res.status(403).json({ protected: true, isAuthenticated: false });
-    }
 
-    return res.json({ protected: true, isAuthenticated: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Internal server error' });
+      if (domainResult.rows.length === 0) {
+          return res.status(404).json({ error: 'Domain not found' });
+      }
+
+      const { deployment_protection, orgid } = domainResult.rows[0];
+
+      if (!deployment_protection) {
+          return res.json({ protected: false, isAuthenticated: true });
+      }
+
+      const userResult = await pool.query(
+          'SELECT orgid FROM users WHERE github_id = $1 OR github_username = $1',
+          [visitorId]
+      );
+
+      if (userResult.rows.length === 0 || userResult.rows[0].orgid !== orgid) {
+          const signinResult = await pool.query(
+              'SELECT orgid FROM signin_logs WHERE orgid = $1 AND signin_timestamp > NOW() - INTERVAL \'1 hour\' LIMIT 1',
+              [orgid]
+          );
+
+          if (signinResult.rows.length === 0) {
+              return res.status(403).json({ protected: true, isAuthenticated: false });
+          }
+      }
+
+      return res.json({ protected: true, isAuthenticated: true });
+  } catch (error) {
+      res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 module.exports = router;

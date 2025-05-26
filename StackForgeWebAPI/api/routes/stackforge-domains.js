@@ -8,16 +8,16 @@ const axios = require("axios");
 const { authenticateToken } = require("../middleware/auth");
 const { pool } = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
-const { 
-  ElasticLoadBalancingV2Client, 
-  DescribeListenersCommand, 
-  DescribeRulesCommand, 
-  DeleteRuleCommand, 
-  CreateRuleCommand, 
-  DescribeLoadBalancersCommand, 
+const {
+  ElasticLoadBalancingV2Client,
+  DescribeListenersCommand,
+  DescribeRulesCommand,
+  CreateRuleCommand,
+  DeleteRuleCommand,
+  DescribeLoadBalancersCommand,
   AddListenerCertificatesCommand,
-  RemoveListenerCertificatesCommand, 
-  DescribeListenerCertificatesCommand, 
+  RemoveListenerCertificatesCommand,
+  DescribeListenerCertificatesCommand,
   DescribeTargetHealthCommand,
 } = require('@aws-sdk/client-elastic-load-balancing-v2');
 const { Route53Client, ChangeResourceRecordSetsCommand } = require('@aws-sdk/client-route-53'); const {
@@ -25,9 +25,9 @@ const { Route53Client, ChangeResourceRecordSetsCommand } = require('@aws-sdk/cli
   RequestCertificateCommand,
   DescribeCertificateCommand
 } = require("@aws-sdk/client-acm");
-const { 
-  CloudFrontClient, 
-  CreateInvalidationCommand 
+const {
+  CloudFrontClient,
+  CreateInvalidationCommand
 } = require('@aws-sdk/client-cloudfront');
 
 const deployManager = require("./drivers/deployManager");
@@ -36,61 +36,67 @@ require('dotenv').config();
 secretKey = process.env.JWT_SECRET_KEY;
 
 router.post("/validate-domain", authenticateToken, async (req, res, next) => {
-  const {
-    userID, organizationID, projectID, domain,
-    repository, branch, rootDirectory, outputDirectory,
-    buildCommand, installCommand, envVars,
-    internalCall = false
-  } = req.body;
+  const { userID, organizationID, projectID, domain, repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, envVars, internalCall = false } = req.body;
+
   if (!userID || !organizationID || !projectID || !domain) {
-    return res.status(400).json({ message: "userID, organizationID, projectID, and domain are required." });
+    return res
+      .status(400)
+      .json({ message: "userID, organizationID, projectID, and domain are required." });
   }
+
   const timestamp = new Date().toISOString();
-  const elbv2 = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
-  const r53 = new Route53Client({ region: process.env.AWS_REGION });
-  const acm = new ACMClient({ region: process.env.AWS_REGION });
+  const elbv2  = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
+  const r53    = new Route53Client({ region: process.env.AWS_REGION });
+  const acm    = new ACMClient({ region: process.env.AWS_REGION });
   const L_HTTPS = process.env.ALB_LISTENER_ARN_HTTPS;
-  const L_HTTP = process.env.ALB_LISTENER_ARN_HTTP;
-  const albDns = process.env.LOAD_BALANCER_DNS.endsWith(".")
+  const L_HTTP  = process.env.ALB_LISTENER_ARN_HTTP;
+  const albDns  = process.env.LOAD_BALANCER_DNS.endsWith(".")
     ? process.env.LOAD_BALANCER_DNS
     : `${process.env.LOAD_BALANCER_DNS}.`;
 
   const projRes = await pool.query(
-    "SELECT name,current_deployment FROM projects WHERE project_id=$1 AND orgid=$2 AND username=$3",
+    `SELECT name, current_deployment, created_at
+       FROM projects
+      WHERE project_id = $1
+        AND orgid      = $2
+        AND username   = $3`,
     [projectID, organizationID, userID]
   );
-  if (!projRes.rows.length) return res.status(404).json({ message: "Project not found." });
+  if (!projRes.rows.length)
+    return res.status(404).json({ message: "Project not found." });
 
-  const projectName = projRes.rows[0].name.toLowerCase();
-  const currentDeployment = projRes.rows[0].current_deployment;
+  const projectName        = projRes.rows[0].name.toLowerCase();
+  const currentDeployment  = projRes.rows[0].current_deployment;
 
   const parentRes = await pool.query(
-    `SELECT dep.env_vars, d.repository, d.branch, d.root_directory, d.output_directory,
-            d.build_command, d.install_command, dep.task_def_arn
-     FROM domains d
-     JOIN deployments dep ON d.deployment_id = dep.deployment_id
-     WHERE d.project_id=$1 AND d.is_primary=true`,
+    `SELECT dep.env_vars,
+            d.repository, d.branch, d.root_directory, d.output_directory,
+            d.build_command, d.install_command,
+            dep.task_def_arn
+       FROM domains d
+       JOIN deployments dep ON d.deployment_id = dep.deployment_id
+      WHERE d.project_id = $1
+        AND d.is_primary = true`,
     [projectID]
   );
-  let parentCfg = parentRes.rows[0] || {};
-  let parentRawEnv = parentCfg.env_vars;
+  let parentCfg       = parentRes.rows[0] || {};
+  let parentRawEnv    = parentCfg.env_vars;
+
   if (parentRawEnv === undefined || parentRawEnv === null) {
     const fallbackRes = await pool.query(
       `SELECT dep.env_vars
-       FROM deployments dep
-       JOIN domains d ON dep.deployment_id = d.deployment_id
-       WHERE d.project_id=$1 AND d.is_primary=true`,
+         FROM deployments dep
+         JOIN domains d ON dep.deployment_id = d.deployment_id
+        WHERE d.project_id = $1
+          AND d.is_primary = true`,
       [projectID]
     );
     parentRawEnv = fallbackRes.rows[0]?.env_vars || [];
   }
+
   let fallbackEnvVars = [];
-  if (typeof parentRawEnv === 'string') {
-    try {
-      fallbackEnvVars = JSON.parse(parentRawEnv);
-    } catch (e) {
-      fallbackEnvVars = [];
-    }
+  if (typeof parentRawEnv === "string") {
+    try { fallbackEnvVars = JSON.parse(parentRawEnv); } catch { fallbackEnvVars = []; }
   } else if (Array.isArray(parentRawEnv)) {
     fallbackEnvVars = parentRawEnv;
   }
@@ -98,26 +104,43 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   let raw = domain.trim().toLowerCase()
     .replace(/\.stackforgeengine\.com$/i, "")
     .replace(new RegExp(`\\.${projectName}$`), "");
-  const isParent = raw === projectName || raw === "";
-  const subLabel = isParent ? projectName : raw.split(".")[0];
+  const isParent   = raw === projectName || raw === "";
+  const subLabel   = isParent ? projectName : raw.split(".")[0];
   const storedName = isParent ? projectName : `${subLabel}.${projectName}`;
-  const fqdn = `${storedName}.stackforgeengine.com`;
+  const fqdn       = `${storedName}.stackforgeengine.com`;
 
   const domRes = await pool.query(
-    `SELECT domain_id, certificate_arn, target_group_arn, redirect_target, deployment_id
-     FROM domains
-     WHERE project_id=$1 AND domain_name=$2`,
+    `SELECT domain_id, certificate_arn, target_group_arn,
+            redirect_target, deployment_id
+       FROM domains
+      WHERE project_id = $1
+        AND domain_name = $2`,
     [projectID, storedName]
   );
   const existing = domRes.rows[0] || null;
-  const domainId = existing?.domain_id || uuidv4();
-  let certArn = existing?.certificate_arn || null;
-  let tgArn = existing?.target_group_arn || null;
-  const existingRedirect = existing?.redirect_target || null;
-  const existingDeploymentId = existing?.deployment_id || null;
-  const wildcard = `*.${projectName}.stackforgeengine.com`;
-  const altNames = [wildcard, `${projectName}.stackforgeengine.com`];
-  let deploymentId = isParent
+
+  const projectAgeMs = Date.now() - new Date(projRes.rows[0].created_at).getTime();
+  const delayMs      = 60_000;               
+  if (!existing && projectAgeMs < delayMs) {
+    const waitSec = Math.ceil((delayMs - projectAgeMs) / 1000);
+    return res.status(429).json({
+      code   : "DOMAIN_THROTTLED",
+      message: `New domains may be added starting one minute after project creation. ` +
+               `Please wait approximately ${waitSec} more second${waitSec !== 1 ? "s" : ""} ` +
+               `and try again.`
+    });
+  }
+
+  const domainId       = existing?.domain_id       || uuidv4();
+  let   certArn        = existing?.certificate_arn || null;
+  let   tgArn          = existing?.target_group_arn|| null;
+  const existingRedirect      = existing?.redirect_target || null;
+  const existingDeploymentId  = existing?.deployment_id   || null;
+
+  const wildcard  = `*.${projectName}.stackforgeengine.com`;
+  const altNames  = [wildcard, `${projectName}.stackforgeengine.com`];
+
+  let   deploymentId = isParent
     ? (existingDeploymentId || currentDeployment || uuidv4())
     : (existingDeploymentId || uuidv4());
 
@@ -130,6 +153,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       })
     );
     certArn = reqCert.CertificateArn;
+
     const certInfo = await acm.send(
       new DescribeCertificateCommand({ CertificateArn: certArn })
     );
@@ -161,15 +185,12 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     const info = await acm.send(
       new DescribeCertificateCommand({ CertificateArn: certArn })
     );
-    if (info.Certificate.Status === "ISSUED") {
-      certReady = true;
-      break;
-    }
-    await new Promise(r => setTimeout(r, 10000));
+    if (info.Certificate.Status === "ISSUED") { certReady = true; break; }
+    await new Promise(r => setTimeout(r, 10_000));
   }
   if (!certReady) {
     return res.status(202).json({
-      message: `Certificate request created for ${wildcard}. Please re-run validation once DNS validation is complete.`,
+      message: `Certificate request created for ${wildcard}. Re-run validation once DNS is ready.`,
       certificateArn: certArn
     });
   }
@@ -199,38 +220,37 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   let parsedEnv = null;
   if (envVars !== undefined && envVars !== null) {
-    try {
-      parsedEnv = typeof envVars === 'string' ? JSON.parse(envVars) : envVars;
-    } catch (e) {
-      parsedEnv = null;
-    }
+    try { parsedEnv = typeof envVars === "string" ? JSON.parse(envVars) : envVars; } catch { parsedEnv = null; }
   }
   let finalEnvVars = Array.isArray(parsedEnv) ? parsedEnv : fallbackEnvVars;
 
   const cfg = {
-    repository: repository || parentCfg.repository || null,
-    branch: branch || parentCfg.branch || "main",
-    rootDirectory: rootDirectory || parentCfg.root_directory || ".",
-    outputDirectory: outputDirectory || parentCfg.output_directory || "",
-    buildCommand: buildCommand || parentCfg.build_command || "",
-    installCommand: installCommand || parentCfg.install_command || "npm install",
-    envVars: finalEnvVars
+    repository      : repository      || parentCfg.repository      || null,
+    branch          : branch          || parentCfg.branch          || "main",
+    rootDirectory   : rootDirectory   || parentCfg.root_directory  || ".",
+    outputDirectory : outputDirectory || parentCfg.output_directory|| "",
+    buildCommand    : buildCommand    || parentCfg.build_command   || "",
+    installCommand  : installCommand  || parentCfg.install_command || "npm install",
+    envVars         : finalEnvVars
   };
   if (!Array.isArray(cfg.envVars)) cfg.envVars = [];
 
   let commitSha = null;
   if (cfg.repository && cfg.branch) {
     try {
-      const githubAccessToken = (await pool.query(
+      const tokenRow = await pool.query(
         "SELECT github_access_token FROM users WHERE username=$1",
         [userID]
-      )).rows[0].github_access_token;
-      commitSha = await deployManager.getLatestCommitSha(cfg.repository, cfg.branch, githubAccessToken);
-    } catch (error) {}
+      );
+      const githubAccessToken = tokenRow.rows[0]?.github_access_token;
+      commitSha = await deployManager.getLatestCommitSha(
+        cfg.repository, cfg.branch, githubAccessToken
+      );
+    } catch {}
   }
 
   async function upsertDns(host) {
-    const isApex = host.split(".").length === 3;
+    const isApex = host.split(".").length === 3;  
     if (isApex) {
       const lb = await elbv2.send(
         new DescribeLoadBalancersCommand({ Names: [process.env.LOAD_BALANCER_NAME] })
@@ -238,7 +258,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       await r53.send(
         new ChangeResourceRecordSetsCommand({
           HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
-          ChangeBatch: {
+          ChangeBatch : {
             Changes: [
               {
                 Action: "UPSERT",
@@ -246,8 +266,8 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
                   Name: host,
                   Type: "A",
                   AliasTarget: {
-                    HostedZoneId: lb.LoadBalancers[0].CanonicalHostedZoneId,
-                    DNSName: albDns,
+                    HostedZoneId       : lb.LoadBalancers[0].CanonicalHostedZoneId,
+                    DNSName            : albDns,
                     EvaluateTargetHealth: false
                   }
                 }
@@ -260,14 +280,14 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       await r53.send(
         new ChangeResourceRecordSetsCommand({
           HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
-          ChangeBatch: {
+          ChangeBatch : {
             Changes: [
               {
                 Action: "UPSERT",
                 ResourceRecordSet: {
                   Name: host,
                   Type: "CNAME",
-                  TTL: 60,
+                  TTL : 60,
                   ResourceRecords: [{ Value: albDns }]
                 }
               }
@@ -279,114 +299,144 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   }
   await upsertDns(fqdn);
 
-  let taskDefArn = parentCfg.task_def_arn;
   if (!existingRedirect) {
-    tgArn = tgArn || (await deployManager.ensureTargetGroup(projectName, isParent ? null : subLabel));
+    tgArn = tgArn ||
+      (await deployManager.ensureTargetGroup(projectName, isParent ? null : subLabel));
+
     for (const L of [L_HTTP, L_HTTPS]) {
       const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: L }));
       const missing = !Rules.some(r =>
-        r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(fqdn))
+        r.Conditions.some(c =>
+          c.Field === "host-header" &&
+          c.Values.map(v => v.toLowerCase()).includes(fqdn.toLowerCase())
+        )
       );
       if (missing) {
-        const used = new Set(Rules.filter(r => !r.IsDefault).map(r => +r.Priority));
+        const used = new Set(Rules.filter(r => !r.IsDefault).map(r => Number(r.Priority)));
         let pr = 1; while (used.has(pr)) pr++;
         await elbv2.send(
           new CreateRuleCommand({
             ListenerArn: L,
-            Priority: pr,
-            Conditions: [{ Field: "host-header", Values: [fqdn] }],
-            Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
+            Priority   : pr,
+            Conditions : [{ Field: "host-header", Values: [fqdn] }],
+            Actions    : [{ Type: "forward", TargetGroupArn: tgArn }]
           })
         );
       }
     }
-    if (!internalCall) {
-      await deployManager.createOrUpdateService({
-        projectName,
-        subdomain: isParent ? null : subLabel,
-        taskDefArn: parentCfg.task_def_arn,
-        targetGroupArn: tgArn
-      });
-    }
   }
 
-  if (!existingRedirect) {
-    const deploymentCheck = await pool.query(
-      "SELECT domain_id FROM domains WHERE deployment_id=$1 AND domain_id!=$2 AND orgid=$3",
-      [deploymentId, domainId, organizationID]
+  if (!parentCfg.task_def_arn && currentDeployment) {
+    try {
+      const tdRow = await pool.query(
+        "SELECT task_def_arn FROM deployments WHERE deployment_id = $1",
+        [currentDeployment]
+      );
+      parentCfg.task_def_arn = tdRow.rows[0]?.task_def_arn || null;
+    } catch {}
+  }
+
+  if (!existingRedirect && parentCfg.task_def_arn) {     
+    await deployManager.createOrUpdateService({
+      projectName,
+      subdomain : isParent ? null : subLabel,
+      taskDefArn: parentCfg.task_def_arn,
+      targetGroupArn: tgArn
+    });
+  } else if (!parentCfg.task_def_arn) {}
+
+  const deploymentCheck = await pool.query(
+    `SELECT domain_id
+       FROM domains
+      WHERE deployment_id = $1
+        AND domain_id    != $2
+        AND orgid         = $3`,
+    [deploymentId, domainId, organizationID]
+  );
+  if (deploymentCheck.rows.length > 0 && !isParent) deploymentId = uuidv4();
+
+  const existingDeployment = await pool.query(
+    `SELECT deployment_id
+       FROM deployments
+      WHERE deployment_id = $1
+        AND orgid         = $2`,
+    [deploymentId, organizationID]
+  );
+
+  if (existingDeployment.rows.length === 0) {
+    await pool.query(
+      `INSERT INTO deployments
+         (orgid, username, deployment_id, project_id, domain_id,
+          status, url, template,
+          created_at, updated_at, last_deployed_at,
+          task_def_arn, commit_sha,
+          root_directory, output_directory, build_command, install_command, env_vars)
+       VALUES
+         ($1,$2,$3,$4,$5,
+          $6,$7,$8,
+          $9,$10,$11,
+          $12,$13,
+          $14,$15,$16,$17,$18)`,
+      [
+        organizationID, userID, deploymentId, projectID, domainId,
+        "active", `https://${fqdn}`, "default",
+        timestamp, timestamp, timestamp,
+        parentCfg.task_def_arn || null, commitSha,
+        cfg.rootDirectory, cfg.outputDirectory,
+        cfg.buildCommand,  cfg.installCommand,
+        JSON.stringify(cfg.envVars)
+      ]
     );
-    if (deploymentCheck.rows.length > 0 && !isParent) deploymentId = uuidv4();
-    const existingDeployment = await pool.query(
-      "SELECT deployment_id FROM deployments WHERE deployment_id=$1 AND orgid=$2",
-      [deploymentId, organizationID]
+
+    await pool.query(
+      `INSERT INTO deployment_logs
+         (orgid, username, project_id, project_name,
+          action, deployment_id, timestamp, ip_address)
+       VALUES
+         ($1,$2,$3,$4,
+          $5,$6,$7,$8)`,
+      [
+        organizationID, userID, projectID, projectName,
+        "validate-domain", deploymentId, timestamp, "127.0.0.1"
+      ]
     );
-    if (existingDeployment.rows.length === 0) {
-      await pool.query(
-        `INSERT INTO deployments (orgid,username,deployment_id,project_id,domain_id,status,url,template,created_at,updated_at,last_deployed_at,task_def_arn,commit_sha,root_directory,output_directory,build_command,install_command,env_vars)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
-        [
-          organizationID,
-          userID,
-          deploymentId,
-          projectID,
-          domainId,
-          "active",
-          `https://${fqdn}`,
-          "default",
-          timestamp,
-          timestamp,
-          timestamp,
-          taskDefArn,
-          commitSha,
-          cfg.rootDirectory,
-          cfg.outputDirectory,
-          cfg.buildCommand,
-          cfg.installCommand,
-          JSON.stringify(cfg.envVars)
-        ]
-      );
-      await pool.query(
-        `INSERT INTO deployment_logs (orgid,username,project_id,project_name,action,deployment_id,timestamp,ip_address)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [
-          organizationID,
-          userID,
-          projectID,
-          projectName,
-          "validate-domain",
-          deploymentId,
-          timestamp,
-          "127.0.0.1"
-        ]
-      );
-    } else {
-      await pool.query(
-        `UPDATE deployments
-         SET updated_at=$1,last_deployed_at=$1,status=$2,url=$3,task_def_arn=$4,commit_sha=$5,root_directory=$6,output_directory=$7,build_command=$8,install_command=$9,env_vars=$10,domain_id=$11
-         WHERE deployment_id=$12 AND orgid=$13`,
-        [
-          timestamp,
-          "active",
-          `https://${fqdn}`,
-          taskDefArn,
-          commitSha,
-          cfg.rootDirectory,
-          cfg.outputDirectory,
-          cfg.buildCommand,
-          cfg.installCommand,
-          JSON.stringify(cfg.envVars),
-          domainId,
-          deploymentId,
-          organizationID
-        ]
-      );
-    }
-    if (isParent && currentDeployment !== deploymentId) {
-      await pool.query(
-        "UPDATE projects SET current_deployment=$1,updated_at=$2 WHERE project_id=$3 AND orgid=$4",
-        [deploymentId, timestamp, projectID, organizationID]
-      );
-    }
+  } else {
+    await pool.query(
+      `UPDATE deployments
+          SET updated_at      = $1,
+              last_deployed_at= $1,
+              status          = $2,
+              url             = $3,
+              task_def_arn    = $4,
+              commit_sha      = $5,
+              root_directory  = $6,
+              output_directory= $7,
+              build_command   = $8,
+              install_command = $9,
+              env_vars        = $10,
+              domain_id       = $11
+        WHERE deployment_id   = $12
+          AND orgid           = $13`,
+      [
+        timestamp, "active", `https://${fqdn}`,
+        parentCfg.task_def_arn || null, commitSha,
+        cfg.rootDirectory, cfg.outputDirectory,
+        cfg.buildCommand,  cfg.installCommand,
+        JSON.stringify(cfg.envVars),
+        domainId, deploymentId, organizationID
+      ]
+    );
+  }
+
+  if (isParent && currentDeployment !== deploymentId) {
+    await pool.query(
+      `UPDATE projects
+          SET current_deployment = $1,
+              updated_at         = $2
+        WHERE project_id        = $3
+          AND orgid             = $4`,
+      [deploymentId, timestamp, projectID, organizationID]
+    );
   }
 
   const valsCommon = [
@@ -402,34 +452,47 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     JSON.stringify(cfg.envVars),
     tgArn
   ];
+
   if (existing) {
     await pool.query(
-      `UPDATE domains SET updated_at=$1,deployment_id=$2,certificate_arn=$3,repository=$4,branch=$5,root_directory=$6,output_directory=$7,build_command=$8,install_command=$9,env_vars=$10,target_group_arn=$11 WHERE domain_id=$12`,
+      `UPDATE domains
+          SET updated_at        = $1,
+              deployment_id     = $2,
+              certificate_arn   = $3,
+              repository        = $4,
+              branch            = $5,
+              root_directory    = $6,
+              output_directory  = $7,
+              build_command     = $8,
+              install_command   = $9,
+              env_vars          = $10,
+              target_group_arn  = $11
+        WHERE domain_id         = $12`,
       [...valsCommon, domainId]
     );
   } else {
     await pool.query(
-      `INSERT INTO domains (orgid,username,domain_id,domain_name,project_id,created_by,created_at,updated_at,environment,is_primary,deployment_id,certificate_arn,repository,branch,root_directory,output_directory,build_command,install_command,env_vars,target_group_arn)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+      `INSERT INTO domains
+         (orgid, username, domain_id, domain_name,
+          project_id, created_by, created_at, updated_at,
+          environment, is_primary,
+          deployment_id, certificate_arn,
+          repository, branch, root_directory, output_directory,
+          build_command, install_command, env_vars, target_group_arn)
+       VALUES
+         ($1,$2,$3,$4,
+          $5,$6,$7,$8,
+          $9,$10,
+          $11,$12,
+          $13,$14,$15,$16,
+          $17,$18,$19,$20)`,
       [
-        organizationID,
-        userID,
-        domainId,
-        storedName,
-        projectID,
-        userID,
-        timestamp,
-        timestamp,
-        "production",
-        isParent,
-        deploymentId,
-        certArn,
-        cfg.repository,
-        cfg.branch,
-        cfg.rootDirectory,
-        cfg.outputDirectory,
-        cfg.buildCommand,
-        cfg.installCommand,
+        organizationID, userID, domainId, storedName,
+        projectID, userID, timestamp, timestamp,
+        "production", isParent,
+        deploymentId, certArn,
+        cfg.repository, cfg.branch, cfg.rootDirectory, cfg.outputDirectory,
+        cfg.buildCommand, cfg.installCommand,
         JSON.stringify(cfg.envVars),
         tgArn
       ]
@@ -437,21 +500,28 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   }
 
   const recs = [];
-  try { const a = await dns.resolve4(fqdn); if (a.length) recs.push({ type: "A", name: "@", value: a[0] }); } catch {}
-  try { const a = await dns.resolve6(fqdn); if (a.length) recs.push({ type: "AAAA", name: "@", value: a[0] }); } catch {}
+  try { const a = await dns.resolve4(fqdn);  if (a.length) recs.push({ type: "A",     name: "@", value: a[0] }); } catch {}
+  try { const a = await dns.resolve6(fqdn);  if (a.length) recs.push({ type: "AAAA",  name: "@", value: a[0] }); } catch {}
   try { const c = await dns.resolveCname(fqdn); if (c.length) recs.push({ type: "CNAME", name: "@", value: c[0] }); } catch {}
-  try { const m = await dns.resolveMx(fqdn); if (m.length) recs.push({ type: "MX", name: "@", value: m.map(r => `${r.priority} ${r.exchange}`).join(", ") }); } catch {}
-  await pool.query("UPDATE domains SET dns_records=$1 WHERE domain_id=$2", [JSON.stringify(recs), domainId]);
+  try { const m = await dns.resolveMx(fqdn); if (m.length) recs.push({ type: "MX",    name: "@", value: m.map(r => `${r.priority} ${r.exchange}`).join(", ") }); } catch {}
+  await pool.query(
+    "UPDATE domains SET dns_records = $1 WHERE domain_id = $2",
+    [JSON.stringify(recs), domainId]
+  );
 
-  if (!existingRedirect) await deployManager.recordRuntimeLogs(organizationID, userID, deploymentId, projectName, isParent ? null : subLabel);
+  if (!existingRedirect)
+    await deployManager.recordRuntimeLogs(
+      organizationID, userID, deploymentId, projectName,
+      isParent ? null : subLabel
+    );
 
   return res.status(200).json({
     message: existingRedirect
       ? `Subdomain ${subLabel} refreshed (redirect still → ${existingRedirect}).`
       : `Subdomain ${subLabel} validated${existing ? "" : " and deployment initiated"}.`,
-    url: `https://${fqdn}`,
+    url           : `https://${fqdn}`,
     certificateArn: certArn,
-    dnsRecords: recs,
+    dnsRecords    : recs,
     deploymentId
   });
 });
@@ -693,7 +763,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
           while (healthCheckRetries > 0) {
             isTgHealthyPostDeploy = await validateTargetGroupHealth(tgArn);
             if (isTgHealthyPostDeploy) break;
-            await new Promise(resolve => setTimeout(resolve, 10000)); 
+            await new Promise(resolve => setTimeout(resolve, 10000));
             healthCheckRetries--;
           }
           if (!isTgHealthyPostDeploy) {

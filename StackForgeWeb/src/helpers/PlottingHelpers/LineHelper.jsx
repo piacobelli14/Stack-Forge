@@ -41,11 +41,8 @@ const LineChart = ({ data, color, yAxisFormatter }) => {
       chartInstanceRef.current = echarts.init(chartRef.current);
     }
 
-    console.log("LineChart data:", data);
-
     const dates = data.map(item => {
       if (!item.date || typeof item.date !== "string") {
-        console.warn("Invalid date found in LineChart data:", item.date);
         return "Invalid Date";
       }
       return item.date; 

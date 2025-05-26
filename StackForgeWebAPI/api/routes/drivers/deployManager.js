@@ -8,6 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const dns = require("dns").promises;
 const jwt = require('jsonwebtoken');
+const https = require('https');
 const {
     Route53Client,
     ChangeResourceRecordSetsCommand,
@@ -21,30 +22,35 @@ const {
 } = require("@aws-sdk/client-ecr");
 const {
     ECSClient,
+    DescribeTasksCommand,
+    StopTaskCommand, 
     RegisterTaskDefinitionCommand,
     DescribeTaskDefinitionCommand,
     DescribeServicesCommand,
-    CreateServiceCommand,
-    UpdateServiceCommand,
-    DeleteServiceCommand,
-    waitUntilServicesStable,
-    ListTasksCommand,
+    DeregisterTaskDefinitionCommand,
     ListTaskDefinitionsCommand,
-    DeregisterTaskDefinitionCommand
+    ListTasksCommand,
+    CreateServiceCommand,
+    DeleteServiceCommand,
+    UpdateServiceCommand,
+    waitUntilServicesStable,
 } = require("@aws-sdk/client-ecs");
 const {
     ElasticLoadBalancingV2Client,
-    DescribeRulesCommand,
-    CreateRuleCommand,
-    ModifyRuleCommand,
+    DescribeListenerCertificatesCommand,
     DescribeTargetGroupsCommand,
-    CreateTargetGroupCommand,
+    DescribeTargetGroupAttributesCommand,
     DescribeLoadBalancersCommand,
     DescribeListenersCommand,
     DescribeTargetHealthCommand,
+    DescribeRulesCommand,
+    CreateRuleCommand,
+    ModifyRuleCommand,
+    ModifyTargetGroupAttributesCommand,
+    CreateTargetGroupCommand,
     DeleteRuleCommand,
-    DescribeListenerCertificatesCommand,
-    DeleteTargetGroupCommand
+    DeleteTargetGroupCommand,
+    DeregisterTargetsCommand,
 } = require("@aws-sdk/client-elastic-load-balancing-v2");
 const {
     CodeBuildClient,
@@ -64,8 +70,8 @@ const {
     GetLogEventsCommand,
     CreateLogStreamCommand,
     CreateLogGroupCommand,
+    DeleteLogGroupCommand,
     DescribeLogGroupsCommand,
-    DeleteLogGroupCommand
 } = require("@aws-sdk/client-cloudwatch-logs");
 const {
     ACMClient,
@@ -76,7 +82,8 @@ const {
 const {
     CloudFrontClient,
     CreateInvalidationCommand,
-    ListDistributionsCommand
+    ListDistributionsCommand,
+    GetInvalidationCommand
 } = require('@aws-sdk/client-cloudfront');
 
 const codeBuildClient = new CodeBuildClient({ region: process.env.AWS_REGION });
@@ -128,26 +135,31 @@ class DeployManager {
         if (!projectName || typeof projectName !== "string" || !projectName.trim()) {
             throw new Error(`Invalid projectName: ${projectName}.`);
         }
-    
+
         const p0 = projectName.toLowerCase();
-        let s0 = subdomain ? subdomain.toLowerCase() : null;
-        if (s0 === p0) s0 = null;                      
-    
-        const baseName = s0
-            ? `${p0}-${s0.replace(/\./g, "-")}`.slice(0, 26)
-            : p0.slice(0, 26);
-    
+
+        let baseName;
+        if (!subdomain || subdomain.toLowerCase() === p0) {
+            baseName = p0.slice(0, 26);
+        } else {
+            const subSlug = subdomain.split(".")[0]
+                .toLowerCase()
+                .replace(/[^a-z0-9-]/g, "");
+            const pPart = p0.slice(0, 18);
+            baseName = `${pPart}-${subSlug.slice(0, 7)}`;
+        }
+
         const matchOld = new RegExp(`^${baseName}(?:-v\\d+)?$`);
-        let tgName  = baseName;
-        let tgArn   = undefined;
+        let tgName = baseName;
+        let tgArn;
         let version = 0;
 
-        const vpcId      = process.env.VPC_ID;
-        const listenerArn= process.env.ALB_LISTENER_ARN_HTTPS;
+        const vpcId = process.env.VPC_ID;
+        const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
         if (!vpcId || !listenerArn) {
             throw new Error("VPC_ID or ALB_LISTENER_ARN_HTTPS missing in env.");
         }
-    
+
         const desired = {
             Protocol: "HTTP",
             Port: 80,
@@ -161,12 +173,12 @@ class DeployManager {
             HealthyThresholdCount: 5,
             UnhealthyThresholdCount: 2
         };
-    
-        const hostHeader = s0
-            ? `${s0}.stackforgeengine.com`
-            : `${p0}.stackforgeengine.com`;
-    
-        const isCompatible = (tg) =>
+
+        const hostHeader = (!subdomain || subdomain.toLowerCase() === p0)
+            ? `${p0}.stackforgeengine.com`
+            : `${subdomain}.stackforgeengine.com`;
+
+        const isCompatible = tg =>
             tg.Protocol === desired.Protocol &&
             tg.Port === desired.Port &&
             tg.VpcId === desired.VpcId &&
@@ -178,71 +190,57 @@ class DeployManager {
             tg.HealthCheckTimeoutSeconds === desired.HealthCheckTimeoutSeconds &&
             tg.HealthyThresholdCount === desired.HealthyThresholdCount &&
             tg.UnhealthyThresholdCount === desired.UnhealthyThresholdCount;
-    
+
         const allTgs = await this.elbv2.send(new DescribeTargetGroupsCommand({}));
-        const oldTgs = allTgs.TargetGroups.filter(tg =>
-            matchOld.test(tg.TargetGroupName) && tg.TargetGroupName !== tgName
+        const oldTgs = allTgs.TargetGroups.filter(
+            tg => matchOld.test(tg.TargetGroupName) && tg.TargetGroupName !== tgName
         );
-    
+
         for (const oldTg of oldTgs) {
             try {
-                const rules = await this.elbv2.send(
-                    new DescribeRulesCommand({ ListenerArn: listenerArn })
-                );
+                const rules = await this.elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
                 for (const r of rules.Rules ?? []) {
-                    if (
-                        !r.IsDefault &&
-                        r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === oldTg.TargetGroupArn)
-                    ) {
+                    if (!r.IsDefault &&
+                        r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === oldTg.TargetGroupArn)) {
                         await this.elbv2.send(new DeleteRuleCommand({ RuleArn: r.RuleArn }));
                     }
                 }
-                await this.elbv2.send(
-                    new DeleteTargetGroupCommand({ TargetGroupArn: oldTg.TargetGroupArn })
-                );
+                await this.elbv2.send(new DeleteTargetGroupCommand({ TargetGroupArn: oldTg.TargetGroupArn }));
             } catch (error) {
-                if (error.name !== "ResourceInUseException") throw error;
+                if (error.name !== "ResourceInUseException") throw err;
             }
         }
-    
-        const getExisting = async (name) => {
+
+        const getExisting = async name => {
             try {
-                const d = await this.elbv2.send(
-                    new DescribeTargetGroupsCommand({ Names: [name] })
-                );
+                const d = await this.elbv2.send(new DescribeTargetGroupsCommand({ Names: [name] }));
                 return d.TargetGroups?.[0];
-            } catch (err) {
-                if (err.name === "TargetGroupNotFoundException") return null;
+            } catch (error) {
+                if (error.name === "TargetGroupNotFoundException") return null;
                 throw err;
             }
         };
-    
+
         while (true) {
             const existing = await getExisting(tgName);
-    
+
             if (existing && isCompatible(existing)) {
                 tgArn = existing.TargetGroupArn;
                 break;
             }
-    
+
             if (existing) {
                 try {
-                    const rules = await this.elbv2.send(
-                        new DescribeRulesCommand({ ListenerArn: listenerArn })
-                    );
+                    const rules = await this.elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
                     for (const r of rules.Rules ?? []) {
-                        if (
-                            !r.IsDefault &&
-                            r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === existing.TargetGroupArn)
-                        ) {
+                        if (!r.IsDefault &&
+                            r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === existing.TargetGroupArn)) {
                             await this.elbv2.send(new DeleteRuleCommand({ RuleArn: r.RuleArn }));
                         }
                     }
-                    await this.elbv2.send(
-                        new DeleteTargetGroupCommand({ TargetGroupArn: existing.TargetGroupArn })
-                    );
-                } catch (err) {
-                    if (err.name === "ResourceInUseException") {
+                    await this.elbv2.send(new DeleteTargetGroupCommand({ TargetGroupArn: existing.TargetGroupArn }));
+                } catch (error) {
+                    if (error.name === "ResourceInUseException") {
                         version += 1;
                         tgName = `${baseName}-v${version}`.slice(0, 32);
                         continue;
@@ -250,46 +248,37 @@ class DeployManager {
                     throw err;
                 }
             }
-    
+
             if (!tgArn) {
-                const c = await this.elbv2.send(
-                    new CreateTargetGroupCommand({ Name: tgName, ...desired })
-                );
+                const c = await this.elbv2.send(new CreateTargetGroupCommand({ Name: tgName, ...desired }));
                 tgArn = c.TargetGroups[0].TargetGroupArn;
                 break;
             }
         }
-    
-        const { Rules } = await this.elbv2.send(
-            new DescribeRulesCommand({ ListenerArn: listenerArn })
-        );
+
+        const { Rules } = await this.elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
         const exists = Rules?.find(r =>
             !r.IsDefault &&
             r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(hostHeader)) &&
             r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === tgArn)
         );
-    
+
         if (!exists) {
-            const used = new Set(
-                Rules.filter(r => !r.IsDefault).map(r => Number(r.Priority))
-            );
+            const used = new Set(Rules.filter(r => !r.IsDefault).map(r => Number(r.Priority)));
             let priority = 10000;
             while (used.has(priority)) priority += 1;
-    
-            await this.elbv2.send(
-                new CreateRuleCommand({
-                    ListenerArn: listenerArn,
-                    Priority: priority,
-                    Conditions: [{ Field: "host-header", Values: [hostHeader] }],
-                    Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
-                })
-            );
-        }
-    
+            if (priority > 50000)
+                throw new Error("No available ALB priority (1-50 000) for new rule.");
+
+            await this.elbv2.send(new CreateRuleCommand({
+                ListenerArn: listenerArn,
+                Priority: priority,
+                Conditions: [{ Field: "host-header", Values: [hostHeader] }],
+                Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
+            }));
+        } else {}
         return tgArn;
     }
-    
-    
 
     async ensureLogGroup(logGroupName) {
         const listResp = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({
@@ -299,7 +288,7 @@ class DeployManager {
 
         if (!exists) {
             await cloudWatchLogsClient.send(new CreateLogGroupCommand({ logGroupName }));
-        } 
+        }
     }
 
     async getDeploymentStatus(deploymentId, organizationID, userID) {
@@ -489,193 +478,369 @@ class DeployManager {
         taskDefArn,
         targetGroupArn,
         healthCheckPath = "/"
-      }) {
+    }) {
         const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
         const elbClient = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
         const cfClient = new CloudFrontClient({ region: process.env.AWS_REGION });
-    
-        ["ECS_CLUSTER_ARN", "ECS_CLUSTER", "SUBNET_IDS",
-          "SECURITY_GROUP_IDS", "ALB_LISTENER_ARN_HTTPS", "AWS_REGION"]
-          .forEach(k => { if (!process.env[k]) throw new Error(`Missing env ${k}.`); });
-    
+
+        ["ECS_CLUSTER_ARN", "SUBNET_IDS", "SECURITY_GROUP_IDS",
+            "ALB_LISTENER_ARN_HTTPS", "AWS_REGION"].forEach(
+                k => { if (!process.env[k]) throw new Error(`Missing env ${k}.`); }
+            );
+
+        if (subdomain && subdomain.toLowerCase() === projectName.toLowerCase()) {
+            subdomain = null;
+        }
+
+        if (subdomain && !/^[a-zA-Z0-9.-]+$/.test(subdomain)) {
+            throw new Error(`Invalid subdomain format: ${subdomain}`);
+        }
+
         const serviceName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
         const containerName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
         const fqdn = subdomain ? `${subdomain}.stackforgeengine.com`
-          : `${projectName}.stackforgeengine.com`;
-    
+            : `${projectName}.stackforgeengine.com`;
+
         const checkTargetGroupHealth = async () => {
-          const { TargetHealthDescriptions } = await elbClient.send(
-            new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn })
-          );
-          return TargetHealthDescriptions.some(t => t.TargetHealth.State === 'healthy');
-        };
-    
-        const pickPriority = async (listenerArn) => {
-          const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
-          const used = new Set(Rules.filter(r => !r.IsDefault).map(r => parseInt(r.Priority, 10)));
-          for (let p = 1; p <= 50000; p++) if (!used.has(p)) return p;
-          throw new Error("No free ALB priority.");
-        };
-    
-        const updateALBRules = async () => {
-          const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
-          const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
-          const existingRule = Rules.find(r =>
-            !r.IsDefault &&
-            r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(fqdn)) &&
-            r.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === targetGroupArn)
-          );
-    
-          if (existingRule) {
-            await elbClient.send(new ModifyRuleCommand({
-              RuleArn: existingRule.RuleArn,
-              Conditions: [{ Field: "host-header", Values: [fqdn] }],
-              Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
-            }));
-          } else {
-            const outdatedRule = Rules.find(r =>
-              !r.IsDefault &&
-              r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(fqdn))
+            const { TargetHealthDescriptions } = await elbClient.send(
+                new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn })
             );
-            if (outdatedRule) {
-              await elbClient.send(new DeleteRuleCommand({ RuleArn: outdatedRule.RuleArn }));
-            }
-            await elbClient.send(new CreateRuleCommand({
-              ListenerArn: listenerArn,
-              Priority: await pickPriority(listenerArn),
-              Conditions: [{ Field: "host-header", Values: [fqdn] }],
-              Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
-            }));
-          }
+            const healthy = TargetHealthDescriptions.length > 0 &&
+                TargetHealthDescriptions.every(t => t.TargetHealth.State === "healthy");
+            const draining = TargetHealthDescriptions.filter(t => t.TargetHealth.State === "draining");
+            return { healthy, draining, targets: TargetHealthDescriptions };
         };
-    
-        const td = await ecsClient.send(
-          new DescribeTaskDefinitionCommand({ taskDefinition: taskDefArn })
-        );
+
+        const cleanTargetGroup = async () => {
+            const { TargetHealthDescriptions } = await elbClient.send(
+                new DescribeTargetHealthCommand({ TargetGroupArn: targetGroupArn })
+            );
+            const drainingTargets = TargetHealthDescriptions.filter(t => t.TargetHealth.State === "draining");
+            if (drainingTargets.length) {
+                await elbClient.send(new DeregisterTargetsCommand({
+                    TargetGroupArn: targetGroupArn,
+                    Targets: drainingTargets.map(t => ({ Id: t.Target.Id, Port: t.Target.Port }))
+                }));
+                let round = 0;
+                while (true) {
+                    round++;
+                    const { draining } = await checkTargetGroupHealth();
+                    if (!draining.length) {
+                        break;
+                    }
+                    await new Promise(r => setTimeout(r, 5000));
+                }
+            } 
+        };
+
+        const validateTargetCount = async (taskArns) => {
+            let backoff = 5000;
+            let round = 0;
+
+            while (true) {
+                round++;
+                let health;
+                try {
+                    health = await checkTargetGroupHealth();
+                } catch (error) {
+                    if (isRateLimitError(error)) {
+                        await new Promise((r) => setTimeout(r, backoff));
+                        backoff = Math.min(backoff * 2, 30000);
+                        continue;
+                    }
+                    throw err;
+                }
+
+                const { targets } = health;
+                const actual = targets.length;
+                const desired = taskArns.length;
+
+                if (actual > desired) {
+                    const healthyExtras = targets
+                        .filter((t) => t.TargetHealth.State === "healthy")
+                        .slice(0, actual - desired);
+
+                    if (healthyExtras.length) {
+                        try {
+                            await elbClient.send(
+                                new DeregisterTargetsCommand({
+                                    TargetGroupArn: targetGroupArn,
+                                    Targets: healthyExtras.map((t) => ({
+                                        Id: t.Target.Id,
+                                        Port: t.Target.Port,
+                                    })),
+                                })
+                            );
+                        } catch (error) {
+                            if (isRateLimitError(error)) {
+                                await new Promise((r) => setTimeout(r, backoff));
+                                backoff = Math.min(backoff * 2, 30000);
+                                continue;
+                            }
+                            throw err;
+                        }
+                        continue;
+                    } else {
+                        await new Promise((r) => setTimeout(r, 5000));
+                        continue;
+                    }
+                }
+
+                if (actual === desired) {
+                    break;
+                }
+
+                await new Promise((r) => setTimeout(r, 5000));
+            }
+        };
+
+        const checkStickySessions = async () => {
+            try {
+                const { TargetGroupAttributes = [] } =
+                    await elbClient.send(
+                        new DescribeTargetGroupAttributesCommand({ TargetGroupArn: targetGroupArn })
+                    );
+
+                const enabled = TargetGroupAttributes.some(
+                    (a) => a.Key === "stickiness.enabled" && a.Value === "true"
+                );
+
+            } catch (error) {}
+        };
+
+        const pickPriority = async (listenerArn) => {
+            const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+            const used = new Set(Rules.filter(r => !r.IsDefault).map(r => parseInt(r.Priority, 10)));
+            for (let p = 1; p <= 50000; p++) if (!used.has(p)) return p;
+            throw new Error("No free ALB priority available.");
+        };
+
+        const updateALBRules = async () => {
+            const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
+            const normalizedFqdn = fqdn.toLowerCase();
+            const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+
+            Rules.forEach(r => {
+                const hosts = r.Conditions.filter(c => c.Field === "host-header").flatMap(c => c.Values);
+                if (hosts.map(h => h.toLowerCase()).includes(normalizedFqdn)) {
+                    const act = r.Actions[0].Type;
+                    const tg = act === "forward" ? r.Actions[0].TargetGroupArn : "—";
+                }
+            });
+
+            const redirectRule = Rules.find(r =>
+                !r.IsDefault &&
+                r.Actions[0].Type === "redirect" &&
+                r.Conditions.some(c => c.Field === "host-header" &&
+                    c.Values.map(v => v.toLowerCase()).includes(normalizedFqdn))
+            );
+
+            const forwardRules = Rules.filter(r =>
+                !r.IsDefault &&
+                r.Actions[0].Type === "forward" &&
+                r.Conditions.some(c => c.Field === "host-header" &&
+                    c.Values.map(v => v.toLowerCase()).includes(normalizedFqdn))
+            );
+
+            const correctForward = forwardRules.find(r => r.Actions[0].TargetGroupArn === targetGroupArn);
+
+            if (redirectRule) {
+                for (const r of forwardRules) {
+                    if (r.Actions[0].TargetGroupArn !== targetGroupArn) {
+                        await elbClient.send(new DeleteRuleCommand({ RuleArn: r.RuleArn }));
+                    }
+                }
+
+                if (!correctForward) {
+                    let priority = 50000;
+                    const used = new Set(Rules.filter(r => !r.IsDefault).map(r => Number(r.Priority)));
+                    while (used.has(priority)) priority += 1;
+
+                    await elbClient.send(new CreateRuleCommand({
+                        ListenerArn: listenerArn,
+                        Priority: priority,
+                        Conditions: [{ Field: "host-header", Values: [fqdn] }],
+                        Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
+                    }));
+                } 
+                return;
+            }
+
+            for (const r of forwardRules) {
+                if (r.Actions[0].TargetGroupArn !== targetGroupArn) {
+                    await elbClient.send(new DeleteRuleCommand({ RuleArn: r.RuleArn }));
+                }
+            }
+
+            if (correctForward) {
+                return;
+            }
+
+            const priority = await pickPriority(listenerArn);
+            await elbClient.send(new CreateRuleCommand({
+                ListenerArn: listenerArn,
+                Priority: priority,
+                Conditions: [{ Field: "host-header", Values: [fqdn] }],
+                Actions: [{ Type: "forward", TargetGroupArn: targetGroupArn }]
+            }));
+        };
+
+        const verifyApplicationResponse = async () => {
+            try {
+                const response = await new Promise((resolve, reject) => {
+                    const req = https.get(`https://${fqdn}`, res => {
+                        let data = "";
+                        res.on("data", chunk => data += chunk);
+                        res.on("end", () => resolve({ statusCode: res.statusCode, headers: res.headers, body: data }));
+                    });
+                    req.on("error", reject);
+                    req.end();
+                });
+                return response;
+            } catch (error) {
+                return null;
+            }
+        };
+
+        const td = await ecsClient.send(new DescribeTaskDefinitionCommand({ taskDefinition: taskDefArn }));
         let cont = td.taskDefinition.containerDefinitions.find(c => c.name === containerName);
         if (!cont) {
-          cont = td.taskDefinition.containerDefinitions[0];
-          if (!cont) throw new Error(`No containers found in task definition ${taskDefArn}.`);
+            cont = td.taskDefinition.containerDefinitions[0];
+            if (!cont) throw new Error(`No containers in task definition ${taskDefArn}.`);
+        }
+        cont.environment = (cont.environment || []).map(e => ({
+            ...e,
+            value: typeof e.value === "string" ? e.value.replace(/^['"]|['"]$/g, "") : e.value
+        }));
+        if (!cont.environment.some(e => e.name === "CACHE_CONTROL")) {
+            cont.environment.push({ name: "CACHE_CONTROL", value: "no-cache, no-store, must-revalidate" });
         }
         const port = cont.portMappings?.[0]?.containerPort || 3000;
-    
         const svcBase = {
-          cluster: process.env.ECS_CLUSTER_ARN,
-          taskDefinition: taskDefArn,
-          desiredCount: 1,
-          networkConfiguration: {
-            awsvpcConfiguration: {
-              subnets: process.env.SUBNET_IDS.split(","),
-              securityGroups: process.env.SECURITY_GROUP_IDS.split(","),
-              assignPublicIp: "ENABLED"
-            }
-          },
-          loadBalancers: [{
-            targetGroupArn: targetGroupArn,
-            containerName: cont.name,
-            containerPort: port
-          }],
-          healthCheckGracePeriodSeconds: 60
+            cluster: process.env.ECS_CLUSTER_ARN,
+            taskDefinition: taskDefArn,
+            desiredCount: 1,
+            networkConfiguration: {
+                awsvpcConfiguration: {
+                    subnets: process.env.SUBNET_IDS.split(","),
+                    securityGroups: process.env.SECURITY_GROUP_IDS.split(","),
+                    assignPublicIp: "ENABLED"
+                }
+            },
+            loadBalancers: [{
+                targetGroupArn: targetGroupArn,
+                containerName: cont.name,
+                containerPort: port
+            }],
+            healthCheckGracePeriodSeconds: 120
         };
-    
+
+        await checkStickySessions();
+        await cleanTargetGroup();
+
         const { services } = await ecsClient.send(new DescribeServicesCommand({
-          cluster: process.env.ECS_CLUSTER_ARN,
-          services: [serviceName]
-        }));
-        const existing = services?.[0];
-    
-        if (existing && existing.status === "ACTIVE") {
-          await ecsClient.send(new UpdateServiceCommand({
-            ...svcBase,
-            service: serviceName,
-            forceNewDeployment: true
-          }));
-          await waitUntilServicesStable(
-            { client: ecsClient, maxWaitTime: 1200, minDelay: 15, maxDelay: 60 },
-            { cluster: process.env.ECS_CLUSTER_ARN, services: [serviceName] }
-          );
-        } else {
-          if (existing) {
-            await ecsClient.send(new DeleteServiceCommand({
-              cluster: process.env.ECS_CLUSTER_ARN, service: serviceName, force: true
-            }));
-          }
-          await ecsClient.send(new CreateServiceCommand({
-            ...svcBase, serviceName, launchType: "FARGATE"
-          }));
-          await waitUntilServicesStable(
-            { client: ecsClient, maxWaitTime: 1200, minDelay: 15, maxDelay: 60 },
-            { cluster: process.env.ECS_CLUSTER_ARN, services: [serviceName] }
-          );
-        }
-    
-        const serviceDesc = await ecsClient.send(
-          new DescribeServicesCommand({
             cluster: process.env.ECS_CLUSTER_ARN,
             services: [serviceName]
-          })
-        );
+        }));
+        const existing = services?.[0];
+
+        if (existing && existing.status === "ACTIVE") {
+            await ecsClient.send(new UpdateServiceCommand({ ...svcBase, service: serviceName, forceNewDeployment: true }));
+            await waitUntilServicesStable(
+                { client: ecsClient, maxWaitTime: 1200, minDelay: 15, maxDelay: 60 },
+                { cluster: process.env.ECS_CLUSTER_ARN, services: [serviceName] }
+            );
+        } else {
+            if (existing) {
+                try {
+                    await ecsClient.send(new DeleteServiceCommand({
+                        cluster: process.env.ECS_CLUSTER_ARN,
+                        service: serviceName,
+                        force: true
+                    }));
+                } catch (error) {}
+            }
+            await ecsClient.send(new CreateServiceCommand({ ...svcBase, serviceName, launchType: "FARGATE" }));
+            await waitUntilServicesStable(
+                { client: ecsClient, maxWaitTime: 1200, minDelay: 15, maxDelay: 60 },
+                { cluster: process.env.ECS_CLUSTER_ARN, services: [serviceName] }
+            );
+        }
+
+        const serviceDesc = await ecsClient.send(new DescribeServicesCommand({
+            cluster: process.env.ECS_CLUSTER_ARN,
+            services: [serviceName]
+        }));
         const service = serviceDesc.services?.[0];
-        if (!service || service.status !== 'ACTIVE' || service.runningCount < 1) {
-          throw new Error(`Service ${serviceName} is not healthy: status=${service?.status}, runningCount=${service?.runningCount}.`);
+        if (!service || service.status !== "ACTIVE" || service.runningCount < 1) {
+            throw new Error(`Service ${serviceName} is not healthy`);
         }
-    
-        let healthCheckRetries = 5;
-        let isTgHealthy = false;
-        while (healthCheckRetries > 0) {
-          isTgHealthy = await checkTargetGroupHealth();
-          if (isTgHealthy) break;
-          await new Promise(resolve => setTimeout(resolve, 10000)); 
-          healthCheckRetries--;
+
+        let taskArns = [];
+        try {
+            const listTasks = await ecsClient.send(new ListTasksCommand({
+                cluster: process.env.ECS_CLUSTER_ARN,
+                serviceName
+            }));
+            taskArns = listTasks.taskArns || [];
+        } catch (error) {}
+
+        let round2 = 0;
+        while (true) {
+            round2++;
+            const { healthy, draining } = await checkTargetGroupHealth();
+            if (healthy) {
+                break;
+            }
+            await new Promise(r => setTimeout(r, 5000));
         }
-        if (!isTgHealthy) {
-          throw new Error(`No healthy targets in target group ${targetGroupArn} after deployment.`);
-        }
-    
+
+        try {
+            const fresh = await ecsClient.send(new ListTasksCommand({
+                cluster: process.env.ECS_CLUSTER_ARN,
+                serviceName
+            }));
+            taskArns = fresh.taskArns || [];
+        } catch {}
+
+        await validateTargetCount(taskArns);
         await updateALBRules();
+        await verifyApplicationResponse();
 
         if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
-          let invalidationSuccess = false;
-          let invalidationId = null;
-          const callerReference = `ecs-${serviceName}-${Date.now()}`;
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              const { Invalidation } = await cfClient.send(new CreateInvalidationCommand({
-                DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
-                InvalidationBatch: {
-                  CallerReference: callerReference,
-                  Paths: {
-                    Quantity: 4,
-                    Items: ["/", "/*", "/*/*", "/assets/*"] 
-                  }
+            let success = false, invalidationId = null;
+            const ref = `ecs-${serviceName}-${Date.now()}`;
+            for (let a = 1; a <= 3; a++) {
+                try {
+                    const { Invalidation } = await cfClient.send(new CreateInvalidationCommand({
+                        DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
+                        InvalidationBatch: {
+                            CallerReference: ref,
+                            Paths: { Quantity: 4, Items: ["/", "/*", "/*/*", "/assets/*"] }
+                        }
+                    }));
+                    invalidationId = Invalidation.Id;
+                    success = true;
+                    break;
+                } catch (error) {
+                    await new Promise(r => setTimeout(r, 5000));
                 }
-              }));
-              invalidationId = Invalidation.Id;
-              invalidationSuccess = true;
-              break;
-            } catch (error) {
-              await new Promise(resolve => setTimeout(resolve, 5000));
             }
-          }
-    
-          if (invalidationSuccess && invalidationId) {
-            let statusRetries = 10;
-            while (statusRetries > 0) {
-              try {
-                const { Invalidation } = await cfClient.send(new GetInvalidationCommand({
-                  DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
-                  Id: invalidationId
-                }));
-                if (Invalidation.Status === "Completed") {
-                  break;
+            if (success && invalidationId) {
+                let retries = 10;
+                while (retries--) {
+                    try {
+                        const { Invalidation } = await cfClient.send(new GetInvalidationCommand({
+                            DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
+                            Id: invalidationId
+                        }));
+                        if (Invalidation.Status === "Completed") break;
+                    } catch {}
+                    await new Promise(r => setTimeout(r, 10000));
                 }
-              } catch (error) {}
-              await new Promise(resolve => setTimeout(resolve, 10000)); 
-              statusRetries--;
             }
-          }
-        }
-      }
+        } 
+    }
 
     async createCodeBuildProject({
         projectName,
@@ -688,149 +853,124 @@ class DeployManager {
         outputDirectory,
         githubAccessToken
     }) {
-        if (!repository || typeof repository !== "string" || !repository.trim()) {
-            throw new Error("Invalid repository: must be a non-empty string.");
-        }
-        if (!githubAccessToken || typeof githubAccessToken !== "string" || !githubAccessToken.trim()) {
-            throw new Error("Invalid GitHub access token.");
-        }
+        if (!repository?.trim()) throw new Error("repository is required");
+        if (!githubAccessToken?.trim()) throw new Error("GitHub token missing");
         await this.validateGitHubToken(githubAccessToken, repository);
-    
-        let repoUrl;
-        if (/^https?:\/\//i.test(repository) || /^git@/i.test(repository)) {
-            repoUrl = repository;
-        } else {
-            const clean = repository.trim().replace(/^\/+|\/+$/g, "");
-            repoUrl = `https://github.com/${clean}.git`;
-        }
-    
-        const rootDir = rootDirectory || ".";
+
+        const repoUrl = /^https?:\/|^git@/.test(repository)
+            ? repository
+            : `https://github.com/${repository.replace(/^\/|\/$/g, "")}.git`;
+
+        const rootDir  = rootDirectory || ".";
         const imageTag = subdomain
-            ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}`
+            ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(
+                  repository, branch, githubAccessToken)}`
             : "latest";
-    
+
+        const repoUri = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}`;
+        const cbName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
+
         const buildspec = {
             version: "0.2",
+            env: { variables: { DOCKER_BUILDKIT: "1" } },
             phases: {
                 install: {
                     "runtime-versions": { nodejs: "20" },
-                    commands: [
-                        'echo "Install phase: nothing to do here"'
-                    ]
+                    commands: ['echo "Install phase ready"']
                 },
                 pre_build: {
                     commands: [
-                        'echo "Starting pre_build phase"',
-                        'echo "Configuring Git credentials"',
-                        'git config --global credential.helper \'!f() { echo username=x-oauth-basic; echo password=$GITHUB_TOKEN; }; f\'',
-                        'echo "Cloning repository into $CODEBUILD_SRC_DIR"',
-                        'git clone --branch $REPO_BRANCH $REPO_URL $CODEBUILD_SRC_DIR || { echo "Git clone failed: $?"; exit 1; }',
-                        'echo "Listing cloned files"',
-                        'ls -la $CODEBUILD_SRC_DIR',
-                        'echo "Entering root directory: $ROOT_DIRECTORY"',
+                        'git config --global credential.helper "!f() { echo username=x-oauth-basic; echo password=$GITHUB_TOKEN; }; f"',
+                        'git clone --depth 1 --branch $REPO_BRANCH $REPO_URL $CODEBUILD_SRC_DIR',
                         `cd $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
-                        'echo "Listing files in $ROOT_DIRECTORY"',
-                        `ls -la $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
-                        'echo "Installing dependencies"',
-                        installCommand || "npm install"
+                        installCommand || "npm ci --prefer-offline --no-audit"
                     ]
                 },
-                build: {
-                    commands: [
-                        'echo "Starting build phase"',
-                        `cd $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
-                        'echo "Current directory: $(pwd)"',
-                        'echo "Listing files before build"',
-                        'ls -la',
-                        'echo "No build step required for Node.js app"'
-                    ]
-                },
+                build: { commands: ['echo "No extra app build"'] },
                 post_build: {
                     commands: [
-                        'echo "Starting post_build phase"',
-                        `cd $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
-                        'echo "Current directory: $(pwd)"',
-                        'echo "Listing files before Docker build"',
-                        'ls -la',
-                        'echo "Injecting monitoring script into HTML files"',
-                        `find $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY -name '*.html' -exec sed -i 's|</head>|<script src="http://localhost:3000/z-analytics-inject.js"></script></head>|g' {} \\;`,
-                        'echo "Building Docker image"',
-                        'echo "FROM node:20" > Dockerfile',
-                        'echo "WORKDIR /app" >> Dockerfile',
-                        'echo "COPY package*.json ./" >> Dockerfile',
-                        'echo "RUN npm install" >> Dockerfile',
-                        'echo "COPY api/ ./api/" >> Dockerfile',
-                        'echo "CMD [\\"node\\", \\"api/index.js\\"]" >> Dockerfile',
-                        'echo "Listing files in current directory after Dockerfile creation"',
-                        'ls -la',
-                        'cat Dockerfile',
-                        '[ -n "$DOCKER_HUB_USERNAME" ] && [ -n "$DOCKER_HUB_PASSWORD" ] && ' +
-                        'echo "$DOCKER_HUB_PASSWORD" | docker login --username "$DOCKER_HUB_USERNAME" --password-stdin || ' +
-                        'echo "Skipping Docker-Hub login (no creds)"',
-                        'docker build -t $REPO_URI:$IMAGE_TAG .',
+                        'cat > Dockerfile <<EOF\n' +
+                        'FROM node:20-slim AS deps\n' +
+                        'WORKDIR /app\n' +
+                        'COPY package*.json ./\n' +
+                        'RUN npm ci --omit=dev --prefer-offline --no-audit\n' +
+                        '\n' +
+                        'FROM node:20-slim\n' +
+                        'WORKDIR /app\n' +
+                        'COPY --from=deps /app/node_modules ./node_modules\n' +
+                        'COPY . .\n' +
+                        'CMD ["node","api/index.js"]\n' +
+                        'EOF',
+                        '[ "$DOCKER_HUB_USERNAME" ] && [ "$DOCKER_HUB_PASSWORD" ] && ' +
+                        'echo "$DOCKER_HUB_PASSWORD" | docker login --username "$DOCKER_HUB_USERNAME" --password-stdin || true',
                         'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI',
-                        'docker push $REPO_URI:$IMAGE_TAG'
+                        'docker pull $REPO_URI:latest || true',
+                        'docker build --progress=plain ' +
+                        '--build-arg BUILDKIT_INLINE_CACHE=1 ' +
+                        '--cache-from=$REPO_URI:latest ' +
+                        '-t $REPO_URI:$IMAGE_TAG .',
+                        'docker push $REPO_URI:$IMAGE_TAG',
+                        'docker tag  $REPO_URI:$IMAGE_TAG $REPO_URI:latest',
+                        'docker push $REPO_URI:latest'
                     ]
                 }
             },
-            artifacts: { files: ["**/*"], "discard-paths": "yes" }
+            artifacts: { files: [], "discard-paths": "yes" }
         };
-    
+
         const envVars = [
-            { name: "ROOT_DIRECTORY", value: rootDir, type: "PLAINTEXT" },
-            { name: "INSTALL_COMMAND", value: installCommand || "npm install", type: "PLAINTEXT" },
-            { name: "BUILD_COMMAND", value: buildCommand || "", type: "PLAINTEXT" },
-            { name: "OUTPUT_DIRECTORY", value: outputDirectory || "", type: "PLAINTEXT" },
-            { name: "REPO_URI", value: `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}`, type: "PLAINTEXT" },
-            { name: "AWS_REGION", value: process.env.AWS_REGION, type: "PLAINTEXT" },
-            { name: "GITHUB_TOKEN", value: githubAccessToken, type: "PLAINTEXT" },
-            { name: "REPO_URL", value: repoUrl, type: "PLAINTEXT" },
-            { name: "REPO_BRANCH", value: branch, type: "PLAINTEXT" },
-            { name: "IMAGE_TAG", value: imageTag, type: "PLAINTEXT" },
+            { name: "ROOT_DIRECTORY", value: rootDir,  type: "PLAINTEXT" },
+            { name: "REPO_URI",       value: repoUri,  type: "PLAINTEXT" },
+            { name: "AWS_REGION",     value: process.env.AWS_REGION, type: "PLAINTEXT" },
+            { name: "GITHUB_TOKEN",   value: githubAccessToken, type: "PLAINTEXT" },
+            { name: "REPO_URL",       value: repoUrl,  type: "PLAINTEXT" },
+            { name: "REPO_BRANCH",    value: branch,   type: "PLAINTEXT" },
+            { name: "IMAGE_TAG",      value: imageTag, type: "PLAINTEXT" },
             { name: "DOCKER_HUB_USERNAME", value: process.env.DOCKER_HUB_USERNAME || "", type: "PLAINTEXT" },
             { name: "DOCKER_HUB_PASSWORD", value: process.env.DOCKER_HUB_PASSWORD || "", type: "PLAINTEXT" }
         ];
-    
+
         const params = {
-            name: subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName,
+            name: cbName,
             source: { type: "NO_SOURCE", buildspec: JSON.stringify(buildspec) },
             artifacts: { type: "NO_ARTIFACTS" },
             environment: {
                 type: "LINUX_CONTAINER",
                 image: "aws/codebuild/standard:7.0",
-                computeType: "BUILD_GENERAL1_SMALL",
+                computeType: "BUILD_GENERAL1_MEDIUM",
                 environmentVariables: envVars,
                 privilegedMode: true
             },
+            cache: { type: "LOCAL", modes: ["LOCAL_DOCKER_LAYER_CACHE"] },
             serviceRole: process.env.CODEBUILD_ROLE_ARN,
             logsConfig: {
                 cloudWatchLogs: {
                     status: "ENABLED",
-                    groupName: `/aws/codebuild/${subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName}`
+                    groupName: `/aws/codebuild/${cbName}`
                 }
             }
         };
-    
+
         try {
             await codeBuildClient.send(new CreateProjectCommand(params));
-        } catch (error) {
-            if (error.name === "ResourceAlreadyExistsException") {
+        } catch (e) {
+            if (e.name === "ResourceAlreadyExistsException")
                 await codeBuildClient.send(new UpdateProjectCommand(params));
-            } else {
-                throw new Error(`Failed to create CodeBuild project: ${error.message}.`);
-            }
+            else
+                throw new Error(`Failed to create CodeBuild project: ${e.message}.`);
         }
-    
+
         if (subdomain) {
             await pool.query(
                 `UPDATE domains
-                 SET image_tag = $1
+                   SET image_tag = $1
                  WHERE domain_name = $2
-                   AND project_id = (SELECT project_id FROM projects WHERE name = $3)`,
+                   AND project_id  = (SELECT project_id FROM projects WHERE name = $3)`,
                 [imageTag, subdomain, projectName]
             );
         }
     }
+
 
     async startCodeBuild({
         projectName,
@@ -843,25 +983,25 @@ class DeployManager {
         const codeBuildProjectName = subdomain
             ? `${projectName}-${subdomain.replace(/\./g, '-')}`
             : projectName;
-    
+
         const logGroupName = `/aws/codebuild/${codeBuildProjectName}`;
         const repoUrl = /^https?:\/\//i.test(repository) || /^git@/i.test(repository)
             ? repository
             : `https://github.com/${repository}.git`;
-    
+
         if (!githubAccessToken) {
             throw new Error("GitHub access token is required for CodeBuild.");
         }
         await this.validateGitHubToken(githubAccessToken, repository);
-    
+
         const imageTag = subdomain
             ? `${subdomain.replace(/\./g, '-')}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}`
             : "latest";
-    
+
         try {
             await cloudWatchLogsClient.send(new CreateLogGroupCommand({ logGroupName }));
-        } catch (_) {}
-    
+        } catch (_) { }
+
         const startResp = await codeBuildClient.send(new StartBuildCommand({
             projectName: codeBuildProjectName,
             environmentVariablesOverride: [
@@ -874,7 +1014,7 @@ class DeployManager {
             ]
         }));
         const buildId = startResp.build.id;
-    
+
         let logStreamName = startResp.build.logs?.cloudWatchLogs?.logStreamName || null;
         if (!logStreamName) {
             for (let i = 0; i < 10 && !logStreamName; i++) {
@@ -883,17 +1023,17 @@ class DeployManager {
                 logStreamName = info.builds?.[0]?.logs?.cloudWatchLogs?.logStreamName || null;
             }
         }
-    
+
         if (!logStreamName) logStreamName = buildId.split(":")[1];
-    
+
         if (!logStreamName) {
             throw new Error("CodeBuild did not return a CloudWatch log-stream name.");
         }
-    
+
         const logFile = path.join(logDir, `codebuild-${buildId.replace(/:/g, "-")}.log`);
         fs.mkdirSync(path.dirname(logFile), { recursive: true });
         fs.writeFileSync(logFile, "");
-    
+
         let nextToken;
         let buildStatus = "IN_PROGRESS";
         while (buildStatus === "IN_PROGRESS") {
@@ -907,25 +1047,25 @@ class DeployManager {
                 fs.appendFileSync(logFile, event.message + "\n");
             }
             nextToken = logs.nextForwardToken;
-    
+
             const buildInfo = await codeBuildClient.send(new BatchGetBuildsCommand({ ids: [buildId] }));
             buildStatus = buildInfo.builds[0].buildStatus;
-    
+
             await new Promise(r => setTimeout(r, 4000));
         }
-    
+
         if (buildStatus !== "SUCCEEDED") {
             const lastLine = fs.readFileSync(logFile, "utf-8").trim().split("\n").pop();
             throw new Error(`Build failed (status: ${buildStatus}) – ${lastLine || "no details"}.`);
         }
-    
+
         const imageUri = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}:${imageTag}`;
         return { imageUri, logFile };
     }
 
     async streamCodeBuild(
         { projectName, subdomain = null, repository, branch, githubAccessToken },
-        onChunk               
+        onChunk
     ) {
         if (typeof onChunk !== "function") {
             throw new Error(`streamCodeBuild: onChunk must be a function, got ${typeof onChunk}.`);
@@ -936,8 +1076,8 @@ class DeployManager {
         }
 
         const codeBuildProjectName = subdomain
-            ? `${projectName}-${subdomain.replace(/\./g, "-")}` 
-            : projectName;                                      
+            ? `${projectName}-${subdomain.replace(/\./g, "-")}`
+            : projectName;
         const logGroupName = `/aws/codebuild/${codeBuildProjectName}`;
         const repoUrl = /^https?:\/\//i.test(repository) || /^git@/i.test(repository)
             ? repository
@@ -946,13 +1086,13 @@ class DeployManager {
             ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}`
             : "latest";
 
-        const logStreamName = `build-${uuidv4()}`;           
+        const logStreamName = `build-${uuidv4()}`;
         try {
             await cloudWatchLogsClient.send(new CreateLogGroupCommand({ logGroupName }));
-        } catch { }                                           
+        } catch { }
         try {
             await cloudWatchLogsClient.send(new CreateLogStreamCommand({ logGroupName, logStreamName }));
-        } catch { }                                           
+        } catch { }
 
         let build;
         try {
@@ -974,12 +1114,12 @@ class DeployManager {
         }
 
         const buildId = build.build.id;
-        const cbLogStreamName = build.build.logs?.cloudWatchLogs?.logStreamName   
-            || buildId.split(":")[1];                           
+        const cbLogStreamName = build.build.logs?.cloudWatchLogs?.logStreamName
+            || buildId.split(":")[1];
         let nextToken = null;
         let buildStatus = "IN_PROGRESS";
         let lastLogEvent = "";
-        const timeoutMs = 20 * 60 * 1000;  
+        const timeoutMs = 20 * 60 * 1000;
         const t0 = Date.now();
 
         while (buildStatus === "IN_PROGRESS") {
@@ -999,7 +1139,7 @@ class DeployManager {
                 }
                 nextToken = logs.nextForwardToken;
             } catch (error) {
-                if (error.name !== "ResourceNotFoundException") throw error;  
+                if (error.name !== "ResourceNotFoundException") throw error;
             }
 
             const buildInfo = await codeBuildClient.send(new BatchGetBuildsCommand({ ids: [buildId] }));
@@ -1089,7 +1229,7 @@ class DeployManager {
         userID,
         organizationID,
         projectName,
-        domainName,          
+        domainName,
         repository,
         branch,
         teamName,
@@ -1098,7 +1238,7 @@ class DeployManager {
         buildCommand,
         envVars,
         deploymentId,
-        onData = null         
+        onData = null
     }) {
         const emit = typeof onData === "function" ? onData : () => { };
         const logDir = path.join("/tmp", `${projectName}-${uuidv4()}`, "logs");
@@ -1200,7 +1340,7 @@ class DeployManager {
         userID,
         organizationID,
         projectName,
-        domainNames, 
+        domainNames,
         template,
         repository,
         branch,
@@ -1210,7 +1350,7 @@ class DeployManager {
         buildCommand,
         installCommand,
         envVars,
-        deploymentProtection = false 
+        deploymentProtection = false
     }) {
         const deploymentId = uuidv4();
         const timestamp = new Date().toISOString();
@@ -1219,11 +1359,11 @@ class DeployManager {
         let projectID;
         let isNewProject = false;
         const domainIds = {};
-    
+
         if (!Array.isArray(domainNames) || domainNames.length === 0) {
             throw new Error("domainNames must be a non-empty array of subdomains.");
         }
-    
+
         const tokenResult = await pool.query(
             "SELECT github_access_token FROM users WHERE username = $1",
             [userID]
@@ -1232,7 +1372,7 @@ class DeployManager {
             throw new Error("GitHub account not connected.");
         }
         const githubAccessToken = tokenResult.rows[0].github_access_token;
-    
+
         let commitSha;
         try {
             commitSha = await this.getLatestCommitSha(repository, branch, githubAccessToken);
@@ -1243,12 +1383,12 @@ class DeployManager {
             );
             throw error;
         }
-    
+
         const existingProjRes = await pool.query(
             "SELECT project_id FROM projects WHERE orgid = $1 AND username = $2 AND name = $3",
             [organizationID, userID, projectName]
         );
-    
+
         if (existingProjRes.rows.length > 0) {
             projectID = existingProjRes.rows[0].project_id;
             isNewProject = false;
@@ -1256,7 +1396,7 @@ class DeployManager {
             isNewProject = true;
             projectID = uuidv4();
         }
-    
+
         const taskDefArns = {};
         const urls = [];
         for (const domainName of domainNames) {
@@ -1283,7 +1423,7 @@ class DeployManager {
                     };
                 }
             }
-    
+
             if (!isNewProject) {
                 const existingDomainResult = await pool.query(
                     "SELECT domain_id FROM domains WHERE project_id = $1 AND domain_name = $2",
@@ -1305,14 +1445,14 @@ class DeployManager {
                              deployment_protection = $10
                          WHERE domain_id = $11`,
                         [
-                            timestamp, 
-                            deploymentId, 
-                            repository, 
-                            branch, 
-                            rootDirectory, 
-                            outputDirectory, 
-                            buildCommand, 
-                            installCommand, 
+                            timestamp,
+                            deploymentId,
+                            repository,
+                            branch,
+                            rootDirectory,
+                            outputDirectory,
+                            buildCommand,
+                            installCommand,
                             JSON.stringify(envVars),
                             deploymentProtection,
                             domainId
@@ -1351,7 +1491,7 @@ class DeployManager {
                 domainId = uuidv4();
                 domainIds[subdomain] = domainId;
             }
-    
+
             await this.ensureECRRepo(projectName);
             await this.createCodeBuildProject({
                 projectName,
@@ -1363,7 +1503,7 @@ class DeployManager {
                 buildCommand: domainDetails.buildCommand,
                 githubAccessToken
             });
-    
+
             const { imageUri } = await this.startCodeBuild({
                 projectName,
                 subdomain,
@@ -1372,7 +1512,7 @@ class DeployManager {
                 logDir,
                 githubAccessToken
             });
-    
+
             const taskDefArn = await this.createTaskDef({
                 projectName,
                 subdomain,
@@ -1380,9 +1520,9 @@ class DeployManager {
                 envVars: domainDetails.envVars
             });
             taskDefArns[subdomain] = taskDefArn;
-    
+
             const targetGroupArn = await this.ensureTargetGroup(projectName, subdomain);
-    
+
             await this.updateDNSRecord(projectName, [subdomain], targetGroupArn);
             await this.createOrUpdateService({
                 projectName,
@@ -1396,7 +1536,7 @@ class DeployManager {
                  WHERE deployment_id = $5`,
                 [domainDetails.rootDirectory, domainDetails.buildCommand, domainDetails.installCommand, JSON.stringify(domainDetails.envVars), deploymentId]
             );
-    
+
             if (subdomain !== projectName) {
                 await pool.query(
                     `UPDATE domains
@@ -1422,10 +1562,10 @@ class DeployManager {
                 );
             }
         }
-    
+
         try {
             await this.updateDNSRecord(projectName, domainNames);
-    
+
             const records = {};
             for (const domainName of domainNames) {
                 const fqdn = `${domainName}.stackforgeengine.com`;
@@ -1452,7 +1592,7 @@ class DeployManager {
                         });
                 } catch (error) { }
             }
-    
+
             if (isNewProject) {
                 await pool.query(
                     `INSERT INTO projects 
@@ -1476,7 +1616,7 @@ class DeployManager {
                         null
                     ]
                 );
-    
+
                 for (const domainName of domainNames) {
                     const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
                     const domainId = domainIds[subdomain];
@@ -1507,7 +1647,7 @@ class DeployManager {
                         ]
                     );
                 }
-    
+
                 await pool.query(
                     `INSERT INTO deployments 
                      (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
@@ -1533,7 +1673,7 @@ class DeployManager {
                         JSON.stringify(envVars)
                     ]
                 );
-    
+
                 await pool.query(
                     `INSERT INTO deployment_logs 
                      (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
@@ -1555,7 +1695,7 @@ class DeployManager {
                     "UPDATE deployments SET status = $1, updated_at = $2 WHERE project_id = $3 AND status = $4",
                     ["inactive", now, projectID, "active"]
                 );
-    
+
                 await pool.query(
                     `INSERT INTO deployments 
                      (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
@@ -1581,7 +1721,7 @@ class DeployManager {
                         JSON.stringify(envVars)
                     ]
                 );
-    
+
                 for (const domainName of domainNames) {
                     const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
                     await pool.query(
@@ -1590,7 +1730,7 @@ class DeployManager {
                     );
                 }
             }
-    
+
             await this.recordBuildLogs(organizationID, userID, deploymentId, logDir);
             await this.recordRuntimeLogs(organizationID, userID, deploymentId, projectName);
             return { urls, deploymentId, logPath: logDir, taskDefArns };
@@ -1615,7 +1755,7 @@ class DeployManager {
             userID,
             organizationID,
             projectName,
-            domainNames, 
+            domainNames,
             template,
             repository,
             branch,
@@ -2067,7 +2207,7 @@ class DeployManager {
                     logGroupName,
                     logStreamName
                 }));
-            } catch (error) {}
+            } catch (error) { }
 
             let events = [];
             for (let attempt = 1; attempt <= 5; attempt++) {
@@ -2102,7 +2242,7 @@ class DeployManager {
                     Key: runtimeLogPath,
                     Body: logContent
                 }));
-            } catch (error) {}
+            } catch (error) { }
 
             const logId = uuidv4();
             await pool.query(`
@@ -2131,9 +2271,9 @@ class DeployManager {
             ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`;
         if (!hostedZoneId || !albZoneId || !albDns)
             throw new Error("Route-53 / ALB env vars are missing.");
-    
+
         projectName = projectName.toLowerCase();
-    
+
         const fqdnSet = new Set();
         (Array.isArray(subdomains) ? subdomains : []).forEach(raw => {
             const s = raw.trim().toLowerCase();
@@ -2148,7 +2288,7 @@ class DeployManager {
         let certificateArn = process.env.CERTIFICATE_ARN || "arn:aws:acm:us-east-1:913524945973:certificate/d84f519d-2502-477f-8512-3d060065ed78";
         const { Certificate } = await acmClient.send(new DescribeCertificateCommand({ CertificateArn: certificateArn }));
         const certDomains = Certificate.SubjectAlternativeNames || [];
-    
+
         if (!certDomains.includes(wildcardSubdomain) && fqdnList.some(fqdn => fqdn !== `${projectName}.stackforgeengine.com`)) {
             try {
                 const certResponse = await acmClient.send(new RequestCertificateCommand({
@@ -2160,7 +2300,7 @@ class DeployManager {
                     ValidationMethod: "DNS"
                 }));
                 certificateArn = certResponse.CertificateArn;
-    
+
                 for (let i = 0; i < 30; i++) {
                     const { Certificate } = await acmClient.send(new DescribeCertificateCommand({ CertificateArn: certificateArn }));
                     const domainValidation = Certificate.DomainValidationOptions?.find(opt => opt.DomainName === wildcardSubdomain);
@@ -2183,7 +2323,7 @@ class DeployManager {
                     }
                     await new Promise(resolve => setTimeout(resolve, 10000));
                 }
-    
+
                 for (let i = 0; i < 60; i++) {
                     const { Certificate } = await acmClient.send(new DescribeCertificateCommand({ CertificateArn: certificateArn }));
                     if (Certificate.Status === "ISSUED") {
@@ -2198,7 +2338,7 @@ class DeployManager {
                 throw error;
             }
         }
-    
+
         const deletesMap = new Map();
         for (const fqdn of fqdnList) {
             let next = null;
@@ -2220,7 +2360,7 @@ class DeployManager {
                     : null;
             } while (next);
         }
-    
+
         const upsertsMap = new Map();
         for (const fqdn of fqdnList) {
             const apex = fqdn === `${projectName}.stackforgeengine.com`;
@@ -2240,7 +2380,7 @@ class DeployManager {
             };
             upsertsMap.set(`${rec.Name}|${rec.Type}`, { Action: "UPSERT", ResourceRecordSet: rec });
         }
-    
+
         for (const k of upsertsMap.keys()) {
             const del = deletesMap.get(k);
             if (del && JSON.stringify(del.ResourceRecordSet) === JSON.stringify(upsertsMap.get(k).ResourceRecordSet)) {
@@ -2248,7 +2388,7 @@ class DeployManager {
                 upsertsMap.delete(k);
             }
         }
-    
+
         const sendBatch = async (changes) => {
             if (changes.length === 0) return;
             try {
@@ -2266,7 +2406,7 @@ class DeployManager {
         for (let i = 0; i < delArr.length; i += 100) await sendBatch(delArr.slice(i, i + 100));
         const upArr = Array.from(upsertsMap.values());
         for (let i = 0; i < upArr.length; i += 100) await sendBatch(upArr.slice(i, i + 100));
-    
+
         for (const fqdn of fqdnList) {
             try {
                 const { ResourceRecordSets } = await route53Client.send(
@@ -2277,9 +2417,9 @@ class DeployManager {
                     })
                 );
                 const record = ResourceRecordSets.find(rec => rec.Name.replace(/\.$/, "") === fqdn);
-            } catch (error) {}
+            } catch (error) { }
         }
-    
+
         if (targetGroupArn) {
             const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
             const pickPriority = async () => {
@@ -2288,7 +2428,7 @@ class DeployManager {
                 for (let p = 1; p <= 50000; p++) if (!used.has(p)) return p;
                 throw new Error("No free ALB priority.");
             };
-    
+
             for (const fqdn of fqdnList) {
                 const ruleExists = async () => {
                     const { Rules } = await elbClient.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
@@ -2299,7 +2439,7 @@ class DeployManager {
                     );
                     return rule ? rule.RuleArn : null;
                 };
-    
+
                 const existingRuleArn = await ruleExists();
                 if (existingRuleArn) {
                     await elbClient.send(new ModifyRuleCommand({
@@ -2326,148 +2466,120 @@ class DeployManager {
                 }
             }
         }
-    
+
         return { certificateArn };
     }
 
-    async rollbackDeployment({ organizationID, userID, projectID, deploymentID, domainName }) {
-        const timestamp = new Date().toISOString();
-    
-        const deploymentResult = await pool.query(
-            `SELECT d.*, p.name as project_name, d.url, d.commit_sha
-             FROM deployments d
-             JOIN projects p ON d.project_id = p.project_id
-             WHERE d.deployment_id = $1 AND d.orgid = $2 AND d.username = $3`,
-            [deploymentID, organizationID, userID]
-        );
-    
-        if (deploymentResult.rows.length === 0) {
-            throw new Error("Deployment not found or access denied.");
-        }
-    
-        const deployment = deploymentResult.rows[0];
-        const projectName = deployment.project_name;
-        const subdomain = domainName; 
-        const serviceName = subdomain === projectName ? projectName : `${projectName}-${subdomain.replace(/\./g, '-')}`;
-        const fqdn = subdomain === projectName ? `${projectName}.stackforgeengine.com` : `${subdomain}.stackforgeengine.com`;
-    
-        const domainResult = await pool.query(
-            `SELECT repository, branch, root_directory, install_command, build_command, env_vars, image_tag
-             FROM domains
-             WHERE domain_name = $1 AND project_id = $2 AND orgid = $3`,
-            [subdomain, projectID, organizationID]
-        );
-    
-        if (domainResult.rows.length === 0) {
-            throw new Error(`Domain ${subdomain} not found for project ${projectID}.`);
-        }
-    
-        const domainDetails = domainResult.rows[0];
-        let envVars = [];
-        try {
-            const rawEnvVars = domainDetails.env_vars;
-            if (typeof rawEnvVars === "string") {
-                envVars = JSON.parse(rawEnvVars);
-            } else if (typeof rawEnvVars === "object" && rawEnvVars !== null) {
-                envVars = rawEnvVars;
-            }
-            if (!Array.isArray(envVars)) {
-                envVars = [];
-            }
-        } catch (error) {
-            envVars = [];
-        }
-    
-        const githubAccessToken = (await pool.query(
-            "SELECT github_access_token FROM users WHERE username = $1",
-            [userID]
-        )).rows[0].github_access_token;
-    
-        await this.ensureECRRepo(projectName);
-    
-        await this.createCodeBuildProject({
-            projectName,
-            subdomain,
-            repository: domainDetails.repository,
-            branch: domainDetails.branch,
-            rootDirectory: domainDetails.root_directory,
-            installCommand: domainDetails.install_command,
-            buildCommand: domainDetails.build_command,
-            githubAccessToken
-        });
-    
-        const logDir = path.join("/tmp", `${projectName}-${uuidv4()}`, "logs");
-        fs.mkdirSync(logDir, { recursive: true });
-    
-        let imageUri;
-        try {
-            const buildResult = await this.startCodeBuild({
-                projectName,
-                subdomain,
-                repository: domainDetails.repository,
-                branch: domainDetails.branch,
-                logDir,
-                githubAccessToken
-            });
-            imageUri = buildResult.imageUri;
-        } catch (error) {
-            throw error;
-        }
-    
-        const taskDefArn = await this.createTaskDef({
-            projectName,
-            subdomain,
-            imageUri,
-            envVars
-        });
-    
-        const targetGroupArn = await this.ensureTargetGroup(projectName, subdomain);
-    
+    async rollbackDeployment({
+        organizationID, userID,
+        projectID, deploymentID,
+        domainName                    
+    }) {
+        const ts = new Date().toISOString();
+        const depQ = await pool.query(`
+        SELECT d.*, p.name AS project_name,
+               p.current_deployment, p.previous_deployment
+          FROM deployments d
+          JOIN projects p ON p.project_id = d.project_id
+         WHERE d.deployment_id = $1
+           AND d.project_id    = $2
+           AND d.orgid         = $3
+           AND d.username      = $4`,
+            [deploymentID, projectID, organizationID, userID]);
+        if (!depQ.rowCount) throw new Error("Deployment not found or access denied.");
+        const deployment = depQ.rows[0];
+        const projectName = deployment.project_name.toLowerCase();
+
+        if (!domainName) throw new Error("domainName must be supplied.");
+        const dn = domainName.toLowerCase();                   
+        const isBase = dn === projectName;
+        if (!(isBase || dn.endsWith(`.${projectName}`)))
+            throw new Error(`Domain “${domainName}” does not belong to project “${projectName}”.`);
+
+        const domQ = await pool.query(`
+        SELECT domain_id, deployment_id AS current_deployment
+          FROM domains
+         WHERE project_id = $1 AND domain_name = $2`,
+            [projectID, dn]);
+        if (!domQ.rowCount)
+            throw new Error(`Domain “${domainName}” is unknown for this project.`);
+        const { domain_id: domainId, current_deployment: oldActiveId } = domQ.rows[0];
+
+        if (oldActiveId === deploymentID)
+            throw new Error(`Deployment ${deploymentID} is already active for ${dn}.`);
+
+        const taskDefArn = deployment.task_def_arn ||
+            await this.getTaskDefinitionARN(projectName, deploymentID);
+        const targetGroupArn = await this.ensureTargetGroup(
+            projectName, isBase ? null : dn);
+
         await this.createOrUpdateService({
             projectName,
-            subdomain,
+            subdomain: isBase ? null : dn,
             taskDefArn,
             targetGroupArn
         });
-    
-        await this.updateDNSRecord(projectName, [subdomain], targetGroupArn);
-    
-        await pool.query(
-            "UPDATE deployments SET status = 'inactive', updated_at = $1 WHERE project_id = $2 AND domain_id = (SELECT domain_id FROM domains WHERE domain_name = $3 AND project_id = $2) AND status = 'active'",
-            [timestamp, projectID, subdomain]
-        );
-    
-        await pool.query(
-            "UPDATE deployments SET status = 'active', updated_at = $1, last_deployed_at = $1, task_def_arn = $2 WHERE deployment_id = $3",
-            [timestamp, taskDefArn, deploymentID]
-        );
-    
-        await pool.query(
-            `UPDATE domains
-             SET is_primary = true,
-                 deployment_id = $1,
-                 updated_at = $2,
-                 env_vars = $3
-             WHERE domain_name = $4 AND project_id = $5`,
-            [deploymentID, timestamp, JSON.stringify(envVars), subdomain, projectID]
-        );
-    
-        await pool.query(
-            `INSERT INTO deployment_logs
-             (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address)
-             VALUES ($1, $2, $3, $4, 'rollback', $5, $6, '127.0.0.1')`,
-            [organizationID, userID, projectID, projectName, deploymentID, timestamp]
-        );
-    
-        await this.recordRuntimeLogs(organizationID, userID, deploymentID, projectName, subdomain);
-    
+        await this.updateDNSRecord(projectName, [dn]);
+
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
+
+            if (oldActiveId) {
+                const r1 = await client.query(
+                    `UPDATE deployments
+              SET status='inactive', updated_at=$1
+            WHERE deployment_id=$2 RETURNING deployment_id`,
+                    [ts, oldActiveId]);
+            }
+
+            const r2 = await client.query(
+                `UPDATE deployments
+            SET status='active',
+                updated_at=$1,
+                last_deployed_at=$1
+          WHERE deployment_id=$2 RETURNING deployment_id`,
+                [ts, deploymentID]);
+
+            const r3 = await client.query(
+                `UPDATE domains
+            SET deployment_id=$1, updated_at=$2
+          WHERE domain_id=$3`,
+                [deploymentID, ts, domainId]);
+
+            const r4 = await client.query(
+                `UPDATE projects
+            SET previous_deployment=$1,
+                current_deployment =$2,
+                updated_at=$3
+          WHERE project_id=$4`,
+                [oldActiveId, deploymentID, ts, projectID]);
+
+            await client.query(
+                `INSERT INTO deployment_logs
+               (orgid,username,project_id,project_name,
+                action,deployment_id,timestamp,ip_address)
+         VALUES ($1,$2,$3,$4,'rollback',$5,$6,'127.0.0.1')`,
+                [organizationID, userID, projectID, projectName, deploymentID, ts]);
+
+            await client.query("COMMIT");
+        } catch (error) {
+            await client.query("ROLLBACK");
+            throw e;
+        } finally {
+            client.release();
+        }
+
+        this.recordRuntimeLogs(
+            organizationID, userID, deploymentID, projectName, dn
+        ); 
+
         return {
-            message: `Successfully rolled back deployment ${deploymentID} for subdomain ${subdomain}.`,
-            url: `https://${fqdn}`,
-            deploymentId: deploymentID
+            message: `Rolled back ${dn} to deployment ${deploymentID}.`,
+            url: `https://${isBase ? projectName : dn}.stackforgeengine.com`,
+            deploymentID
         };
     }
-    
 
     async deleteProject({ organizationID, userID, projectID, projectName, domainName }) {
         const timestamp = new Date().toISOString();
@@ -2533,14 +2645,14 @@ class DeployManager {
                         taskDefinition: taskDefArn
                     }));
                 }
-            } catch (error) {}
+            } catch (error) { }
 
             try {
                 await ecrClient.send(new DeleteRepositoryCommand({
                     repositoryName: projectName,
                     force: true
                 }));
-            } catch (error) {}
+            } catch (error) { }
 
             try {
                 const changes = [];
@@ -2568,7 +2680,7 @@ class DeployManager {
                         ChangeBatch: { Changes: changes }
                     }));
                 }
-            } catch (error) {}
+            } catch (error) { }
 
             const listenerArns = [process.env.ALB_LISTENER_ARN_HTTP, process.env.ALB_LISTENER_ARN_HTTPS];
             for (const listenerArn of listenerArns) {
@@ -2593,12 +2705,12 @@ class DeployManager {
                             }));
                         }
                     }
-                } catch (error) {}
+                } catch (error) { }
             }
 
             const certificateArns = [...new Set(domains
                 .map(d => d.certificateArn)
-                .filter(arn => arn))]; 
+                .filter(arn => arn))];
             for (const certArn of certificateArns) {
                 try {
                     const maxDetachRetries = 5;
@@ -2626,7 +2738,7 @@ class DeployManager {
                             isDetached = true;
                             break;
                         }
-                        await new Promise(resolve => setTimeout(resolve, 15000)); 
+                        await new Promise(resolve => setTimeout(resolve, 15000));
                         detachRetryCount++;
                     }
 
@@ -2636,9 +2748,9 @@ class DeployManager {
                             dist.ViewerCertificate?.ACMCertificateArn === certArn
                         ) || [];
                         if (cloudFrontUsage.length > 0) {
-                            continue; 
+                            continue;
                         }
-                    } catch (error) {}
+                    } catch (error) { }
 
                     try {
                         const loadBalancersResp = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
@@ -2658,7 +2770,7 @@ class DeployManager {
                                 }
                             }
                         }
-                    } catch (error) {}
+                    } catch (error) { }
 
                     const maxRetries = 5;
                     let retryCount = 0;
@@ -2676,14 +2788,14 @@ class DeployManager {
                             break;
                         } catch (error) {
                             if (error.name === "ResourceInUseException" && retryCount < maxRetries - 1) {
-                                await new Promise(resolve => setTimeout(resolve, 15000 * (retryCount + 1))); 
+                                await new Promise(resolve => setTimeout(resolve, 15000 * (retryCount + 1)));
                                 retryCount++;
                                 continue;
                             }
                             break;
                         }
                     }
-                } catch (error) {}
+                } catch (error) { }
             }
 
             try {
@@ -2699,7 +2811,7 @@ class DeployManager {
                 for (const project of projectsToDelete) {
                     await codeBuildClient.send(new DeleteProjectCommand({ name: project }));
                 }
-            } catch (error) {}
+            } catch (error) { }
 
             const logGroups = [
                 `/ecs/${projectName}`,
@@ -2711,12 +2823,12 @@ class DeployManager {
             for (const logGroup of new Set(logGroups)) {
                 try {
                     await cloudWatchLogsClient.send(new DeleteLogGroupCommand({ logGroupName: logGroup }));
-                } catch (error) {}
+                } catch (error) { }
             }
 
             const targetGroupArns = domains
                 .map(d => d.targetGroupArn)
-                .filter(arn => arn && arn.match(/:targetgroup\/[a-zA-Z0-9-]+\/[a-f0-9]+$/)); 
+                .filter(arn => arn && arn.match(/:targetgroup\/[a-zA-Z0-9-]+\/[a-f0-9]+$/));
             if (domainName && domainName !== projectName) {
                 targetGroupArns.push(`arn:aws:elasticloadbalancing:${process.env.AWS_REGION}:${process.env.AWS_ACCOUNT_ID}:targetgroup/${projectName}-${domainName}/default`);
             }
@@ -2750,7 +2862,7 @@ class DeployManager {
                         }
                     }
                     await elbv2Client.send(new DeleteTargetGroupCommand({ TargetGroupArn: tgArn }));
-                } catch (error) {}
+                } catch (error) { }
             }
 
             try {
@@ -2789,7 +2901,7 @@ class DeployManager {
                      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                     [organizationID, userID, projectID, projectName, "delete", timestamp, "127.0.0.1"]
                 );
-            } catch (error) {}
+            } catch (error) { }
 
             return { message: `Project ${projectName} and all associated resources deleted successfully.` };
         } catch (error) {
@@ -2827,7 +2939,7 @@ class DeployManager {
                     service: serviceName,
                     force: true
                 }));
-                
+
                 const taskDefsResp = await ecsClient.send(new ListTaskDefinitionsCommand({
                     familyPrefix: serviceName
                 }));
@@ -2836,7 +2948,7 @@ class DeployManager {
                         taskDefinition: taskDefArn
                     }));
                 }
-            } catch (error) {}
+            } catch (error) { }
 
             try {
                 const domainFqdn = domainName.includes('.') ? domainName : `${domainName}.stackforgeengine.com`;
@@ -2861,7 +2973,7 @@ class DeployManager {
                         }
                     }));
                 }
-            } catch (error) {}
+            } catch (error) { }
 
             const listenerArns = [process.env.ALB_LISTENER_ARN_HTTP, process.env.ALB_LISTENER_ARN_HTTPS];
             for (const listenerArn of listenerArns) {
@@ -2883,7 +2995,7 @@ class DeployManager {
                             }));
                         }
                     }
-                } catch (error) {}
+                } catch (error) { }
             }
 
             if (certificateArn) {
@@ -2905,7 +3017,7 @@ class DeployManager {
                     await acmClient.send(new DeleteCertificateCommand({
                         CertificateArn: certificateArn
                     }));
-                } catch (error) {}
+                } catch (error) { }
             }
 
             try {
@@ -2913,7 +3025,7 @@ class DeployManager {
                 for (const project of projectNames) {
                     await codeBuildClient.send(new DeleteProjectCommand({ name: project }));
                 }
-            } catch (error) {}
+            } catch (error) { }
 
             const logGroups = [
                 `/ecs/${projectName}`,
@@ -2923,7 +3035,7 @@ class DeployManager {
             for (const logGroup of logGroups) {
                 try {
                     await cloudWatchLogsClient.send(new DeleteLogGroupCommand({ logGroupName: logGroup }));
-                } catch (error) {}
+                } catch (error) { }
             }
 
             if (targetGroupArn) {
@@ -2941,7 +3053,7 @@ class DeployManager {
                         }
                     }
                     await elbv2Client.send(new DeleteTargetGroupCommand({ TargetGroupArn: targetGroupArn }));
-                } catch (error) {}
+                } catch (error) { }
             }
 
             try {
@@ -2967,7 +3079,7 @@ class DeployManager {
                         [domainId, organizationID]
                     );
                 }
-            } catch (error) {}
+            } catch (error) { }
 
             try {
                 await pool.query(
@@ -2976,7 +3088,7 @@ class DeployManager {
                      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                     [organizationID, userID, projectID, projectName, "cleanup_failed", deploymentId, timestamp, "127.0.0.1"]
                 );
-            } catch (error) {}
+            } catch (error) { }
         } catch (error) {
             throw new Error(`Cleanup failed: ${error.message}.`);
         }
@@ -2984,6 +3096,3 @@ class DeployManager {
 }
 
 module.exports = new DeployManager();
-
-
-

@@ -27,6 +27,7 @@
     "aws-sdk": "^2.1692.0",
     "axios": "^1.8.4",
     "compression": "^1.8.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
@@ -43,6 +44,7 @@
     "nodemailer": "^6.10.0",
     "pg": "^8.14.1",
     "puppeteer": "^24.6.1",
-    "ua-parser-js": "^2.0.3"
+    "ua-parser-js": "^2.0.3",
+    "yaml": "^2.8.0"
   }
 }

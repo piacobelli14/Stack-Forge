@@ -73,7 +73,7 @@ const StackForgeProjects = () => {
   const [selectedDomain, setSelectedDomain] = useState("");
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const today = new Date();
-    const dayOfWeek = today.getDay(); 
+    const dayOfWeek = today.getDay();
     const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     const monday = new Date(today);
     monday.setDate(today.getDate() - daysToMonday);
@@ -103,7 +103,7 @@ const StackForgeProjects = () => {
     const handleResize = () => {
       setIsLoaded(false);
       setAddNewOpen(false);
-      setDomainDropdownOpen(false); 
+      setDomainDropdownOpen(false);
       setScreenSize(window.innerWidth);
       setResizeTrigger((prev) => !prev);
       setTimeout(() => setIsLoaded(true), 300);
@@ -137,7 +137,7 @@ const StackForgeProjects = () => {
 
   useEffect(() => {
     const handleClickOutsideCellMenu = (event) => {
-      if (openMenuId !== null && !event.target.closest('.threeDotMenuContainer')) {
+      if (openMenuId !== null && !event.target.closest(".threeDotMenuContainer")) {
         setOpenMenuId(null);
       }
     };
@@ -166,7 +166,7 @@ const StackForgeProjects = () => {
       const buttonRect = domainSelectRef.current.getBoundingClientRect();
       const dropdownRect = domainDropdownRef.current.getBoundingClientRect();
       let newTop = buttonRect.bottom + 5;
-      let newLeft = buttonRect.right - dropdownRect.width; 
+      let newLeft = buttonRect.right - dropdownRect.width;
       if (newTop + dropdownRect.height > window.innerHeight) {
         newTop = window.innerHeight - dropdownRect.height;
       }
@@ -230,9 +230,9 @@ const StackForgeProjects = () => {
           body: JSON.stringify({
             organizationID,
             domain: selectedDomain || "all_domains",
-            startDate: currentWeekStart.toISOString().split('T')[0],
-            endDate: weekEnd.toISOString().split('T')[0],
-            groupBy: 'day'
+            startDate: currentWeekStart.toISOString().split("T")[0],
+            endDate: weekEnd.toISOString().split("T")[0],
+            groupBy: "day",
           }),
         });
         if (!response.ok) {
@@ -240,30 +240,30 @@ const StackForgeProjects = () => {
         }
         const data = await response.json();
         setMonitoringData(data.data || []);
-  
+
         const transformMetrics = (metrics) => {
-          return metrics.map(item => {
+          return metrics.map((item) => {
             if (!item.date || typeof item.date !== "string") {
               return { date: "Invalid Date", value: item.value || 0 };
             }
-  
+
             const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
             if (!dateRegex.test(item.date)) {
               return { date: "Invalid Date", value: item.value || 0 };
             }
-  
+
             const testDate = new Date(item.date);
             if (isNaN(testDate.getTime())) {
               return { date: "Invalid Date", value: item.value || 0 };
             }
-  
+
             return {
-              date: item.date, 
-              value: item.value
+              date: item.date,
+              value: item.value,
             };
           });
         };
-  
+
         const transformedMetrics = {
           pageViews: data.individualMetrics?.pageViews
             ? transformMetrics(data.individualMetrics.pageViews)
@@ -335,8 +335,7 @@ const StackForgeProjects = () => {
       clearTimeout(debounceTimeoutRef.current);
     }
 
-    debounceTimeoutRef.current = setTimeout(() => {
-    }, 300);
+    debounceTimeoutRef.current = setTimeout(() => {}, 300);
   };
 
   const refreshActivityLogs = async () => {
@@ -406,8 +405,24 @@ const StackForgeProjects = () => {
         }),
       });
 
+      const data = await response.json().catch(() => null);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        closeDomainSearchModal();
+        if (response.status === 429 && data?.code === "DOMAIN_THROTTLED") {
+          await showDialog({
+            title: "Please Wait",
+            message: data.message || "You must wait before adding a new domain.",
+            showCancel: false,
+          });
+        } else {
+          await showDialog({
+            title: "Error",
+            message: "Failed to add domain. Please try again.",
+            showCancel: false,
+          });
+        }
+        return;
       }
 
       closeDomainSearchModal();
@@ -461,17 +476,17 @@ const StackForgeProjects = () => {
 
   const getUniqueDomains = () => {
     const domains = projects
-      .map(project => project.url)
-      .filter(url => url)
-      .map(url => {
+      .map((project) => project.url)
+      .filter((url) => url)
+      .map((url) => {
         try {
           return new URL(url).hostname;
         } catch {
           return null;
         }
       })
-      .filter(domain => domain);
-    return [...new Set(domains)]; 
+      .filter((domain) => domain);
+    return [...new Set(domains)];
   };
 
   const handlePreviousWeek = () => {
@@ -520,6 +535,7 @@ const StackForgeProjects = () => {
     end.setDate(start.getDate() + 6);
     return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
   };
+
 
   return (
     <div

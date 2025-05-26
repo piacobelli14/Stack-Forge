@@ -600,7 +600,6 @@ router.post("/git-repo-update-details-relative-to-deployment", authenticateToken
     }
 });
 
-
 router.post("/fetch-current-build-info", authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, domainName } = req.body;
 

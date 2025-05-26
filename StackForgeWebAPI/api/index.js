@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const compression = require('compression');
+const cookieParser = require('cookie-parser');
 const bodyParser = require('body-parser');
 const { pool } = require('./config/db');
 const errorLogger = require('./middleware/errorLogger');
@@ -26,6 +27,7 @@ app.use(cors({
 
 
 app.use(bodyParser.json({ limit: '1gb' }));
+app.use(cookieParser());
 app.use(errorLogger);
 app.use(authenticationRoutes);
 app.use(profileRoutes);

@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');   
 const path = require('path');
 const { pool } = require('../config/db');
 const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require('../config/smtp');
@@ -63,6 +64,17 @@ router.post('/user-authentication', rateLimiter(10, 20, authRateLimitExceededHan
             { algorithm: 'HS256' }
         );
 
+        // ← GENERATE & SET VISITOR COOKIE FOR ALL SUBDOMAINS
+        const visitorId = uuidv4();
+        res.cookie('sf_visitor_id', visitorId, {
+            domain: '.stackforgeengine.com',
+            path: '/',
+            httpOnly: false,
+            secure: true,
+            sameSite: 'None',
+            maxAge: 365 * 24 * 60 * 60 * 1000
+        });
+
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
         const locationResponse = await axios.get(`http://ip-api.com/json/${ip}`);
         const locationData = locationResponse.data;
@@ -89,6 +101,7 @@ router.post('/user-authentication', rateLimiter(10, 20, authRateLimitExceededHan
         next(error);
     }
 });
+
 
 router.post('/send-admin-auth-code', rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { email } = req.body;
