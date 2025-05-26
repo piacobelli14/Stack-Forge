@@ -69,6 +69,15 @@ router.get("/deploy-project-stream", (req, res, next) => {
                 throw new Error("repository and branch are required.");
             }
 
+            const existingProject = await pool.query(
+                "SELECT project_id FROM projects WHERE orgid = $1 AND username = $2 AND name = $3",
+                [organizationID, userID, projectName]
+            );
+            if (existingProject.rows.length > 0) {
+                sendLine(`Error: Project name '${projectName}' already exists for this organization.\n`);
+                throw new Error(`Project name '${projectName}' already exists.`);
+            }
+
             sendLine(`Received projectName: ${projectName}\n`);
             const domainName = projectName.toLowerCase().replace(/\s+/g, "-");
             sendLine(`Generated domainName: ${domainName}\n`);
@@ -103,13 +112,30 @@ router.get("/deploy-project-stream", (req, res, next) => {
                 [organizationID, userID, projectName]
             );
             const projectID = projRes.rows[0]?.project_id;
+            if (!projectID) {
+                sendLine("Error: Failed to retrieve project_id after deployment.\n");
+                throw new Error("Project not found in database after deployment.");
+            }
             sendLine(`DEBUG: project_id = ${projectID}\n`);
             sendLine("DEBUG: calling /validate-domain to populate dns_records\n");
-            const validateRes = await axios.post(
-                `${req.protocol}://${req.get("host")}/validate-domain`,
-                { userID, organizationID, projectID, domain: projectName },
-                { headers: { Authorization: req.headers.authorization } }
-            );
+            let validateRes;
+            for (let i = 0; i < 3; i++) {
+                try {
+                    validateRes = await axios.post(
+                        `${req.protocol}://${req.get("host")}/validate-domain`,
+                        { userID, organizationID, projectID, domain: projectName },
+                        { headers: { Authorization: req.headers.authorization } }
+                    );
+                    break;
+                } catch (err) {
+                    if (err.response?.status === 429 && i < 2) {
+                        sendLine(`Waiting for domain throttle, retrying in 30s...\n`);
+                        await new Promise(resolve => setTimeout(resolve, 30000));
+                        continue;
+                    }
+                    throw err;
+                }
+            }
             sendLine(`DEBUG: /validate-domain response → ${JSON.stringify(validateRes.data)}\n`);
 
             clearInterval(heartbeat);
@@ -145,6 +171,16 @@ router.post("/deploy-project", authenticateToken, async (req, res, next) => {
     }
 
     try {
+        const existingProject = await pool.query(
+            "SELECT project_id FROM projects WHERE orgid = $1 AND username = $2 AND name = $3",
+            [organizationID, userID, projectName]
+        );
+        if (existingProject.rows.length > 0) {
+            return res.status(400).json({
+                message: `Project name '${projectName}' already exists for this organization.`
+            });
+        }
+
         const domainName = projectName.toLowerCase().replace(/\s+/g, "-");
 
         const deploymentResult = await deployManager.launchWebsite({

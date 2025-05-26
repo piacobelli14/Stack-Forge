@@ -5,6 +5,48 @@ const { pool } = require('../config/db');
 const router   = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 
+router.post('/auth/check', async (req, res) => {
+  try {
+      const { domain } = req.body;
+      const visitorId = req.cookies.sf_visitor_id || req.headers['x-visitor-id'];
+
+      const domainResult = await pool.query(
+          'SELECT deployment_protection, orgid FROM domains WHERE domain_name = $1',
+          [domain.split('.')[0]]
+      );
+
+      if (domainResult.rows.length === 0) {
+          return res.status(404).json({ error: 'Domain not found' });
+      }
+
+      const { deployment_protection, orgid } = domainResult.rows[0];
+
+      if (!deployment_protection) {
+          return res.json({ protected: false, isAuthenticated: true });
+      }
+
+      const userResult = await pool.query(
+          'SELECT orgid FROM users WHERE github_id = $1 OR github_username = $1',
+          [visitorId]
+      );
+
+      if (userResult.rows.length === 0 || userResult.rows[0].orgid !== orgid) {
+          const signinResult = await pool.query(
+              'SELECT orgid FROM signin_logs WHERE orgid = $1 AND signin_timestamp > NOW() - INTERVAL \'1 hour\' LIMIT 1',
+              [orgid]
+          );
+
+          if (signinResult.rows.length === 0) {
+              return res.status(403).json({ protected: true, isAuthenticated: false });
+          }
+      }
+
+      return res.json({ protected: true, isAuthenticated: true });
+  } catch (error) {
+      res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.post('/metrics', async (req, res) => {
   try {
     const { domain, visitorId, url, metrics, userAgent } = req.body;
@@ -142,7 +184,9 @@ router.post('/metrics', async (req, res) => {
 });
 
 router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
-  const { userID, organizationID, limit = 50, offset = 0 } = req.body;
+  const { userID, organizationID, search = '' } = req.body;
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   req.on('close', () => {
       return;
@@ -151,12 +195,6 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
   try {
     if (!organizationID) {
       return res.status(400).json({ message: 'organizationID is required' });
-    }
-    if (isNaN(limit) || limit < 1 || limit > 100) {
-      return res.status(400).json({ message: 'limit must be between 1 and 100' });
-    }
-    if (isNaN(offset) || offset < 0) {
-      return res.status(400).json({ message: 'offset must be a non-negative number' });
     }
 
     const activityLogQuery = `
@@ -170,8 +208,10 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         FROM projects p
         LEFT JOIN users u ON p.username = u.username AND p.orgid = u.orgid
         WHERE p.created_at IS NOT NULL
+          AND p.created_at >= $3
           AND p.orgid = $1
           ${userID ? 'AND p.username = $2' : ''}
+          AND CONCAT('You created the project \"', p.name, '\".') ILIKE $4
 
         UNION ALL
 
@@ -183,8 +223,10 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         FROM domains d
         LEFT JOIN users u ON d.username = u.username AND d.orgid = u.orgid
         WHERE d.created_at IS NOT NULL
+          AND d.created_at >= $3
           AND d.orgid = $1
           ${userID ? 'AND d.username = $2' : ''}
+          AND CONCAT('You added the domain \"', d.domain_name, '\".') ILIKE $4
 
         UNION ALL
 
@@ -197,8 +239,10 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         LEFT JOIN users u ON d.username = u.username AND d.orgid = u.orgid
         WHERE d.updated_at IS NOT NULL
           AND d.updated_at != d.created_at
+          AND d.updated_at >= $3
           AND d.orgid = $1
           ${userID ? 'AND d.username = $2' : ''}
+          AND CONCAT('You updated the domain \"', d.domain_name, '\".') ILIKE $4
 
         UNION ALL
 
@@ -211,8 +255,10 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         JOIN projects p ON d.project_id = p.project_id
         LEFT JOIN users u ON d.username = u.username AND d.orgid = u.orgid
         WHERE d.created_at IS NOT NULL
+          AND d.created_at >= $3
           AND d.orgid = $1
           ${userID ? 'AND d.username = $2' : ''}
+          AND CONCAT('You created the deployment \"', d.deployment_id, '\" for the project \"', p.name, '\".') ILIKE $4
 
         UNION ALL
 
@@ -226,8 +272,10 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         LEFT JOIN users u ON d.username = u.username AND d.orgid = u.orgid
         WHERE d.updated_at IS NOT NULL
           AND d.updated_at != d.created_at
+          AND d.updated_at >= $3
           AND d.orgid = $1
           ${userID ? 'AND d.username = $2' : ''}
+          AND CONCAT('You updated the deployment \"', d.deployment_id, '\" for the project \"', p.name, '\".') ILIKE $4
 
         UNION ALL
 
@@ -239,8 +287,10 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         FROM deployment_logs dl
         LEFT JOIN users u ON dl.username = u.username AND dl.orgid = u.orgid
         WHERE dl.timestamp IS NOT NULL
+          AND dl.timestamp >= $3
           AND dl.orgid = $1
           ${userID ? 'AND dl.username = $2' : ''}
+          AND CONCAT('You performed the action \"', dl.action, '\" on the project \"', dl.project_name, '\".') ILIKE $4
 
         UNION ALL
 
@@ -252,8 +302,10 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         FROM permission_logs pl
         LEFT JOIN users u ON pl.changed_by = u.username AND pl.orgid = u.orgid
         WHERE pl.timestamp IS NOT NULL
+          AND pl.timestamp >= $3
           AND pl.orgid = $1
           ${userID ? 'AND pl.changed_by = $2' : ''}
+          AND CONCAT('You changed the permission \"', pl.permission, '\" from \"', pl.old_value, '\" to \"', pl.new_value, '\" for the user \"', pl.username, '\".') ILIKE $4
 
         UNION ALL
 
@@ -264,8 +316,10 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
           u.image AS user_image
         FROM users u
         WHERE u.created_at IS NOT NULL
+          AND u.created_at >= $3
           AND u.orgid = $1
           ${userID ? 'AND u.username = $2' : ''}
+          AND CONCAT('You created the user account \"', u.username, '\".') ILIKE $4
 
         UNION ALL
 
@@ -277,8 +331,10 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         FROM access_requests ar
         LEFT JOIN users u ON ar.request_username = u.username AND ar.request_orgid = u.orgid
         WHERE ar.request_timestamp IS NOT NULL
+          AND ar.request_timestamp >= $3
           AND ar.request_orgid = $1
           ${userID ? 'AND ar.request_username = $2' : ''}
+          AND CONCAT('You submitted an access request with the status \"', ar.request_status, '\" for the organization \"', ar.request_orgid, '\".') ILIKE $4
 
         UNION ALL
 
@@ -290,17 +346,18 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         FROM export_logs el
         LEFT JOIN users u ON el.username = u.username AND el.orgid = u.orgid
         WHERE el.timestamp IS NOT NULL
+          AND el.timestamp >= $3
           AND el.orgid = $1
           ${userID ? 'AND el.username = $2' : ''}
+          AND CONCAT('You exported the dataset \"', el.dataset, '\" as the file type \"', el.file_type, '\".') ILIKE $4
       ) AS activity_log
       WHERE activity_description IS NOT NULL
       ORDER BY activity_timestamp DESC
-      LIMIT $3 OFFSET $4
     `;
 
     const queryParams = userID
-      ? [organizationID, userID, limit, offset]
-      : [organizationID, limit, offset];
+      ? [organizationID, userID, thirtyDaysAgo, `%${search}%`]
+      : [organizationID, thirtyDaysAgo, `%${search}%`];
     const activityLogInfo = await pool.query(activityLogQuery, queryParams);
     const activities = activityLogInfo.rows.map(row => ({
       timestamp: row.activity_timestamp.toISOString(), 
@@ -330,7 +387,7 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
 
   try {
     if (!domain || (domain !== 'all_domains' && !domain)) {
-      return res.status(400).json({ message: 'domain is required' });
+      return res.status(400).json({ message: 'Error: domain is required' });
     }
     if (!startDate || !endDate) {
       return res.status(400).json({ message: 'startDate and endDate are required' });
@@ -385,21 +442,25 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
         COALESCE(SUM(er.count), 0) AS total_edge_requests,
         COALESCE(AVG(er.avg_duration), 0) AS avg_edge_duration
       FROM metrics_daily md
+      INNER JOIN domains d ON md.domain = d.domain_name
       LEFT JOIN (
         SELECT
           DATE_TRUNC($1, event_time) AS period,
           domain,
           COUNT(*) AS count,
           AVG(duration) AS avg_duration
-        FROM metrics_edge_requests
+        FROM metrics_edge_requests mer
+        INNER JOIN domains d2 ON mer.domain = d2.domain_name
         WHERE event_time >= $2
           AND event_time <= $3
-          ${domain !== 'all_domains' ? 'AND domain = $' + (4) : ''}
-        GROUP BY DATE_TRUNC($1, event_time), domain
+          AND d2.status = 'active'
+          ${domain !== 'all_domains' ? 'AND mer.domain = $' + (4) : ''}
+        GROUP BY DATE_TRUNC($1, event_time), mer.domain
       ) er ON DATE_TRUNC($1, md.day) = er.period
           AND (md.domain = er.domain OR er.domain IS NULL)
       WHERE md.day >= $2
         AND md.day <= $3
+        AND d.status = 'active'
     `;
     const queryParams = [dateTrunc, start, end];
 
@@ -436,8 +497,10 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
         md.unique_visitors,
         md.bounce_rate
       FROM metrics_daily md
+      INNER JOIN domains d ON md.domain = d.domain_name
       WHERE md.day >= $1
         AND md.day <= $2
+        AND d.status = 'active'
     `;
     const individualQueryParams = [start, end];
     let individualParamIndex = 3;
@@ -459,12 +522,14 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
       SELECT
         DATE_TRUNC('day', event_time) AS period,
         COUNT(*) AS edge_requests
-      FROM metrics_edge_requests
+      FROM metrics_edge_requests mer
+      INNER JOIN domains d ON mer.domain = d.domain_name
       WHERE event_time >= $1
         AND event_time <= $2
+        AND d.status = 'active'
     `;
     if (domain !== 'all_domains') {
-      edgeQuery += ` AND domain = $${individualParamIndex}`;
+      edgeQuery += ` AND mer.domain = $${individualParamIndex}`;
     }
     edgeQuery += `
       GROUP BY DATE_TRUNC('day', event_time)
@@ -473,6 +538,7 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
 
     const edgeResult = await pool.query(edgeQuery, individualQueryParams);
     const edgeData = edgeResult.rows;
+
     const pageViewsData = dateRange.map(date => {
       const entry = individualMetricsData.find(row => row.period.toISOString().split('T')[0] === date);
       return {
@@ -512,12 +578,23 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
       edgeRequests: edgeRequestsData
     };
 
-    const message = metricsInfo.length > 0 || Object.values(individualMetrics).some(metric => metric.some(entry => entry.value > 0))
-      ? 'Aggregate and individual metrics retrieved successfully.'
-      : 'No metrics found for the specified criteria.';
+    const hasData = metricsInfo.length > 0 || Object.values(individualMetrics).some(metric => metric.some(entry => entry.value > 0));
+
+    if (!hasData && domain !== 'all_domains') {
+      return res.status(404).json({
+        message: `No metrics found for the domain ${domain} in the specified date range.`,
+        data: [],
+        individualMetrics: {
+          pageViews: [],
+          uniqueVisitors: [],
+          bounceRate: [],
+          edgeRequests: []
+        }
+      });
+    }
 
     return res.status(200).json({
-      message,
+      message: hasData ? 'Aggregate and individual metrics retrieved successfully.' : 'No metrics found for the specified criteria.',
       data: metricsInfo,
       individualMetrics 
     });
@@ -529,50 +606,6 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
     next(error);
   }
 });
-
-router.post('/auth/check', async (req, res) => {
-  try {
-      const { domain } = req.body;
-      const visitorId = req.cookies.sf_visitor_id || req.headers['x-visitor-id'];
-
-      const domainResult = await pool.query(
-          'SELECT deployment_protection, orgid FROM domains WHERE domain_name = $1',
-          [domain.split('.')[0]]
-      );
-
-      if (domainResult.rows.length === 0) {
-          return res.status(404).json({ error: 'Domain not found' });
-      }
-
-      const { deployment_protection, orgid } = domainResult.rows[0];
-
-      if (!deployment_protection) {
-          return res.json({ protected: false, isAuthenticated: true });
-      }
-
-      const userResult = await pool.query(
-          'SELECT orgid FROM users WHERE github_id = $1 OR github_username = $1',
-          [visitorId]
-      );
-
-      if (userResult.rows.length === 0 || userResult.rows[0].orgid !== orgid) {
-          const signinResult = await pool.query(
-              'SELECT orgid FROM signin_logs WHERE orgid = $1 AND signin_timestamp > NOW() - INTERVAL \'1 hour\' LIMIT 1',
-              [orgid]
-          );
-
-          if (signinResult.rows.length === 0) {
-              return res.status(403).json({ protected: true, isAuthenticated: false });
-          }
-      }
-
-      return res.json({ protected: true, isAuthenticated: true });
-  } catch (error) {
-      res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-
 
 module.exports = router;
 

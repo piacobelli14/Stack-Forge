@@ -22,6 +22,7 @@ const {
 } = require("@aws-sdk/client-ecr");
 const {
     ECSClient,
+    ListServicesCommand,
     DescribeTasksCommand,
     StopTaskCommand, 
     RegisterTaskDefinitionCommand,
@@ -33,7 +34,7 @@ const {
     CreateServiceCommand,
     DeleteServiceCommand,
     UpdateServiceCommand,
-    waitUntilServicesStable,
+    waitUntilServicesStable
 } = require("@aws-sdk/client-ecs");
 const {
     ElasticLoadBalancingV2Client,
@@ -75,9 +76,11 @@ const {
 } = require("@aws-sdk/client-cloudwatch-logs");
 const {
     ACMClient,
+    ListCertificatesCommand,
     RequestCertificateCommand,
     DescribeCertificateCommand,
-    DeleteCertificateCommand
+    DeleteCertificateCommand, 
+    RemoveListenerCertificatesCommand
 } = require("@aws-sdk/client-acm");
 const {
     CloudFrontClient,
@@ -856,20 +859,20 @@ class DeployManager {
         if (!repository?.trim()) throw new Error("repository is required");
         if (!githubAccessToken?.trim()) throw new Error("GitHub token missing");
         await this.validateGitHubToken(githubAccessToken, repository);
-
+    
         const repoUrl = /^https?:\/|^git@/.test(repository)
             ? repository
             : `https://github.com/${repository.replace(/^\/|\/$/g, "")}.git`;
-
-        const rootDir  = rootDirectory || ".";
+    
+        const rootDir = rootDirectory || ".";
         const imageTag = subdomain
             ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(
                   repository, branch, githubAccessToken)}`
             : "latest";
-
+    
         const repoUri = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}`;
         const cbName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
-
+    
         const buildspec = {
             version: "0.2",
             env: { variables: { DOCKER_BUILDKIT: "1" } },
@@ -889,6 +892,9 @@ class DeployManager {
                 build: { commands: ['echo "No extra app build"'] },
                 post_build: {
                     commands: [
+                        `cd $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
+                        'echo "Injecting monitoring script into HTML files"',
+                        `find . -type f -name '*.html' -exec sed -i 's|</head>|<script src="http://localhost:3000/z-analytics-inject.js"></script></head>|g' {} \\;`,
                         'cat > Dockerfile <<EOF\n' +
                         'FROM node:20-slim AS deps\n' +
                         'WORKDIR /app\n' +
@@ -910,26 +916,26 @@ class DeployManager {
                         '--cache-from=$REPO_URI:latest ' +
                         '-t $REPO_URI:$IMAGE_TAG .',
                         'docker push $REPO_URI:$IMAGE_TAG',
-                        'docker tag  $REPO_URI:$IMAGE_TAG $REPO_URI:latest',
+                        'docker tag $REPO_URI:$IMAGE_TAG $REPO_URI:latest',
                         'docker push $REPO_URI:latest'
                     ]
                 }
             },
             artifacts: { files: [], "discard-paths": "yes" }
         };
-
+    
         const envVars = [
-            { name: "ROOT_DIRECTORY", value: rootDir,  type: "PLAINTEXT" },
-            { name: "REPO_URI",       value: repoUri,  type: "PLAINTEXT" },
-            { name: "AWS_REGION",     value: process.env.AWS_REGION, type: "PLAINTEXT" },
-            { name: "GITHUB_TOKEN",   value: githubAccessToken, type: "PLAINTEXT" },
-            { name: "REPO_URL",       value: repoUrl,  type: "PLAINTEXT" },
-            { name: "REPO_BRANCH",    value: branch,   type: "PLAINTEXT" },
-            { name: "IMAGE_TAG",      value: imageTag, type: "PLAINTEXT" },
+            { name: "ROOT_DIRECTORY", value: rootDir, type: "PLAINTEXT" },
+            { name: "REPO_URI", value: repoUri, type: "PLAINTEXT" },
+            { name: "AWS_REGION", value: process.env.AWS_REGION, type: "PLAINTEXT" },
+            { name: "GITHUB_TOKEN", value: githubAccessToken, type: "PLAINTEXT" },
+            { name: "REPO_URL", value: repoUrl, type: "PLAINTEXT" },
+            { name: "REPO_BRANCH", value: branch, type: "PLAINTEXT" },
+            { name: "IMAGE_TAG", value: imageTag, type: "PLAINTEXT" },
             { name: "DOCKER_HUB_USERNAME", value: process.env.DOCKER_HUB_USERNAME || "", type: "PLAINTEXT" },
             { name: "DOCKER_HUB_PASSWORD", value: process.env.DOCKER_HUB_PASSWORD || "", type: "PLAINTEXT" }
         ];
-
+    
         const params = {
             name: cbName,
             source: { type: "NO_SOURCE", buildspec: JSON.stringify(buildspec) },
@@ -950,7 +956,7 @@ class DeployManager {
                 }
             }
         };
-
+    
         try {
             await codeBuildClient.send(new CreateProjectCommand(params));
         } catch (e) {
@@ -959,18 +965,17 @@ class DeployManager {
             else
                 throw new Error(`Failed to create CodeBuild project: ${e.message}.`);
         }
-
+    
         if (subdomain) {
             await pool.query(
                 `UPDATE domains
                    SET image_tag = $1
                  WHERE domain_name = $2
-                   AND project_id  = (SELECT project_id FROM projects WHERE name = $3)`,
+                   AND project_id = (SELECT project_id FROM projects WHERE name = $3)`,
                 [imageTag, subdomain, projectName]
             );
         }
     }
-
 
     async startCodeBuild({
         projectName,
@@ -1353,17 +1358,17 @@ class DeployManager {
         deploymentProtection = false
     }) {
         const deploymentId = uuidv4();
-        const timestamp = new Date().toISOString();
+        const timestamp = new Date().toUTCString();
         const logDir = path.join("/tmp", `${projectName}-${uuidv4()}`, "logs");
         fs.mkdirSync(logDir, { recursive: true });
         let projectID;
         let isNewProject = false;
         const domainIds = {};
-
+    
         if (!Array.isArray(domainNames) || domainNames.length === 0) {
             throw new Error("domainNames must be a non-empty array of subdomains.");
         }
-
+    
         const tokenResult = await pool.query(
             "SELECT github_access_token FROM users WHERE username = $1",
             [userID]
@@ -1372,7 +1377,7 @@ class DeployManager {
             throw new Error("GitHub account not connected.");
         }
         const githubAccessToken = tokenResult.rows[0].github_access_token;
-
+    
         let commitSha;
         try {
             commitSha = await this.getLatestCommitSha(repository, branch, githubAccessToken);
@@ -1383,12 +1388,12 @@ class DeployManager {
             );
             throw error;
         }
-
+    
         const existingProjRes = await pool.query(
             "SELECT project_id FROM projects WHERE orgid = $1 AND username = $2 AND name = $3",
             [organizationID, userID, projectName]
         );
-
+    
         if (existingProjRes.rows.length > 0) {
             projectID = existingProjRes.rows[0].project_id;
             isNewProject = false;
@@ -1396,7 +1401,7 @@ class DeployManager {
             isNewProject = true;
             projectID = uuidv4();
         }
-
+    
         const taskDefArns = {};
         const urls = [];
         for (const domainName of domainNames) {
@@ -1423,7 +1428,7 @@ class DeployManager {
                     };
                 }
             }
-
+    
             if (!isNewProject) {
                 const existingDomainResult = await pool.query(
                     "SELECT domain_id FROM domains WHERE project_id = $1 AND domain_name = $2",
@@ -1491,7 +1496,7 @@ class DeployManager {
                 domainId = uuidv4();
                 domainIds[subdomain] = domainId;
             }
-
+    
             await this.ensureECRRepo(projectName);
             await this.createCodeBuildProject({
                 projectName,
@@ -1503,7 +1508,7 @@ class DeployManager {
                 buildCommand: domainDetails.buildCommand,
                 githubAccessToken
             });
-
+    
             const { imageUri } = await this.startCodeBuild({
                 projectName,
                 subdomain,
@@ -1512,7 +1517,7 @@ class DeployManager {
                 logDir,
                 githubAccessToken
             });
-
+    
             const taskDefArn = await this.createTaskDef({
                 projectName,
                 subdomain,
@@ -1520,9 +1525,9 @@ class DeployManager {
                 envVars: domainDetails.envVars
             });
             taskDefArns[subdomain] = taskDefArn;
-
+    
             const targetGroupArn = await this.ensureTargetGroup(projectName, subdomain);
-
+    
             await this.updateDNSRecord(projectName, [subdomain], targetGroupArn);
             await this.createOrUpdateService({
                 projectName,
@@ -1536,7 +1541,7 @@ class DeployManager {
                  WHERE deployment_id = $5`,
                 [domainDetails.rootDirectory, domainDetails.buildCommand, domainDetails.installCommand, JSON.stringify(domainDetails.envVars), deploymentId]
             );
-
+    
             if (subdomain !== projectName) {
                 await pool.query(
                     `UPDATE domains
@@ -1562,10 +1567,10 @@ class DeployManager {
                 );
             }
         }
-
+    
         try {
             await this.updateDNSRecord(projectName, domainNames);
-
+    
             const records = {};
             for (const domainName of domainNames) {
                 const fqdn = `${domainName}.stackforgeengine.com`;
@@ -1592,7 +1597,7 @@ class DeployManager {
                         });
                 } catch (error) { }
             }
-
+    
             if (isNewProject) {
                 await pool.query(
                     `INSERT INTO projects 
@@ -1616,7 +1621,7 @@ class DeployManager {
                         null
                     ]
                 );
-
+    
                 for (const domainName of domainNames) {
                     const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
                     const domainId = domainIds[subdomain];
@@ -1647,7 +1652,7 @@ class DeployManager {
                         ]
                     );
                 }
-
+    
                 await pool.query(
                     `INSERT INTO deployments 
                      (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
@@ -1673,7 +1678,7 @@ class DeployManager {
                         JSON.stringify(envVars)
                     ]
                 );
-
+    
                 await pool.query(
                     `INSERT INTO deployment_logs 
                      (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
@@ -1690,12 +1695,12 @@ class DeployManager {
                     ]
                 );
             } else {
-                const now = new Date().toISOString();
+                const now = new Date().toUTCString();
                 await pool.query(
                     "UPDATE deployments SET status = $1, updated_at = $2 WHERE project_id = $3 AND status = $4",
                     ["inactive", now, projectID, "active"]
                 );
-
+    
                 await pool.query(
                     `INSERT INTO deployments 
                      (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
@@ -1721,7 +1726,7 @@ class DeployManager {
                         JSON.stringify(envVars)
                     ]
                 );
-
+    
                 for (const domainName of domainNames) {
                     const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
                     await pool.query(
@@ -1730,7 +1735,7 @@ class DeployManager {
                     );
                 }
             }
-
+    
             await this.recordBuildLogs(organizationID, userID, deploymentId, logDir);
             await this.recordRuntimeLogs(organizationID, userID, deploymentId, projectName);
             return { urls, deploymentId, logPath: logDir, taskDefArns };
@@ -1773,7 +1778,7 @@ class DeployManager {
         }
         onData(`Starting deployment for project: ${projectName}\n`);
         const deploymentId = uuidv4();
-        const timestamp = new Date().toISOString();
+        const timestamp = new Date().toUTCString();
         const logDir = path.join("/tmp", `${projectName}-${uuidv4()}`, "logs");
         try {
             fs.mkdirSync(logDir, { recursive: true });
@@ -1785,12 +1790,12 @@ class DeployManager {
         let projectID;
         let isNewProject = false;
         const domainIds = {};
-
+    
         if (!Array.isArray(domainNames) || domainNames.length === 0) {
             onData(`Error: domainNames must be a non-empty array\n`);
             throw new Error("domainNames must be a non-empty array of subdomains.");
         }
-
+    
         const tokenResult = await pool.query(
             "SELECT github_access_token FROM users WHERE username = $1",
             [userID]
@@ -1801,7 +1806,7 @@ class DeployManager {
         }
         const githubAccessToken = tokenResult.rows[0].github_access_token;
         onData(`GitHub access token retrieved successfully\n`);
-
+    
         let commitSha;
         try {
             commitSha = await this.getLatestCommitSha(repository, branch, githubAccessToken);
@@ -1810,7 +1815,7 @@ class DeployManager {
             onData(`Failed to fetch commit SHA: ${error.message}\n`);
             throw error;
         }
-
+    
         try {
             onData(`Checking for existing project: ${projectName}\n`);
             const existingProjResult = await pool.query(
@@ -1830,7 +1835,7 @@ class DeployManager {
             onData(`Error checking project: ${error.message}\n`);
             throw new Error(`Project check failed: ${error.message}.`);
         }
-
+    
         const taskDefArns = {};
         const urls = [];
         let streamBuffer = "";
@@ -1839,7 +1844,7 @@ class DeployManager {
             const url = `https://${subdomain}.stackforgeengine.com`;
             urls.push(url);
             let domainId;
-
+    
             if (!isNewProject) {
                 onData(`Checking for existing domain: ${subdomain}\n`);
                 const existingDomainResult = await pool.query(
@@ -1890,11 +1895,11 @@ class DeployManager {
                 domainId = uuidv4();
                 domainIds[subdomain] = domainId;
             }
-
+    
             onData(`Ensuring ECR repository for ${projectName}\n`);
             await this.ensureECRRepo(projectName);
             onData(`ECR repository ensured for ${projectName}\n`);
-
+    
             onData(`Creating/updating CodeBuild project for ${projectName}, subdomain: ${subdomain}\n`);
             await this.createCodeBuildProject({
                 projectName,
@@ -1908,7 +1913,7 @@ class DeployManager {
                 githubAccessToken
             });
             onData(`CodeBuild project created/updated for ${projectName}\n`);
-
+    
             onData(`Starting CodeBuild process for subdomain: ${subdomain}\n`);
             const capturingOnData = (chunk) => {
                 streamBuffer += chunk;
@@ -1925,7 +1930,7 @@ class DeployManager {
                 capturingOnData
             );
             onData(`Docker image pushed to ${imageUri}\n`);
-
+    
             onData(`Registering ECS task definition for subdomain: ${subdomain}\n`);
             const taskDefArn = await this.createTaskDef({
                 projectName,
@@ -1935,15 +1940,15 @@ class DeployManager {
             });
             taskDefArns[subdomain] = taskDefArn;
             onData(`ECS task definition registered: ${taskDefArn}\n`);
-
+    
             onData(`Ensuring target group for subdomain: ${subdomain}\n`);
             const targetGroupArn = await this.ensureTargetGroup(projectName, subdomain);
             onData(`Target group ensured: ${targetGroupArn}\n`);
-
+    
             await this.updateDNSRecord(projectName, [subdomain], targetGroupArn);
             onData(`DNS / ALB rule created for ${subdomain}.stackforgeengine.com\n`);
             onData(`Creating/updating ECS service for subdomain: ${subdomain}\n`);
-
+    
             await this.createOrUpdateService({
                 projectName,
                 subdomain,
@@ -1952,7 +1957,7 @@ class DeployManager {
             });
             onData(`ECS service created/updated for ${projectName}\n`);
             onData(`Checking ECS service status for subdomain: ${subdomain}\n`);
-
+    
             try {
                 const serviceDesc = await this.ecs.send(
                     new DescribeServicesCommand({
@@ -1979,12 +1984,12 @@ class DeployManager {
                 onData(`Error checking ECS service status: ${error.message}\n`);
             }
         }
-
+    
         try {
             onData(`Updating DNS records for project ${projectName}\n`);
             await this.updateDNSRecord(projectName, domainNames);
             onData("DNS records updated successfully\n");
-
+    
             const records = {};
             for (const domainName of domainNames) {
                 const fqdn = `${domainName}.stackforgeengine.com`;
@@ -1994,7 +1999,7 @@ class DeployManager {
                 try { const cname = await dns.resolveCname(fqdn); if (cname.length) records[fqdn].push({ type: "CNAME", name: "@", value: cname[0] }); } catch { }
                 try { const mx = await dns.resolveMx(fqdn); if (mx.length) records[fqdn].push({ type: "MX", name: "@", value: mx.map(r => `${r.priority} ${r.exchange}`).join(", ") }); } catch { }
             }
-
+    
             if (isNewProject) {
                 onData(`Creating new project record\n`);
                 await pool.query(
@@ -2020,7 +2025,7 @@ class DeployManager {
                     ]
                 );
                 onData(`Project record created\n`);
-
+    
                 for (const domainName of domainNames) {
                     const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
                     await pool.query(
@@ -2051,7 +2056,7 @@ class DeployManager {
                     );
                     onData(`Domain record created for ${subdomain}\n`);
                 }
-
+    
                 await pool.query(
                     `INSERT INTO deployments 
                      (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
@@ -2095,7 +2100,7 @@ class DeployManager {
                 );
                 onData(`Deployment log created\n`);
             } else {
-                const now = new Date().toISOString();
+                const now = new Date().toUTCString();
                 onData(`Updating deployment status to active\n`);
                 await pool.query(
                     "UPDATE deployments SET status = $1, updated_at = $2 WHERE project_id = $3 AND status = $4",
@@ -2135,7 +2140,7 @@ class DeployManager {
                 }
                 onData(`Deployment status updated\n`);
             }
-
+    
             onData(`Recording build logs\n`);
             await this.recordBuildLogs(organizationID, userID, deploymentId, logDir, streamBuffer);
             onData(`Build logs recorded\n`);
@@ -2185,7 +2190,7 @@ class DeployManager {
                 username,
                 deploymentId,
                 uuidv4(),
-                new Date().toISOString(),
+                new Date().toUTCString(),
                 `s3://${process.env.S3_LOGS_BUCKET_NAME}/build-logs/${deploymentId}`,
                 combined
             ]
@@ -2193,22 +2198,23 @@ class DeployManager {
     }
 
     async recordRuntimeLogs(orgid, username, deploymentId, projectName, subdomain) {
+        const timestamp = new Date().toUTCString();
         try {
             const taskFamily = subdomain
                 ? `${projectName}-${subdomain.replace(/\./g, '-')}`
                 : projectName;
             const logGroupName = `/ecs/${taskFamily}`;
             const logStreamName = `ecs/${projectName}-${deploymentId}`;
-
+    
             await this.ensureLogGroup(logGroupName);
-
+    
             try {
                 await cloudWatchLogsClient.send(new CreateLogStreamCommand({
                     logGroupName,
                     logStreamName
                 }));
-            } catch (error) { }
-
+            } catch (error) {}
+    
             let events = [];
             for (let attempt = 1; attempt <= 5; attempt++) {
                 try {
@@ -2227,13 +2233,13 @@ class DeployManager {
                     }
                 }
             }
-
+    
             const logMessages = events.map(e => ({ timestamp: e.timestamp, message: e.message }));
             for (const log of logMessages) {
-                if (log.message.includes('200 OK')) { httpStatus = '200'; break; }
-                if (log.message.includes('500 Internal Server Error')) { httpStatus = '500'; break; }
+                if (log.message.includes('200 OK')) break;
+                if (log.message.includes('500 Internal Server Error')) break;
             }
-
+    
             const runtimeLogPath = `runtime-logs/${deploymentId}/${uuidv4()}.log`;
             const logContent = JSON.stringify(logMessages, null, 2);
             try {
@@ -2242,17 +2248,19 @@ class DeployManager {
                     Key: runtimeLogPath,
                     Body: logContent
                 }));
-            } catch (error) { }
-
+            } catch (error) {}
+    
             const logId = uuidv4();
             await pool.query(`
-                INSERT INTO runtime_logs (orgid, username, deployment_id, build_log_id, timestamp, runtime_messages, runtime_path) 
-                VALUES ($1, $2, $3, $4, NOW(), $5, $6)
+                INSERT INTO runtime_logs 
+                  (orgid, username, deployment_id, build_log_id, timestamp, runtime_messages, runtime_path)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
             `, [
                 orgid,
                 username,
                 deploymentId,
                 logId,
+                timestamp,
                 JSON.stringify(logMessages),
                 `s3://${process.env.S3_LOGS_BUCKET_NAME}/${runtimeLogPath}`
             ]);
@@ -2260,7 +2268,7 @@ class DeployManager {
             return;
         }
     }
-
+    
     async updateDNSRecord(projectName, subdomains, targetGroupArn = null) {
         const route53Client = new Route53Client({ region: process.env.AWS_REGION });
         const elbClient = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
@@ -2475,7 +2483,7 @@ class DeployManager {
         projectID, deploymentID,
         domainName                    
     }) {
-        const ts = new Date().toISOString();
+        const ts = new Date().toUTCString();
         const depQ = await pool.query(`
         SELECT d.*, p.name AS project_name,
                p.current_deployment, p.previous_deployment
@@ -2489,13 +2497,13 @@ class DeployManager {
         if (!depQ.rowCount) throw new Error("Deployment not found or access denied.");
         const deployment = depQ.rows[0];
         const projectName = deployment.project_name.toLowerCase();
-
+    
         if (!domainName) throw new Error("domainName must be supplied.");
         const dn = domainName.toLowerCase();                   
         const isBase = dn === projectName;
         if (!(isBase || dn.endsWith(`.${projectName}`)))
-            throw new Error(`Domain “${domainName}” does not belong to project “${projectName}”.`);
-
+            throw new Error(`Domain “${domainName}” does not belong to project “${projectName}.`);
+    
         const domQ = await pool.query(`
         SELECT domain_id, deployment_id AS current_deployment
           FROM domains
@@ -2504,15 +2512,15 @@ class DeployManager {
         if (!domQ.rowCount)
             throw new Error(`Domain “${domainName}” is unknown for this project.`);
         const { domain_id: domainId, current_deployment: oldActiveId } = domQ.rows[0];
-
+    
         if (oldActiveId === deploymentID)
             throw new Error(`Deployment ${deploymentID} is already active for ${dn}.`);
-
+    
         const taskDefArn = deployment.task_def_arn ||
             await this.getTaskDefinitionARN(projectName, deploymentID);
         const targetGroupArn = await this.ensureTargetGroup(
             projectName, isBase ? null : dn);
-
+    
         await this.createOrUpdateService({
             projectName,
             subdomain: isBase ? null : dn,
@@ -2520,11 +2528,11 @@ class DeployManager {
             targetGroupArn
         });
         await this.updateDNSRecord(projectName, [dn]);
-
+    
         const client = await pool.connect();
         try {
             await client.query("BEGIN");
-
+    
             if (oldActiveId) {
                 const r1 = await client.query(
                     `UPDATE deployments
@@ -2532,7 +2540,7 @@ class DeployManager {
             WHERE deployment_id=$2 RETURNING deployment_id`,
                     [ts, oldActiveId]);
             }
-
+    
             const r2 = await client.query(
                 `UPDATE deployments
             SET status='active',
@@ -2540,13 +2548,13 @@ class DeployManager {
                 last_deployed_at=$1
           WHERE deployment_id=$2 RETURNING deployment_id`,
                 [ts, deploymentID]);
-
+    
             const r3 = await client.query(
                 `UPDATE domains
             SET deployment_id=$1, updated_at=$2
           WHERE domain_id=$3`,
                 [deploymentID, ts, domainId]);
-
+    
             const r4 = await client.query(
                 `UPDATE projects
             SET previous_deployment=$1,
@@ -2554,26 +2562,26 @@ class DeployManager {
                 updated_at=$3
           WHERE project_id=$4`,
                 [oldActiveId, deploymentID, ts, projectID]);
-
+    
             await client.query(
                 `INSERT INTO deployment_logs
                (orgid,username,project_id,project_name,
                 action,deployment_id,timestamp,ip_address)
          VALUES ($1,$2,$3,$4,'rollback',$5,$6,'127.0.0.1')`,
                 [organizationID, userID, projectID, projectName, deploymentID, ts]);
-
+    
             await client.query("COMMIT");
         } catch (error) {
             await client.query("ROLLBACK");
-            throw e;
+            throw error;
         } finally {
             client.release();
         }
-
+    
         this.recordRuntimeLogs(
             organizationID, userID, deploymentID, projectName, dn
         ); 
-
+    
         return {
             message: `Rolled back ${dn} to deployment ${deploymentID}.`,
             url: `https://${isBase ? projectName : dn}.stackforgeengine.com`,
@@ -2591,17 +2599,21 @@ class DeployManager {
         const ecrClient = new ECRClient({ region: process.env.AWS_REGION });
         const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
         const cloudFrontClient = new CloudFrontClient({ region: process.env.AWS_REGION });
-
+    
+        let client;
         try {
-            const projectResult = await pool.query(
+            client = await pool.connect();
+            await client.query("BEGIN");
+    
+            const projectResult = await client.query(
                 "SELECT * FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
                 [projectID, organizationID, userID]
             );
             if (projectResult.rows.length === 0) {
                 throw new Error("Project not found or access denied.");
             }
-
-            const domainResult = await pool.query(
+    
+            const domainResult = await client.query(
                 "SELECT domain_name, certificate_arn, target_group_arn FROM domains WHERE project_id = $1 AND orgid = $2",
                 [projectID, organizationID]
             );
@@ -2610,50 +2622,68 @@ class DeployManager {
                 certificateArn: row.certificate_arn,
                 targetGroupArn: row.target_group_arn
             }));
-
+    
             const domainsToClean = new Set([
                 `${projectName}.stackforgeengine.com`,
                 `*.${projectName}.stackforgeengine.com`,
                 ...domains.map(d => d.name)
             ]);
-
+    
             try {
-                const serviceName = domainName && domainName !== projectName ? `${projectName}-${domainName}` : projectName;
-                const tasksResp = await ecsClient.send(new ListTasksCommand({
-                    cluster: process.env.ECS_CLUSTER_ARN,
-                    serviceName: serviceName
+                const servicesResp = await ecsClient.send(new ListServicesCommand({
+                    cluster: "stackforge-cluster"
                 }));
-                for (const taskArn of tasksResp.taskArns || []) {
-                    await ecsClient.send(new StopTaskCommand({
-                        cluster: process.env.ECS_CLUSTER_ARN,
-                        task: taskArn,
-                        reason: `Stopping task for project ${projectName} deletion`
-                    }));
+                const servicesToDelete = servicesResp.serviceArns.filter(arn =>
+                    arn.toLowerCase().includes(projectName.toLowerCase())
+                );
+                for (const serviceArn of servicesToDelete) {
+                    const serviceName = serviceArn.split('/').pop();
+                    try {
+                        const tasksResp = await ecsClient.send(new ListTasksCommand({
+                            cluster: "stackforge-cluster",
+                            serviceName
+                        }));
+                        for (const taskArn of tasksResp.taskArns || []) {
+                            await ecsClient.send(new StopTaskCommand({
+                                cluster: "stackforge-cluster",
+                                task: taskArn,
+                                reason: `Stopping task for project ${projectName} deletion`
+                            }));
+                        }
+    
+                        await ecsClient.send(new DeleteServiceCommand({
+                            cluster: "stackforge-cluster",
+                            service: serviceName,
+                            force: true
+                        }));
+    
+                        const taskDefsResp = await ecsClient.send(new ListTaskDefinitionsCommand({
+                            familyPrefix: serviceName
+                        }));
+                        for (const taskDefArn of taskDefsResp.taskDefinitionArns || []) {
+                            await ecsClient.send(new DeregisterTaskDefinitionCommand({
+                                taskDefinition: taskDefArn
+                            }));
+                        }
+                    } catch (error) {}
                 }
-
-                await ecsClient.send(new DeleteServiceCommand({
-                    cluster: process.env.ECS_CLUSTER_ARN,
-                    service: serviceName,
-                    force: true
-                }));
-
-                const taskDefsResp = await ecsClient.send(new ListTaskDefinitionsCommand({
-                    familyPrefix: serviceName
-                }));
-                for (const taskDefArn of taskDefsResp.taskDefinitionArns || []) {
-                    await ecsClient.send(new DeregisterTaskDefinitionCommand({
-                        taskDefinition: taskDefArn
-                    }));
-                }
-            } catch (error) { }
-
+            } catch (error) {}
+    
             try {
-                await ecrClient.send(new DeleteRepositoryCommand({
-                    repositoryName: projectName,
-                    force: true
-                }));
-            } catch (error) { }
-
+                const reposResp = await ecrClient.send(new DescribeRepositoriesCommand({}));
+                const reposToDelete = reposResp.repositories.filter(repo =>
+                    repo.repositoryName.toLowerCase().includes(projectName.toLowerCase())
+                );
+                for (const repo of reposToDelete) {
+                    try {
+                        await ecrClient.send(new DeleteRepositoryCommand({
+                            repositoryName: repo.repositoryName,
+                            force: true
+                        }));
+                    } catch (error) {}
+                }
+            } catch (error) {}
+    
             try {
                 const changes = [];
                 for (const domain of domainsToClean) {
@@ -2680,37 +2710,22 @@ class DeployManager {
                         ChangeBatch: { Changes: changes }
                     }));
                 }
-            } catch (error) { }
-
-            const listenerArns = [process.env.ALB_LISTENER_ARN_HTTP, process.env.ALB_LISTENER_ARN_HTTPS];
-            for (const listenerArn of listenerArns) {
-                try {
-                    const rulesResp = await elbv2Client.send(new DescribeRulesCommand({
-                        ListenerArn: listenerArn
-                    }));
-                    for (const rule of rulesResp.Rules) {
-                        if (rule.IsDefault) {
-                            continue;
-                        }
-                        const isProjectRule = rule.Conditions.some(c =>
-                            c.Field === "host-header" &&
-                            (domainsToClean.has(c.Values[0]) || c.Values.some(v => domainsToClean.has(v)))
-                        ) || rule.Actions.some(a =>
-                            a.Type === "forward" &&
-                            domains.map(d => d.targetGroupArn).includes(a.TargetGroupArn)
-                        );
-                        if (isProjectRule) {
-                            await elbv2Client.send(new DeleteRuleCommand({
-                                RuleArn: rule.RuleArn
-                            }));
-                        }
-                    }
-                } catch (error) { }
-            }
-
+            } catch (error) {}
+    
             const certificateArns = [...new Set(domains
                 .map(d => d.certificateArn)
                 .filter(arn => arn))];
+            try {
+                const certList = await acmClient.send(new ListCertificatesCommand({
+                    CertificateStatuses: ['ISSUED', 'PENDING_VALIDATION']
+                }));
+                for (const cert of certList.CertificateSummaryList || []) {
+                    if (cert.DomainName.toLowerCase().includes(projectName.toLowerCase())) {
+                        certificateArns.push(cert.CertificateArn);
+                    }
+                }
+            } catch (error) {}
+    
             for (const certArn of certificateArns) {
                 try {
                     const maxDetachRetries = 5;
@@ -2725,53 +2740,27 @@ class DeployManager {
                             const certsResp = await elbv2Client.send(new DescribeListenerCertificatesCommand({
                                 ListenerArn: listener.ListenerArn
                             }));
-                            const listenerCerts = certsResp.Certificates?.map(c => c.CertificateArn) || [];
-                            if (listenerCerts.includes(certArn)) {
+                            if (certsResp.Certificates?.some(c => c.CertificateArn === certArn)) {
                                 foundCert = true;
-                                await elbv2Client.send(new DeleteListenerCertificatesCommand({
+                                await elbv2Client.send(new RemoveListenerCertificatesCommand({
                                     ListenerArn: listener.ListenerArn,
                                     Certificates: [{ CertificateArn: certArn }]
                                 }));
                             }
                         }
-                        if (!foundCert) {
-                            isDetached = true;
-                            break;
+                        isDetached = !foundCert;
+                        if (!isDetached) {
+                            await new Promise(resolve => setTimeout(resolve, 15000));
+                            detachRetryCount++;
                         }
-                        await new Promise(resolve => setTimeout(resolve, 15000));
-                        detachRetryCount++;
                     }
-
-                    try {
-                        const distributions = await cloudFrontClient.send(new ListDistributionsCommand({}));
-                        const cloudFrontUsage = distributions.DistributionList?.Items?.filter(dist =>
-                            dist.ViewerCertificate?.ACMCertificateArn === certArn
-                        ) || [];
-                        if (cloudFrontUsage.length > 0) {
-                            continue;
-                        }
-                    } catch (error) { }
-
-                    try {
-                        const loadBalancersResp = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
-                        for (const lb of loadBalancersResp.LoadBalancers || []) {
-                            const lbListeners = await elbv2Client.send(new DescribeListenersCommand({
-                                LoadBalancerArn: lb.LoadBalancerArn
-                            }));
-                            for (const listener of lbListeners.Listeners || []) {
-                                const certsResp = await elbv2Client.send(new DescribeListenerCertificatesCommand({
-                                    ListenerArn: listener.ListenerArn
-                                }));
-                                if (certsResp.Certificates?.some(c => c.CertificateArn === certArn)) {
-                                    await elbv2Client.send(new DeleteListenerCertificatesCommand({
-                                        ListenerArn: listener.ListenerArn,
-                                        Certificates: [{ CertificateArn: certArn }]
-                                    }));
-                                }
-                            }
-                        }
-                    } catch (error) { }
-
+    
+                    const distributions = await cloudFrontClient.send(new ListDistributionsCommand({}));
+                    if (distributions.DistributionList?.Items?.some(dist =>
+                        dist.ViewerCertificate?.ACMCertificateArn === certArn)) {
+                        continue;
+                    }
+    
                     const maxRetries = 5;
                     let retryCount = 0;
                     while (retryCount < maxRetries) {
@@ -2795,117 +2784,154 @@ class DeployManager {
                             break;
                         }
                     }
-                } catch (error) { }
+                } catch (error) {}
             }
-
+    
             try {
-                const projectNames = [
-                    projectName,
-                    ...(domainName && domainName !== projectName ? [`${projectName}-${domainName}`] : []),
-                    ...domains.map(d => d.name.split(".")[0])
-                ];
                 const listProjectsResp = await codeBuildClient.send(new ListProjectsCommand({}));
                 const projectsToDelete = listProjectsResp.projects.filter(p =>
-                    projectNames.some(name => p === name || p.startsWith(`${name}-`))
+                    p.toLowerCase().includes(projectName.toLowerCase())
                 );
                 for (const project of projectsToDelete) {
-                    await codeBuildClient.send(new DeleteProjectCommand({ name: project }));
+                    try {
+                        await codeBuildClient.send(new DeleteProjectCommand({ name: project }));
+                    } catch (error) {}
                 }
-            } catch (error) { }
-
-            const logGroups = [
-                `/ecs/${projectName}`,
-                `/aws/codebuild/${projectName}`,
-                ...(domainName && domainName !== projectName ? [`/ecs/${projectName}-${domainName}`, `/aws/codebuild/${projectName}-${domainName}`] : []),
-                ...domains.map(d => `/ecs/${d.name.split(".")[0]}`),
-                ...domains.map(d => `/aws/codebuild/${d.name.split(".")[0]}`)
-            ];
-            for (const logGroup of new Set(logGroups)) {
-                try {
-                    await cloudWatchLogsClient.send(new DeleteLogGroupCommand({ logGroupName: logGroup }));
-                } catch (error) { }
-            }
-
-            const targetGroupArns = domains
+            } catch (error) {}
+    
+            try {
+                const logGroupsResp = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({}));
+                const logGroupsToDelete = logGroupsResp.logGroups.filter(group =>
+                    group.logGroupName.toLowerCase().includes(projectName.toLowerCase())
+                );
+                for (const logGroup of logGroupsToDelete) {
+                    try {
+                        await cloudWatchLogsClient.send(new DeleteLogGroupCommand({
+                            logGroupName: logGroup.logGroupName
+                        }));
+                    } catch (error) {}
+                }
+            } catch (error) {}
+    
+            const listenerArns = [process.env.ALB_LISTENER_ARN_HTTP, process.env.ALB_LISTENER_ARN_HTTPS].filter(Boolean);
+            let targetGroupArns = domains
                 .map(d => d.targetGroupArn)
                 .filter(arn => arn && arn.match(/:targetgroup\/[a-zA-Z0-9-]+\/[a-f0-9]+$/));
-            if (domainName && domainName !== projectName) {
-                targetGroupArns.push(`arn:aws:elasticloadbalancing:${process.env.AWS_REGION}:${process.env.AWS_ACCOUNT_ID}:targetgroup/${projectName}-${domainName}/default`);
+            try {
+                const tgResp = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
+                targetGroupArns.push(...tgResp.TargetGroups
+                    .filter(tg => tg.TargetGroupName.toLowerCase().includes(projectName.toLowerCase()))
+                    .map(tg => tg.TargetGroupArn)
+                );
+                targetGroupArns = [...new Set(targetGroupArns)];
+            } catch (error) {}
+    
+            for (const listenerArn of listenerArns) {
+                try {
+                    const rulesResp = await elbv2Client.send(new DescribeRulesCommand({
+                        ListenerArn: listenerArn
+                    }));
+                    for (const rule of rulesResp.Rules) {
+                        if (rule.IsDefault) continue;
+                        const isProjectRule = rule.Conditions.some(c =>
+                            c.Field === "host-header" &&
+                            c.Values.some(v => domainsToClean.has(v) || v.toLowerCase().includes(projectName.toLowerCase()))
+                        ) || rule.Actions.some(a =>
+                            a.Type === "forward" &&
+                            targetGroupArns.includes(a.TargetGroupArn)
+                        );
+                        if (isProjectRule) {
+                            try {
+                                await elbv2Client.send(new DeleteRuleCommand({
+                                    RuleArn: rule.RuleArn
+                                }));
+                            } catch (error) {}
+                        }
+                    }
+                } catch (error) {}
             }
-            for (const tgArn of new Set(targetGroupArns)) {
+    
+            for (const tgArn of targetGroupArns) {
                 try {
                     let isUsedByDefaultRule = false;
                     for (const listenerArn of listenerArns) {
                         const rulesResp = await elbv2Client.send(new DescribeRulesCommand({
                             ListenerArn: listenerArn
                         }));
-                        for (const rule of rulesResp.Rules) {
-                            if (rule.IsDefault && rule.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === tgArn)) {
-                                isUsedByDefaultRule = true;
-                                break;
-                            }
-                        }
-                        if (isUsedByDefaultRule) break;
-                    }
-                    if (isUsedByDefaultRule) continue;
-
-                    for (const listenerArn of listenerArns) {
-                        const rulesResp = await elbv2Client.send(new DescribeRulesCommand({
-                            ListenerArn: listenerArn
-                        }));
-                        for (const rule of rulesResp.Rules) {
-                            if (!rule.IsDefault && rule.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === tgArn)) {
-                                await elbv2Client.send(new DeleteRuleCommand({
-                                    RuleArn: rule.RuleArn
-                                }));
-                            }
+                        if (rulesResp.Rules.some(rule =>
+                            rule.IsDefault && rule.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === tgArn))) {
+                            isUsedByDefaultRule = true;
+                            break;
                         }
                     }
+                    if (isUsedByDefaultRule) {
+                        continue;
+                    }
+    
                     await elbv2Client.send(new DeleteTargetGroupCommand({ TargetGroupArn: tgArn }));
-                } catch (error) { }
+                } catch (error) {}
             }
-
+    
             try {
-                await pool.query(
+                for (const domain of domains.map(d => d.name)) {
+                    await client.query(
+                        "DELETE FROM metrics_events WHERE domain = $1",
+                        [domain]
+                    );
+                    await client.query(
+                        "DELETE FROM metrics_daily WHERE domain = $1",
+                        [domain]
+                    );
+                    await client.query(
+                        "DELETE FROM metrics_edge_requests WHERE domain = $1",
+                        [domain]
+                    );
+                }
+    
+                await client.query(
                     "DELETE FROM deployment_logs WHERE project_id = $1 AND orgid = $2",
                     [projectID, organizationID]
                 );
-                await pool.query(
+                await client.query(
                     "DELETE FROM build_logs WHERE orgid = $1 AND deployment_id IN (SELECT deployment_id FROM deployments WHERE project_id = $2)",
                     [organizationID, projectID]
                 );
-                await pool.query(
+                await client.query(
                     "DELETE FROM runtime_logs WHERE orgid = $1 AND deployment_id IN (SELECT deployment_id FROM deployments WHERE project_id = $2)",
                     [organizationID, projectID]
                 );
-                await pool.query(
+                await client.query(
                     "DELETE FROM deployments WHERE project_id = $1 AND orgid = $2",
                     [projectID, organizationID]
                 );
-                await pool.query(
+                await client.query(
                     "DELETE FROM domains WHERE project_id = $1 AND orgid = $2",
                     [projectID, organizationID]
                 );
-                await pool.query(
+                await client.query(
                     "DELETE FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
                     [projectID, organizationID, userID]
                 );
             } catch (error) {
-                throw new Error(`Failed to delete database records: ${error.message}.`);
+                throw new Error(`Failed to delete database records: ${error.message}`);
             }
-
+    
             try {
-                await pool.query(
+                await client.query(
                     `INSERT INTO deployment_logs 
                      (orgid, username, project_id, project_name, action, timestamp, ip_address) 
                      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                     [organizationID, userID, projectID, projectName, "delete", timestamp, "127.0.0.1"]
                 );
-            } catch (error) { }
-
+            } catch (error) {}
+    
+            await client.query("COMMIT");
             return { message: `Project ${projectName} and all associated resources deleted successfully.` };
         } catch (error) {
-            throw new Error(`Failed to delete project: ${error.message}.`);
+            if (client) await client.query("ROLLBACK");
+            throw new Error(`Failed to delete project: ${error.message}`);
+        } finally {
+            if (client) client.release();
         }
     }
 
@@ -2918,38 +2944,52 @@ class DeployManager {
         const cloudWatchLogsClient = new CloudWatchLogsClient({ region: process.env.AWS_REGION });
         const ecrClient = new ECRClient({ region: process.env.AWS_REGION });
         const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
-
+    
+        let client;
         try {
+            client = await pool.connect();
+            await client.query("BEGIN");
+    
             try {
-                const serviceName = domainName && domainName !== projectName ? `${projectName}-${domainName}` : projectName;
-                const tasksResp = await ecsClient.send(new ListTasksCommand({
-                    cluster: process.env.ECS_CLUSTER_ARN,
-                    serviceName: serviceName
+                const servicesResp = await ecsClient.send(new ListServicesCommand({
+                    cluster: "stackforge-cluster"
                 }));
-                for (const taskArn of tasksResp.taskArns || []) {
-                    await ecsClient.send(new StopTaskCommand({
-                        cluster: process.env.ECS_CLUSTER_ARN,
-                        task: taskArn,
-                        reason: `Stopping task for failed deployment ${deploymentId}`
-                    }));
+                const servicesToDelete = servicesResp.serviceArns.filter(arn =>
+                    arn.includes(projectName)
+                );
+                for (const serviceArn of servicesToDelete) {
+                    const serviceName = serviceArn.split('/').pop();
+                    try {
+                        const tasksResp = await ecsClient.send(new ListTasksCommand({
+                            cluster: "stackforge-cluster",
+                            serviceName
+                        }));
+                        for (const taskArn of tasksResp.taskArns || []) {
+                            await ecsClient.send(new StopTaskCommand({
+                                cluster: "stackforge-cluster",
+                                task: taskArn,
+                                reason: `Stopping task for failed deployment ${deploymentId}.`
+                            }));
+                        }
+    
+                        await ecsClient.send(new DeleteServiceCommand({
+                            cluster: "stackforge-cluster",
+                            service: serviceName,
+                            force: true
+                        }));
+    
+                        const taskDefsResp = await ecsClient.send(new ListTaskDefinitionsCommand({
+                            familyPrefix: serviceName
+                        }));
+                        for (const taskDefArn of taskDefsResp.taskDefinitionArns) {
+                            await ecsClient.send(new DeregisterTaskDefinitionCommand({
+                                taskDefinition: taskDefArn
+                            }));
+                        }
+                    } catch (error) {}
                 }
-
-                await ecsClient.send(new DeleteServiceCommand({
-                    cluster: process.env.ECS_CLUSTER_ARN,
-                    service: serviceName,
-                    force: true
-                }));
-
-                const taskDefsResp = await ecsClient.send(new ListTaskDefinitionsCommand({
-                    familyPrefix: serviceName
-                }));
-                for (const taskDefArn of taskDefsResp.taskDefinitionArns || []) {
-                    await ecsClient.send(new DeregisterTaskDefinitionCommand({
-                        taskDefinition: taskDefArn
-                    }));
-                }
-            } catch (error) { }
-
+            } catch (error) {}
+    
             try {
                 const domainFqdn = domainName.includes('.') ? domainName : `${domainName}.stackforgeengine.com`;
                 const recordName = domainFqdn.endsWith(".") ? domainFqdn : `${domainFqdn}.`;
@@ -2973,9 +3013,76 @@ class DeployManager {
                         }
                     }));
                 }
-            } catch (error) { }
-
-            const listenerArns = [process.env.ALB_LISTENER_ARN_HTTP, process.env.ALB_LISTENER_ARN_HTTPS];
+            } catch (error) {}
+    
+            const certificateArns = [certificateArn].filter(arn => arn);
+            try {
+                const certList = await acmClient.send(new ListCertificatesCommand({}));
+                for (const cert of certList.CertificateSummaryList || []) {
+                    if (cert.DomainName.includes(projectName)) {
+                        certificateArns.push(cert.CertificateArn);
+                    }
+                }
+            } catch (error) {}
+    
+            for (const certArn of certificateArns) {
+                try {
+                    const listenersResp = await elbv2Client.send(new DescribeListenersCommand({
+                        LoadBalancerArn: process.env.LOAD_BALANCER_ARN
+                    }));
+                    for (const listener of listenersResp.Listeners || []) {
+                        const certsResp = await elbv2Client.send(new DescribeListenerCertificatesCommand({
+                            ListenerArn: listener.ListenerArn
+                        }));
+                        if (certsResp.Certificates?.some(c => c.CertificateArn === certArn)) {
+                            await elbv2Client.send(new RemoveListenerCertificatesCommand({
+                                ListenerArn: listener.ListenerArn,
+                                Certificates: [{ CertificateArn: certArn }]
+                            }));
+                        }
+                    }
+                    await acmClient.send(new DeleteCertificateCommand({
+                        CertificateArn: certArn
+                    }));
+                } catch (error) {}
+            }
+    
+            try {
+                const listProjectsResp = await codeBuildClient.send(new ListProjectsCommand({}));
+                const projectsToDelete = listProjectsResp.projects.filter(p =>
+                    p.includes(projectName)
+                );
+                for (const project of projectsToDelete) {
+                    try {
+                        await codeBuildClient.send(new DeleteProjectCommand({ name: project }));
+                    } catch (error) {}
+                }
+            } catch (error) {}
+    
+            try {
+                const logGroupsResp = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({}));
+                const logGroupsToDelete = logGroupsResp.logGroups.filter(group =>
+                    group.logGroupName.includes(projectName)
+                );
+                for (const logGroup of logGroupsToDelete) {
+                    try {
+                        await cloudWatchLogsClient.send(new DeleteLogGroupCommand({
+                            logGroupName: logGroup.logGroupName
+                        }));
+                    } catch (error) {}
+                }
+            } catch (error) {}
+    
+            const listenerArns = [process.env.ALB_LISTENER_ARN_HTTP, process.env.ALB_LISTENER_ARN_HTTPS].filter(Boolean);
+            let targetGroupArns = [targetGroupArn].filter(arn => arn && arn.match(/:targetgroup\/[a-zA-Z0-9-]+\/[a-f0-9]+$/));
+            try {
+                const tgResp = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
+                targetGroupArns.push(...tgResp.TargetGroups
+                    .filter(tg => tg.TargetGroupName.includes(projectName))
+                    .map(tg => tg.TargetGroupArn)
+                );
+            } catch (error) {}
+    
             for (const listenerArn of listenerArns) {
                 try {
                     const rulesResp = await elbv2Client.send(new DescribeRulesCommand({
@@ -2987,110 +3094,78 @@ class DeployManager {
                             c.Field === "host-header" &&
                             c.Values.includes(`${domainName}.stackforgeengine.com`)
                         ) || rule.Actions.some(a =>
-                            a.Type === "forward" && a.TargetGroupArn === targetGroupArn
+                            a.Type === "forward" && targetGroupArns.includes(a.TargetGroupArn)
                         );
                         if (isProjectRule) {
-                            await elbv2Client.send(new DeleteRuleCommand({
-                                RuleArn: rule.RuleArn
-                            }));
-                        }
-                    }
-                } catch (error) { }
-            }
-
-            if (certificateArn) {
-                try {
-                    const listenersResp = await elbv2Client.send(new DescribeListenersCommand({
-                        LoadBalancerArn: process.env.LOAD_BALANCER_ARN
-                    }));
-                    for (const listener of listenersResp.Listeners || []) {
-                        const certsResp = await elbv2Client.send(new DescribeListenerCertificatesCommand({
-                            ListenerArn: listener.ListenerArn
-                        }));
-                        if (certsResp.Certificates?.some(c => c.CertificateArn === certificateArn)) {
-                            await elbv2Client.send(new DeleteListenerCertificatesCommand({
-                                ListenerArn: listener.ListenerArn,
-                                Certificates: [{ CertificateArn: certificateArn }]
-                            }));
-                        }
-                    }
-                    await acmClient.send(new DeleteCertificateCommand({
-                        CertificateArn: certificateArn
-                    }));
-                } catch (error) { }
-            }
-
-            try {
-                const projectNames = [projectName, domainName && domainName !== projectName ? `${projectName}-${domainName}` : null].filter(Boolean);
-                for (const project of projectNames) {
-                    await codeBuildClient.send(new DeleteProjectCommand({ name: project }));
-                }
-            } catch (error) { }
-
-            const logGroups = [
-                `/ecs/${projectName}`,
-                `/aws/codebuild/${projectName}`,
-                ...(domainName && domainName !== projectName ? [`/ecs/${projectName}-${domainName}`, `/aws/codebuild/${projectName}-${domainName}`] : [])
-            ];
-            for (const logGroup of logGroups) {
-                try {
-                    await cloudWatchLogsClient.send(new DeleteLogGroupCommand({ logGroupName: logGroup }));
-                } catch (error) { }
-            }
-
-            if (targetGroupArn) {
-                try {
-                    for (const listenerArn of listenerArns) {
-                        const rulesResp = await elbv2Client.send(new DescribeRulesCommand({
-                            ListenerArn: listenerArn
-                        }));
-                        for (const rule of rulesResp.Rules) {
-                            if (!rule.IsDefault && rule.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === targetGroupArn)) {
+                            try {
                                 await elbv2Client.send(new DeleteRuleCommand({
                                     RuleArn: rule.RuleArn
                                 }));
-                            }
+                            } catch (error) {}
                         }
                     }
-                    await elbv2Client.send(new DeleteTargetGroupCommand({ TargetGroupArn: targetGroupArn }));
-                } catch (error) { }
+                } catch (error) {}
             }
-
+    
+            for (const tgArn of targetGroupArns) {
+                try {
+                    await elbv2Client.send(new DeleteTargetGroupCommand({ TargetGroupArn: tgArn }));
+                } catch (error) {}
+            }
+    
             try {
-                await pool.query(
+                const domainFqdn = domainName.includes('.') ? domainName : `${domainName}.stackforgeengine.com`;
+                await client.query(
+                    "DELETE FROM metrics_events WHERE domain = $1",
+                    [domainFqdn]
+                );
+                await client.query(
+                    "DELETE FROM metrics_daily WHERE domain = $1",
+                    [domainFqdn]
+                );
+                await client.query(
+                    "DELETE FROM metrics_edge_requests WHERE domain = $1",
+                    [domainFqdn]
+                );
+                await client.query(
                     "DELETE FROM deployment_logs WHERE deployment_id = $1 AND orgid = $2",
                     [deploymentId, organizationID]
                 );
-                await pool.query(
+                await client.query(
                     "DELETE FROM build_logs WHERE deployment_id = $1 AND orgid = $2",
                     [deploymentId, organizationID]
                 );
-                await pool.query(
+                await client.query(
                     "DELETE FROM runtime_logs WHERE deployment_id = $1 AND orgid = $2",
                     [deploymentId, organizationID]
                 );
-                await pool.query(
+                await client.query(
                     "DELETE FROM deployments WHERE deployment_id = $1 AND orgid = $2",
                     [deploymentId, organizationID]
                 );
                 if (domainId) {
-                    await pool.query(
+                    await client.query(
                         "DELETE FROM domains WHERE domain_id = $1 AND orgid = $2",
                         [domainId, organizationID]
                     );
                 }
-            } catch (error) { }
-
+            } catch (error) {}
+    
             try {
-                await pool.query(
+                await client.query(
                     `INSERT INTO deployment_logs 
                      (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
                     [organizationID, userID, projectID, projectName, "cleanup_failed", deploymentId, timestamp, "127.0.0.1"]
                 );
-            } catch (error) { }
+            } catch (error) {}
+    
+            await client.query("COMMIT");
         } catch (error) {
+            if (client) await client.query("ROLLBACK");
             throw new Error(`Cleanup failed: ${error.message}.`);
+        } finally {
+            if (client) client.release();
         }
     }
 }

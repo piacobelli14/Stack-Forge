@@ -54,7 +54,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     ? process.env.LOAD_BALANCER_DNS
     : `${process.env.LOAD_BALANCER_DNS}.`;
 
-  const projRes = await pool.query(
+  const projResult = await pool.query(
     `SELECT name, current_deployment, created_at
        FROM projects
       WHERE project_id = $1
@@ -62,13 +62,13 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         AND username   = $3`,
     [projectID, organizationID, userID]
   );
-  if (!projRes.rows.length)
+  if (!projResult.rows.length)
     return res.status(404).json({ message: "Project not found." });
 
-  const projectName        = projRes.rows[0].name.toLowerCase();
-  const currentDeployment  = projRes.rows[0].current_deployment;
+  const projectName        = projResult.rows[0].name.toLowerCase();
+  const currentDeployment  = projResult.rows[0].current_deployment;
 
-  const parentRes = await pool.query(
+  const parentResult = await pool.query(
     `SELECT dep.env_vars,
             d.repository, d.branch, d.root_directory, d.output_directory,
             d.build_command, d.install_command,
@@ -79,8 +79,8 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         AND d.is_primary = true`,
     [projectID]
   );
-  let parentCfg       = parentRes.rows[0] || {};
-  let parentRawEnv    = parentCfg.env_vars;
+  let parentCfg = parentResult.rows[0] || {};
+  let parentRawEnv = parentCfg.env_vars;
 
   if (parentRawEnv === undefined || parentRawEnv === null) {
     const fallbackRes = await pool.query(
@@ -109,7 +109,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   const storedName = isParent ? projectName : `${subLabel}.${projectName}`;
   const fqdn       = `${storedName}.stackforgeengine.com`;
 
-  const domRes = await pool.query(
+  const domResult = await pool.query(
     `SELECT domain_id, certificate_arn, target_group_arn,
             redirect_target, deployment_id
        FROM domains
@@ -117,25 +117,25 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         AND domain_name = $2`,
     [projectID, storedName]
   );
-  const existing = domRes.rows[0] || null;
+  const existing = domResult.rows[0] || null;
 
-  const projectAgeMs = Date.now() - new Date(projRes.rows[0].created_at).getTime();
-  const delayMs      = 60_000;               
+  const projectAgeMs = Date.now() - new Date(projRes.rows[0].created_at + 'Z').getTime();
+  const delayMs = 300_000;
   if (!existing && projectAgeMs < delayMs) {
-    const waitSec = Math.ceil((delayMs - projectAgeMs) / 1000);
-    return res.status(429).json({
-      code   : "DOMAIN_THROTTLED",
-      message: `New domains may be added starting one minute after project creation. ` +
-               `Please wait approximately ${waitSec} more second${waitSec !== 1 ? "s" : ""} ` +
-               `and try again.`
-    });
+      const waitSec = Math.ceil((delayMs - projectAgeMs) / 1000);
+      return res.status(429).json({
+          code: "DOMAIN_THROTTLED",
+          message: `New domains may be added starting five minutes after project creation. ` +
+                  `Please wait approximately ${waitSec} more second${waitSec !== 1 ? "s" : ""} ` +
+                  `and try again.`
+      });
   }
 
-  const domainId       = existing?.domain_id       || uuidv4();
-  let   certArn        = existing?.certificate_arn || null;
-  let   tgArn          = existing?.target_group_arn|| null;
-  const existingRedirect      = existing?.redirect_target || null;
-  const existingDeploymentId  = existing?.deployment_id   || null;
+  const domainId = existing?.domain_id || uuidv4();
+  let   certArn = existing?.certificate_arn || null;
+  let   tgArn = existing?.target_group_arn || null;
+  const existingRedirect = existing?.redirect_target || null;
+  const existingDeploymentId = existing?.deployment_id || null;
 
   const wildcard  = `*.${projectName}.stackforgeengine.com`;
   const altNames  = [wildcard, `${projectName}.stackforgeengine.com`];
@@ -266,8 +266,8 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
                   Name: host,
                   Type: "A",
                   AliasTarget: {
-                    HostedZoneId       : lb.LoadBalancers[0].CanonicalHostedZoneId,
-                    DNSName            : albDns,
+                    HostedZoneId : lb.LoadBalancers[0].CanonicalHostedZoneId,
+                    DNSName : albDns,
                     EvaluateTargetHealth: false
                   }
                 }
@@ -297,6 +297,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       );
     }
   }
+  
   await upsertDns(fqdn);
 
   if (!existingRedirect) {
@@ -525,7 +526,6 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     deploymentId
   });
 });
-
 
 router.post("/project-domains", authenticateToken, async (req, res, next) => {
   const { userID, organizationID, projectID } = req.body;

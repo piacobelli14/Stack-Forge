@@ -235,35 +235,36 @@ const StackForgeProjects = () => {
             groupBy: "day",
           }),
         });
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
         setMonitoringData(data.data || []);
-
+  
         const transformMetrics = (metrics) => {
           return metrics.map((item) => {
             if (!item.date || typeof item.date !== "string") {
               return { date: "Invalid Date", value: item.value || 0 };
             }
-
+  
             const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
             if (!dateRegex.test(item.date)) {
               return { date: "Invalid Date", value: item.value || 0 };
             }
-
+  
             const testDate = new Date(item.date);
             if (isNaN(testDate.getTime())) {
               return { date: "Invalid Date", value: item.value || 0 };
             }
-
+  
             return {
               date: item.date,
               value: item.value,
             };
           });
         };
-
+  
         const transformedMetrics = {
           pageViews: data.individualMetrics?.pageViews
             ? transformMetrics(data.individualMetrics.pageViews)
@@ -278,7 +279,7 @@ const StackForgeProjects = () => {
             ? transformMetrics(data.individualMetrics.edgeRequests)
             : [],
         };
-
+  
         setIndividualMetrics(transformedMetrics);
       } catch (error) {
         setMonitoringData([]);
@@ -288,18 +289,12 @@ const StackForgeProjects = () => {
           bounceRate: [],
           edgeRequests: [],
         });
-        await showDialog({
-          title: "Error",
-          message: "Failed to load monitoring data. Please try again.",
-          showCancel: false,
-        });
       } finally {
         setIsLoadingMonitoring(false);
       }
     };
     fetchMonitoringData();
   }, [projectsPage, token, organizationID, selectedDomain, currentWeekStart]);
-
   const getProjects = async () => {
     const token = localStorage.getItem("token");
     try {
