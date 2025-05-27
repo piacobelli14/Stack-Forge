@@ -1,24 +1,24 @@
-const express = require('express');
-const axios = require('axios');
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const { v4: uuidv4 } = require('uuid');   
-const path = require('path');
-const { pool } = require('../config/db');
-const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require('../config/smtp');
-const { s3Client, storage, upload, PutObjectCommand } = require('../config/s3');
-const { authenticateToken } = require('../middleware/auth');
-const { rateLimiter, authRateLimitExceededHandler } = require('../middleware/rateLimiter');
+const express = require("express");
+const axios = require("axios");
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const { v4: uuidv4 } = require("uuid");   
+const path = require("path");
+const { pool } = require("../config/db");
+const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require("../config/smtp");
+const { s3Client, storage, upload, PutObjectCommand } = require("../config/s3");
+const { authenticateToken } = require("../middleware/auth");
+const { rateLimiter, authRateLimitExceededHandler } = require("../middleware/rateLimiter");
 
-require('dotenv').config();
+require("dotenv").config();
 secretKey = process.env.JWT_SECRET_KEY;
 
 const router = express.Router();
 
-router.post('/user-authentication', rateLimiter(10, 20, authRateLimitExceededHandler), async (req, res, next) => {
+router.post("/user-authentication", rateLimiter(10, 20, authRateLimitExceededHandler), async (req, res, next) => {
     const { username, password } = req.body;
     
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
@@ -35,19 +35,19 @@ router.post('/user-authentication', rateLimiter(10, 20, authRateLimitExceededHan
         const info = await pool.query(loginQuery, [username]);
 
         if (info.rows.length === 0) {
-            return res.status(401).json({ message: 'Invalid login credentials.' });
+            return res.status(401).json({ message: "Invalid login credentials." });
         }
 
         const userData = info.rows[0];
         const { verified } = userData;
         if (!verified) {
-            return res.status(401).json({ message: 'Email not verified. Please verify your account.' });
+            return res.status(401).json({ message: "Email not verified. Please verify your account." });
         }
 
         const { salt, hashed_password, username: userID, orgid: orgID, twofaenabled, multifaenabled, isadmin } = userData;
         const hashedPasswordToCheck = hashPassword(password, salt);
         if (hashedPasswordToCheck !== hashed_password) {
-            const error = new Error('Invalid login credentials.');
+            const error = new Error("Invalid login credentials.");
             error.status = 401;
             return next(error);
         }
@@ -61,21 +61,21 @@ router.post('/user-authentication', rateLimiter(10, 20, authRateLimitExceededHan
                 exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
             },
             secretKey,
-            { algorithm: 'HS256' }
+            { algorithm: "HS256" }
         );
 
         // ← GENERATE & SET VISITOR COOKIE FOR ALL SUBDOMAINS
         const visitorId = uuidv4();
-        res.cookie('sf_visitor_id', visitorId, {
-            domain: '.stackforgeengine.com',
-            path: '/',
+        res.cookie("sf_visitor_id", visitorId, {
+            domain: ".stackforgeengine.com",
+            path: "/",
             httpOnly: false,
             secure: true,
-            sameSite: 'None',
+            sameSite: "None",
             maxAge: 365 * 24 * 60 * 60 * 1000
         });
 
-        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
         const locationResponse = await axios.get(`http://ip-api.com/json/${ip}`);
         const locationData = locationResponse.data;
 
@@ -96,26 +96,26 @@ router.post('/user-authentication', rateLimiter(10, 20, authRateLimitExceededHan
         });
     } catch (error) {
         if (!res.headersSent) {
-            res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
     }
 });
 
 
-router.post('/send-admin-auth-code', rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
+router.post("/send-admin-auth-code", rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { email } = req.body;
 
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
     try {
-        const authenticationCodeQuery = 'SELECT email, username FROM admins WHERE email = $1';
+        const authenticationCodeQuery = "SELECT email, username FROM admins WHERE email = $1";
         const authenticationCodeInfo = await pool.query(authenticationCodeQuery, [email]);
 
         if (authenticationCodeInfo.rows.length === 0) {
-            return res.status(401).json({ message: 'Email not found.' });
+            return res.status(401).json({ message: "Email not found." });
         }
 
         const { username } = authenticationCodeInfo.rows[0];
@@ -132,24 +132,24 @@ router.post('/send-admin-auth-code', rateLimiter(10, 15, authRateLimitExceededHa
         const mailOptions = {
             from: smtpUser,
             to: email,
-            subject: 'Login Code',
+            subject: "Login Code",
             text: `Your login code is: ${loginCode}. \n\nPlease enter this code to log in.\n\n -The Stack Forge Team`
         };
 
         await emailTransporter.sendMail(mailOptions);
 
-        return res.status(200).json({ message: 'Login code sent.' });
+        return res.status(200).json({ message: "Login code sent." });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
     }
 });
 
-router.post('/verify-admin-auth-code', rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
+router.post("/verify-admin-auth-code", rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { email, code } = req.body;
 
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
@@ -162,11 +162,11 @@ router.post('/verify-admin-auth-code', rateLimiter(10, 15, authRateLimitExceeded
         const verifyAuthenticationCodeInfo = await pool.query(verifyAuthenticationCodeQuery, [email, code]);
 
         if (verifyAuthenticationCodeInfo.rows.length === 0) {
-            return res.status(400).json({ message: 'Invalid or expired login code.' });
+            return res.status(400).json({ message: "Invalid or expired login code." });
         }
 
         const { username: userID } = verifyAuthenticationCodeInfo.rows[0];
-        const jwtToken = jwt.sign({ userID }, secretKey, { expiresIn: '24h' });
+        const jwtToken = jwt.sign({ userID }, secretKey, { expiresIn: "24h" });
 
         const deleteCodeQuery = `
             DELETE FROM admin_tokens 
@@ -178,15 +178,15 @@ router.post('/verify-admin-auth-code', rateLimiter(10, 15, authRateLimitExceeded
         return res.status(200).json({ token: jwtToken, userid: userID });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
     }
 });
 
-router.post('/reset-password', rateLimiter(10, 3, authRateLimitExceededHandler), async (req, res, next) => {
+router.post("/reset-password", rateLimiter(10, 3, authRateLimitExceededHandler), async (req, res, next) => {
     const { email } = req.body;
 
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
@@ -200,7 +200,7 @@ router.post('/reset-password', rateLimiter(10, 3, authRateLimitExceededHandler),
         const resetVerificationInfo = await pool.query(resetVerificationQuery, [email]);
 
         if (resetVerificationInfo.rows.length === 0) {
-            return res.status(401).json({ message: 'Email not found.' });
+            return res.status(401).json({ message: "Email not found." });
         }
 
         const { username } = resetVerificationInfo.rows[0];
@@ -210,14 +210,14 @@ router.post('/reset-password', rateLimiter(10, 3, authRateLimitExceededHandler),
         const mailOptions = {
             from: smtpUser,
             to: email,
-            subject: 'Password Reset Code',
+            subject: "Password Reset Code",
             text: `Your password reset code is: ${resetCode}. \n\nPlease enter this code when prompted so that you can reset your password.\n\n -The Stack Forge Team`
         };
 
         await emailTransporter.sendMail(mailOptions);
 
         return res.status(200).json({
-            message: 'Password reset code sent.',
+            message: "Password reset code sent.",
             data: {
                 resetCode,
                 resetExpiration: expirationTimestamp,
@@ -225,16 +225,16 @@ router.post('/reset-password', rateLimiter(10, 3, authRateLimitExceededHandler),
         });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
     }
 });
 
-router.post('/change-password', rateLimiter(10, 3, authRateLimitExceededHandler), async (req, res, next) => {
+router.post("/change-password", rateLimiter(10, 3, authRateLimitExceededHandler), async (req, res, next) => {
     const { newPassword, email } = req.body;
 
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
@@ -251,16 +251,16 @@ router.post('/change-password', rateLimiter(10, 3, authRateLimitExceededHandler)
         return res.status(200).json({});
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
     }
 });
 
-router.post('/validate-new-user-info', rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
+router.post("/validate-new-user-info", rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { email, username } = req.body;
 
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
@@ -273,12 +273,12 @@ router.post('/validate-new-user-info', rateLimiter(10, 15, authRateLimitExceeded
         const infoVerificationInfo = await pool.query(infoVerificationQuery);
 
         if (infoVerificationInfo.error) {
-            return res.status(500).json({ message: 'Unable to validate user info. Please try again.' });
+            return res.status(500).json({ message: "Unable to validate user info. Please try again." });
         }
 
         const rows = infoVerificationInfo.rows;
         if (!rows || !Array.isArray(rows)) {
-            return res.status(200).json({ message: 'No user info found.' });
+            return res.status(200).json({ message: "No user info found." });
         }
 
         let emailInUse = false;
@@ -293,27 +293,27 @@ router.post('/validate-new-user-info', rateLimiter(10, 15, authRateLimitExceeded
             }
         }
         if (emailInUse) {
-            return res.status(401).json({ message: 'That email is already in use. Please select another.' });
+            return res.status(401).json({ message: "That email is already in use. Please select another." });
         } else if (usernameInUse) {
-            return res.status(401).json({ message: 'That username is taken. Please select another.' });
+            return res.status(401).json({ message: "That username is taken. Please select another." });
         }
-        return res.status(200).json({ message: 'User info validated successfully.' });
+        return res.status(200).json({ message: "User info validated successfully." });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
     }
 });
 
-router.post('/create-user', rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
+router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { firstName, lastName, username, email, password, phone, image } = req.body;
 
     if (!firstName || !lastName || !username || !email || !password || !phone || !image) {
-        return res.status(401).json({ message: 'Unable to verify registration info. Please try again later.' });
+        return res.status(401).json({ message: "Unable to verify registration info. Please try again later." });
     }
 
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
@@ -322,19 +322,19 @@ router.post('/create-user', rateLimiter(10, 15, authRateLimitExceededHandler), a
         const capitalizedLastName = capitalizeFirstLetter(lastName);
         const { salt, hashedPassword } = generateSaltedPassword(password);
 
-        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationToken = crypto.randomBytes(32).toString("hex");
 
         const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
 
         if (!matches) {
-            return res.status(400).json({ message: 'Invalid image format. Please upload a valid image.' });
+            return res.status(400).json({ message: "Invalid image format. Please upload a valid image." });
         }
 
         const mimeType = matches[1];
-        const imageBuffer = Buffer.from(matches[2], 'base64');
-        const extension = mimeType.split('/')[1];
+        const imageBuffer = Buffer.from(matches[2], "base64");
+        const extension = mimeType.split("/")[1];
 
-        const imageName = `${crypto.randomBytes(16).toString('hex')}.${extension}`;
+        const imageName = `${crypto.randomBytes(16).toString("hex")}.${extension}`;
 
         const uploadParams = {
             Bucket: process.env.S3_BUCKET_NAME,
@@ -364,35 +364,35 @@ router.post('/create-user', rateLimiter(10, 15, authRateLimitExceededHandler), a
         const userCreationInfo = await pool.query(userCreationQuery, userCreationValues);
 
         if (userCreationInfo.error) {
-            return res.status(500).json({ message: 'Unable to create new user. Please try again later.' });
+            return res.status(500).json({ message: "Unable to create new user. Please try again later." });
         } else {
-            return res.status(200).json({ message: 'User created successfully. Verification email sent.' });
+            return res.status(200).json({ message: "User created successfully. Verification email sent." });
         }
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
     }
 });
 
-router.get('/verify-email', rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
+router.get("/verify-email", rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { token } = req.query;
 
     if (!token) {
-        return res.status(400).json({ message: 'Verification token is missing.' });
+        return res.status(400).json({ message: "Verification token is missing." });
     }
 
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
     try {
-        const verificationQuery = 'SELECT email FROM users WHERE verification_token = $1';
+        const verificationQuery = "SELECT email FROM users WHERE verification_token = $1";
         const verificationInfo = await pool.query(verificationQuery, [token]);
 
         if (verificationInfo.rows.length === 0) {
-            return res.status(400).json({ message: 'Invalid verification token.' });
+            return res.status(400).json({ message: "Invalid verification token." });
         }
 
         const updateEmailQuery = `
@@ -403,44 +403,44 @@ router.get('/verify-email', rateLimiter(10, 15, authRateLimitExceededHandler), a
         `;
         await pool.query(updateEmailQuery, [token]);
 
-        return res.status(200).json({ message: 'Email verified successfully.' });
+        return res.status(200).json({ message: "Email verified successfully." });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
     }
 });
 
-router.get('/connect-github', async (req, res, next) => {
+router.get("/connect-github", async (req, res, next) => {
     const { token, userID } = req.query;
     if (!token || !userID) {
-        return res.status(400).send('Missing token or userID');
+        return res.status(400).send("Missing token or userID");
     }
     try {
         const payload = jwt.verify(token, secretKey);
         if (payload.userid !== userID) {
-            return res.status(401).send('Invalid token for this user');
+            return res.status(401).send("Invalid token for this user");
         }
     } catch (err) {
-        return res.status(401).send('Invalid token');
+        return res.status(401).send("Invalid token");
     }
     const clientID = process.env.GITHUB_CLIENT_ID;
     const redirectUri = process.env.GITHUB_REDIRECT_URI;
-    const state = Buffer.from(JSON.stringify({ token, userID })).toString('base64');
-    const scope = 'repo,user';
+    const state = Buffer.from(JSON.stringify({ token, userID })).toString("base64");
+    const scope = "repo,user";
     const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scope)}`;
     res.redirect(githubAuthUrl);
 });
 
-router.get('/github-success', async (req, res, next) => {
+router.get("/github-success", async (req, res, next) => {
     const { code, state } = req.query;
     if (!code || !state) {
         return res.status(400).send("Missing code or state");
     }
     let decoded;
     try {
-        decoded = JSON.parse(Buffer.from(state, 'base64').toString('ascii'));
+        decoded = JSON.parse(Buffer.from(state, "base64").toString("ascii"));
     } catch (error) {
         return res.status(400).send("Invalid state parameter");
     }
@@ -457,23 +457,23 @@ router.get('/github-success', async (req, res, next) => {
     const clientSecret = process.env.GITHUB_CLIENT_SECRET;
     const redirectUri = process.env.GITHUB_REDIRECT_URI;
     try {
-        const tokenResponse = await axios.post('https://github.com/login/oauth/access_token', {
+        const tokenResponse = await axios.post("https://github.com/login/oauth/access_token", {
             client_id: clientID,
             client_secret: clientSecret,
             code: code,
             redirect_uri: redirectUri,
             state: state
         }, {
-            headers: { Accept: 'application/json' }
+            headers: { Accept: "application/json" }
         });
         const githubAccessToken = tokenResponse.data.access_token;
         if (!githubAccessToken) {
             return res.status(400).send("GitHub access token not received");
         }
-        const githubUserResponse = await axios.get('https://api.github.com/user', {
+        const githubUserResponse = await axios.get("https://api.github.com/user", {
             headers: {
                 Authorization: `token ${githubAccessToken}`,
-                Accept: 'application/json'
+                Accept: "application/json"
             }
         });
         const githubUserData = githubUserResponse.data;
@@ -490,10 +490,10 @@ router.get('/github-success', async (req, res, next) => {
         if (result.rowCount === 0) {
             return res.status(400).send("Failed to update user information in the database.");
         }
-        return res.sendFile(path.resolve(__dirname, '../public', 'github.html'));
+        return res.sendFile(path.resolve(__dirname, "../public", "github.html"));
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
     }
@@ -509,16 +509,16 @@ function hashPassword(enteredPassword, storedSalt) {
         return null;
     }
     const saltedPasswordToCheck = storedSalt + enteredPassword;
-    const hash = crypto.createHash('sha256');
-    const hashedPassword = hash.update(saltedPasswordToCheck).digest('hex');
+    const hash = crypto.createHash("sha256");
+    const hashedPassword = hash.update(saltedPasswordToCheck).digest("hex");
     return hashedPassword;
 }
 
 function generateSaltedPassword(password) {
-    const salt = crypto.randomBytes(16).toString('hex');
+    const salt = crypto.randomBytes(16).toString("hex");
     const saltedPassword = salt + password;
-    const hash = crypto.createHash('sha256');
-    const hashedPassword = hash.update(saltedPassword).digest('hex');
+    const hash = crypto.createHash("sha256");
+    const hashedPassword = hash.update(saltedPassword).digest("hex");
     return { salt, hashedPassword };
 }
 

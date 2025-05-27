@@ -1,15 +1,15 @@
-const express = require('express');
-const axios = require('axios');
-const crypto = require('crypto');
+const express = require("express");
+const axios = require("axios");
+const crypto = require("crypto");
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
-const { pool } = require('../config/db');
-const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require('../config/smtp');
-const { s3Client, storage, upload, PutObjectCommand } = require('../config/s3');
-const { authenticateToken } = require('../middleware/auth');
+const { pool } = require("../config/db");
+const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require("../config/smtp");
+const { s3Client, storage, upload, PutObjectCommand } = require("../config/s3");
+const { authenticateToken } = require("../middleware/auth");
 
-require('dotenv').config();
+require("dotenv").config();
 secretKey = process.env.JWT_SECRET_KEY;
 
 const router = express.Router();
@@ -160,16 +160,16 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                     const { deployment_id } = deploymentResult.rows[0];
                     const browser = await puppeteer.launch({ headless: true });
                     const page = await browser.newPage();
-                    let status = 'inactive';
+                    let status = "inactive";
 
                     try {
                         const response = await page.goto(resolvedWebsiteURL, { waitUntil: "networkidle2", timeout: 30000 });
                         const responseStatus = response ? response.status() : null;
                         if (responseStatus && responseStatus >= 200 && responseStatus < 300) {
-                            status = 'active';
+                            status = "active";
                         }
                     } catch (error) {
-                        status = 'inactive';
+                        status = "inactive";
                     } finally {
                         await browser.close();
                     }
@@ -393,20 +393,24 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
             }
             const domainId = domainLookup.rows[0].domain_id;
             deploymentResult = await pool.query(
-                `SELECT commit_sha, last_deployed_at
-                 FROM deployments
-                 WHERE project_id = $1 AND orgid = $2 AND domain_id = $3
-                 ORDER BY last_deployed_at DESC
-                 LIMIT 1`,
+                `
+                    SELECT commit_sha, last_deployed_at
+                    FROM deployments
+                    WHERE project_id = $1 AND orgid = $2 AND domain_id = $3
+                    ORDER BY last_deployed_at DESC
+                    LIMIT 1
+                `,
                 [projectID, organizationID, domainId]
             );
         } else {
             deploymentResult = await pool.query(
-                `SELECT commit_sha, last_deployed_at
-                 FROM deployments
-                 WHERE project_id = $1 AND orgid = $2
-                 ORDER BY last_deployed_at DESC
-                 LIMIT 1`,
+                `
+                    SELECT commit_sha, last_deployed_at
+                    FROM deployments
+                    WHERE project_id = $1 AND orgid = $2
+                    ORDER BY last_deployed_at DESC
+                    LIMIT 1
+                `,
                 [projectID, organizationID]
             );
         }
@@ -520,21 +524,25 @@ router.post("/git-repo-update-details-relative-to-deployment", authenticateToken
         let deploymentResult;
         if (domainName) {
             deploymentResult = await pool.query(
-                `SELECT d.commit_sha, d.last_deployed_at
-                 FROM deployments d
-                 JOIN domains dom ON dom.domain_id = d.domain_id
-                 WHERE d.project_id = $1 AND d.orgid = $2 AND dom.domain_name = $3
-                 ORDER BY d.last_deployed_at DESC
-                 LIMIT 1`,
+                `
+                    SELECT d.commit_sha, d.last_deployed_at
+                    FROM deployments d
+                    JOIN domains dom ON dom.domain_id = d.domain_id
+                    WHERE d.project_id = $1 AND d.orgid = $2 AND dom.domain_name = $3
+                    ORDER BY d.last_deployed_at DESC
+                    LIMIT 1
+                `,
                 [projectID, organizationID, domainName]
             );
         } else {
             deploymentResult = await pool.query(
-                `SELECT commit_sha, last_deployed_at
-                 FROM deployments
-                 WHERE project_id = $1 AND orgid = $2
-                 ORDER BY last_deployed_at DESC
-                 LIMIT 1`,
+                `
+                    SELECT commit_sha, last_deployed_at
+                    FROM deployments
+                    WHERE project_id = $1 AND orgid = $2
+                    ORDER BY last_deployed_at DESC
+                    LIMIT 1
+                `,
                 [projectID, organizationID]
             );
         }
@@ -603,7 +611,7 @@ router.post("/git-repo-update-details-relative-to-deployment", authenticateToken
 router.post("/fetch-current-build-info", authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, domainName } = req.body;
 
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
@@ -617,7 +625,7 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
             if (domainLookup.rows.length > 0) {
                 domainIdFilter = domainLookup.rows[0].domain_id;
             } else {
-                return res.status(404).json({ message: 'Domain not found for this project.' });
+                return res.status(404).json({ message: "Domain not found for this project." });
             }
         }
 
@@ -633,7 +641,7 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
             WHERE orgid = $1
             AND username = $2
             AND project_id = $3
-            ${domainIdFilter ? `AND domain_id = '${domainIdFilter}'` : ''}
+            ${domainIdFilter ? `AND domain_id = "${domainIdFilter}"` : ""}
             ORDER BY last_deployed_at DESC
             LIMIT 1
         `;
@@ -641,7 +649,7 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
         const projectInfo = await pool.query(projectInfoFetchQuery, [organizationID, userID, projectID]);
 
         if (projectInfo.rows.length === 0) {
-            return res.status(404).json({ message: 'No production deployment found for this project.' });
+            return res.status(404).json({ message: "No production deployment found for this project." });
         }
 
         res.status(200).json({
@@ -655,7 +663,7 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
 
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
     }
@@ -670,10 +678,10 @@ router.post("/runtime-logs", authenticateToken, async (req, res, next) => {
         });
     }
 
-    const validPeriods = ['past_30_mins', 'past_hour', 'past_day', 'past_week'];
+    const validPeriods = ["past_30_mins", "past_hour", "past_day", "past_week"];
     if (!validPeriods.includes(timePeriod)) {
         return res.status(400).json({
-            message: `Invalid timePeriod. Must be one of: ${validPeriods.join(', ')}.`
+            message: `Invalid timePeriod. Must be one of: ${validPeriods.join(", ")}.`
         });
     }
 
@@ -681,16 +689,16 @@ router.post("/runtime-logs", authenticateToken, async (req, res, next) => {
         let timeFilter;
         const now = new Date();
         switch (timePeriod) {
-            case 'past_30_mins':
+            case "past_30_mins":
                 timeFilter = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
                 break;
-            case 'past_hour':
+            case "past_hour":
                 timeFilter = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
                 break;
-            case 'past_day':
+            case "past_day":
                 timeFilter = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
                 break;
-            case 'past_week':
+            case "past_week":
                 timeFilter = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
                 break;
         }
@@ -745,16 +753,16 @@ router.post("/build-logs", authenticateToken, async (req, res, next) => {
     let timeFilter;
     const now = new Date();
     switch (timePeriod) {
-        case 'past_30_mins':
+        case "past_30_mins":
             timeFilter = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
             break;
-        case 'past_hour':
+        case "past_hour":
             timeFilter = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
             break;
-        case 'past_day':
+        case "past_day":
             timeFilter = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
             break;
-        case 'past_week':
+        case "past_week":
             timeFilter = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
             break;
         default:
@@ -800,27 +808,27 @@ router.post("/build-logs", authenticateToken, async (req, res, next) => {
     }
 });
 
-router.post('/edit-project-image', authenticateToken, async (req, res, next) => {
+router.post("/edit-project-image", authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, image } = req.body;
 
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
     if (!userID || !organizationID || !projectID || !image) {
-        return res.status(400).json({ message: 'User ID, Organization ID, projectID, and image are required.' });
+        return res.status(400).json({ message: "User ID, Organization ID, projectID, and image are required." });
     }
 
     try {
         const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
         if (!matches) {
-            return res.status(400).json({ message: 'Invalid image format.' });
+            return res.status(400).json({ message: "Invalid image format." });
         }
         const mimeType = matches[1];
-        const imageBuffer = Buffer.from(matches[2], 'base64');
-        const extension = mimeType.split('/')[1];
+        const imageBuffer = Buffer.from(matches[2], "base64");
+        const extension = mimeType.split("/")[1];
 
-        const imageName = `${crypto.randomBytes(16).toString('hex')}.${extension}`;
+        const imageName = `${crypto.randomBytes(16).toString("hex")}.${extension}`;
 
         const uploadParams = {
             Bucket: process.env.S3_IMAGE_BUCKET_NAME,
@@ -840,21 +848,21 @@ router.post('/edit-project-image', authenticateToken, async (req, res, next) => 
 
         const updateImageInfo = await pool.query(updateImageQuery, [imageUrl, organizationID, projectID, userID]);
         if (updateImageInfo.rowCount === 0) {
-            return res.status(404).json({ message: 'Project not found or image not updated.' });
+            return res.status(404).json({ message: "Project not found or image not updated." });
         }
-        return res.status(200).json({ message: 'Project image updated successfully.' });
+        return res.status(200).json({ message: "Project image updated successfully." });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
     }
 });
 
-router.post('/edit-project-name', authenticateToken, async (req, res, next) => {
+router.post("/edit-project-name", authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, projectName } = req.body;
 
-    req.on('close', () => {
+    req.on("close", () => {
         return;
     });
 
@@ -874,13 +882,13 @@ router.post('/edit-project-name', authenticateToken, async (req, res, next) => {
         const updateDeploymentLogsInfo = await pool.query(updateDeploymentLogsQuery, [projectName, projectID]);
 
         if (updateProjectNameInfo.rowCount === 0) {
-            return res.status(400).json({ message: 'No project found to update. Please try again.' });
+            return res.status(400).json({ message: "No project found to update. Please try again." });
         }
 
-        return res.status(200).json({ message: 'Project name updated successfully.' });
+        return res.status(200).json({ message: "Project name updated successfully." });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
     }

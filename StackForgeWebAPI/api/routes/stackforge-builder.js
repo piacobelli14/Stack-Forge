@@ -74,8 +74,8 @@ router.get("/deploy-project-stream", (req, res, next) => {
                 [organizationID, userID, projectName]
             );
             if (existingProject.rows.length > 0) {
-                sendLine(`Error: Project name '${projectName}' already exists for this organization.\n`);
-                throw new Error(`Project name '${projectName}' already exists.`);
+                sendLine(`Error: Project name "${projectName}" already exists for this organization.\n`);
+                throw new Error(`Project name "${projectName}" already exists.`);
             }
 
             sendLine(`Received projectName: ${projectName}\n`);
@@ -177,7 +177,7 @@ router.post("/deploy-project", authenticateToken, async (req, res, next) => {
         );
         if (existingProject.rows.length > 0) {
             return res.status(400).json({
-                message: `Project name '${projectName}' already exists for this organization.`
+                message: `Project name "${projectName}" already exists for this organization.`
             });
         }
 
@@ -319,9 +319,11 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
             writeChunk(`Processing subdomain: ${subdomain}, isBaseDomain: ${isBaseDomain}, projectName: ${projectName}\n`);
 
             const domainDetailsResult = await pool.query(
-                `SELECT repository, branch, root_directory, output_directory, install_command, build_command, env_vars, domain_id
-                 FROM domains
-                 WHERE domain_name = $1 AND project_id = $2`,
+                `
+                    SELECT repository, branch, root_directory, output_directory, install_command, build_command, env_vars, domain_id
+                    FROM domains
+                    WHERE domain_name = $1 AND project_id = $2
+                `,
                 [subdomain, projectID]
             );
             if (domainDetailsResult.rows.length === 0) {
@@ -400,10 +402,12 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
             );
 
             const insertResult = await pool.query(
-                `INSERT INTO deployments 
-                 (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-                 RETURNING deployment_id`,
+                `
+                    INSERT INTO deployments 
+                        (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                    RETURNING deployment_id
+                `,
                 [
                     organizationID,
                     userID,
@@ -431,9 +435,11 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
 
             writeChunk(`Updating domains table for subdomain: ${subdomain}\n`);
             await pool.query(
-                `UPDATE domains
-                 SET repository = $1, branch = $2, root_directory = $3, output_directory = $4, build_command = $5, install_command = $6, env_vars = $7, deployment_id = $8, updated_at = $9
-                 WHERE domain_name = $10 AND project_id = $11`,
+                `
+                    UPDATE domains
+                    SET repository = $1, branch = $2, root_directory = $3, output_directory = $4, build_command = $5, install_command = $6, env_vars = $7, deployment_id = $8, updated_at = $9
+                    WHERE domain_name = $10 AND project_id = $11
+                `,
                 [
                     config.repository,
                     config.branch,
@@ -451,19 +457,23 @@ router.post("/update-project-stream", authenticateToken, async (req, res, next) 
 
             writeChunk(`Updating projects table for deploymentId: ${deploymentId}\n`);
             await pool.query(
-                `UPDATE projects
-                 SET previous_deployment = current_deployment,
+                `
+                    UPDATE projects
+                    SET previous_deployment = current_deployment,
                      current_deployment = $1,
                      updated_at = $2
-                 WHERE project_id = $3`,
+                    WHERE project_id = $3
+                `,
                 [deploymentId, timestamp, projectID]
             );
 
             writeChunk(`Logging deployment: deploymentId=${deploymentId}\n`);
             await pool.query(
-                `INSERT INTO deployment_logs 
-                 (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                `
+                    INSERT INTO deployment_logs 
+                        orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                `,
                 [
                     organizationID,
                     userID,
@@ -670,11 +680,13 @@ router.post("/project-details", authenticateToken, async (req, res, next) => {
 
     try {
         const projectResult = await pool.query(
-            `SELECT *
-             FROM projects
-            WHERE project_id = $1
-              AND orgid      = $2
-              AND username   = $3`,
+            `
+                SELECT *
+                FROM projects
+                WHERE project_id = $1
+                    AND orgid = $2
+                    AND username = $3
+            `,
             [projectID, organizationID, userID]
         );
         if (projectResult.rows.length === 0)
@@ -682,10 +694,11 @@ router.post("/project-details", authenticateToken, async (req, res, next) => {
         const project = projectResult.rows[0];
 
         const domainsResult = await pool.query(
-            `SELECT *
-             FROM domains
-            WHERE project_id = $1
-              AND orgid      = $2`,
+            `
+                SELECT *
+                FROM domains
+                WHERE project_id = $1 AND orgid = $2
+            `,
             [projectID, organizationID]
         );
         const domains = domainsResult.rows;
@@ -705,16 +718,15 @@ router.post("/project-details", authenticateToken, async (req, res, next) => {
 
         deploymentsResult = await pool.query(
             `
-          SELECT *
-            FROM deployments
-           WHERE project_id = $1
-             AND orgid      = $2
-             ${domainFilter}
-           ORDER BY
-                (status = 'active') DESC,
-                last_deployed_at   DESC NULLS LAST,
-                updated_at         DESC NULLS LAST,
-                created_at         DESC
+                SELECT *
+                FROM deployments
+                WHERE project_id = $1 AND orgid = $2
+                ${domainFilter}
+                ORDER BY
+                    (status = "active") DESC,
+                    last_deployed_at DESC NULLS LAST,
+                    updated_at DESC NULLS LAST,
+                    created_at DESC
           `,
             [projectID, organizationID, ...filterParams]
         );

@@ -296,16 +296,18 @@ class DeployManager {
 
     async getDeploymentStatus(deploymentId, organizationID, userID) {
         const deploymentResult = await pool.query(
-            `SELECT 
-             d.*,
-             p.name AS project_name,
-             dm.domain_name AS domain,
-             o.orgname 
-             FROM deployments d
-             LEFT JOIN projects p ON d.project_id = p.project_id
-             LEFT JOIN domains dm ON d.domain_id = dm.domain_id
-             JOIN organizations o ON d.orgid = o.orgid
-             WHERE d.deployment_id = $1 AND d.orgid = $2 AND d.username = $3`,
+            `
+                SELECT 
+                    d.*,
+                    p.name AS project_name,
+                    dm.domain_name AS domain,
+                    o.orgname 
+                FROM deployments d
+                LEFT JOIN projects p ON d.project_id = p.project_id
+                LEFT JOIN domains dm ON d.domain_id = dm.domain_id
+                JOIN organizations o ON d.orgid = o.orgid
+                WHERE d.deployment_id = $1 AND d.orgid = $2 AND d.username = $3
+            `,
             [deploymentId, organizationID, userID]
         );
         if (deploymentResult.rows.length === 0) {
@@ -349,9 +351,11 @@ class DeployManager {
     async getTaskDefinitionARN(projectName, deploymentID) {
         try {
             const deploymentResult = await pool.query(
-                `SELECT task_def_arn 
-                 FROM deployments 
-                 WHERE deployment_id = $1`,
+                `
+                    SELECT task_def_arn 
+                    FROM deployments 
+                    WHERE deployment_id = $1
+                `,
                 [deploymentID]
             );
             if (deploymentResult.rows.length === 0) {
@@ -369,19 +373,21 @@ class DeployManager {
 
     async listDeployments(organizationID) {
         const deploymentListResult = await pool.query(
-            `SELECT 
-             d.deployment_id,
-             d.orgid,
-             d.username,
-             d.status,
-             d.url,
-             d.template,
-             d.created_at,
-             d.updated_at,
-             d.last_deployed_at
-             FROM deployments d
-             WHERE d.orgid = $1
-             ORDER BY d.created_at DESC`,
+            `
+                SELECT 
+                    d.deployment_id,
+                    d.orgid,
+                    d.username,
+                    d.status,
+                    d.url,
+                    d.template,
+                    d.created_at,
+                    d.updated_at,
+                    d.last_deployed_at
+                FROM deployments d
+                WHERE d.orgid = $1
+                ORDER BY d.created_at DESC
+            `,
             [organizationID]
         );
         return deploymentListResult.rows;
@@ -389,9 +395,11 @@ class DeployManager {
 
     async listProjects(organizationID) {
         const projectListResult = await pool.query(
-            `SELECT * FROM projects
-             WHERE orgid = $1
-             ORDER BY created_at DESC`,
+            `
+                SELECT * FROM projects
+                WHERE orgid = $1
+                ORDER BY created_at DESC
+            `,
             [organizationID]
         );
         return projectListResult.rows;
@@ -399,18 +407,20 @@ class DeployManager {
 
     async listDomains(organizationID) {
         const domainListResult = await pool.query(
-            `SELECT 
-             domain_id,
-             orgid,
-             username,
-             domain_name,
-             project_id,
-             created_by,
-             created_at,
-             updated_at
-             FROM domains
-             WHERE orgid = $1
-             ORDER BY created_at DESC`,
+            `
+                SELECT 
+                    domain_id,
+                    orgid,
+                    username,
+                    domain_name,
+                    project_id,
+                    created_by,
+                    created_at,
+                    updated_at
+                FROM domains
+                WHERE orgid = $1
+                ORDER BY created_at DESC
+            `,
             [organizationID]
         );
         return domainListResult.rows;
@@ -486,10 +496,9 @@ class DeployManager {
         const elbClient = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
         const cfClient = new CloudFrontClient({ region: process.env.AWS_REGION });
 
-        ["ECS_CLUSTER_ARN", "SUBNET_IDS", "SECURITY_GROUP_IDS",
-            "ALB_LISTENER_ARN_HTTPS", "AWS_REGION"].forEach(
+        ["ECS_CLUSTER_ARN", "SUBNET_IDS", "SECURITY_GROUP_IDS", "ALB_LISTENER_ARN_HTTPS", "AWS_REGION"].forEach(
                 k => { if (!process.env[k]) throw new Error(`Missing env ${k}.`); }
-            );
+        );
 
         if (subdomain && subdomain.toLowerCase() === projectName.toLowerCase()) {
             subdomain = null;
@@ -968,10 +977,11 @@ class DeployManager {
     
         if (subdomain) {
             await pool.query(
-                `UPDATE domains
-                   SET image_tag = $1
-                 WHERE domain_name = $2
-                   AND project_id = (SELECT project_id FROM projects WHERE name = $3)`,
+                `
+                    UPDATE domains  SET image_tag = $1
+                    WHERE domain_name = $2
+                        AND project_id = (SELECT project_id FROM projects WHERE name = $3)
+                `,
                 [imageTag, subdomain, projectName]
             );
         }
@@ -1218,9 +1228,11 @@ class DeployManager {
             onData(`Build completed successfully. Image pushed to ${imageUri}\n`);
 
             await pool.query(
-                `UPDATE deployments 
-                 SET root_directory = $1, output_directory = $2, build_command = $3, install_command = $4, env_vars = $5
-                 WHERE deployment_id = $6`,
+                `
+                    UPDATE deployments 
+                    SET root_directory = $1, output_directory = $2, build_command = $3, install_command = $4, env_vars = $5
+                    WHERE deployment_id = $6
+                `,
                 [rootDirectory, outputDirectory, buildCommand, installCommand, JSON.stringify(envVars), deploymentId]
             );
             return logDir;
@@ -1254,11 +1266,12 @@ class DeployManager {
         let cfg = { repository, branch, rootDirectory, installCommand, buildCommand, envVars };
         if (!isBase) {
             const domResult = await pool.query(
-                `SELECT repository,branch,root_directory,install_command,
-                    build_command,env_vars
-                FROM domains
-                WHERE domain_name=$1
-                AND project_id=(SELECT project_id FROM projects WHERE name=$2)`,
+                `
+                    SELECT repository,branch,root_directory,install_command, build_command,env_vars
+                    FROM domains
+                    WHERE domain_name=$1
+                        AND project_id=(SELECT project_id FROM projects WHERE name=$2)
+                `,
                 [domainName, projectName]
             );
             if (!domResult.rows.length)
@@ -1412,9 +1425,11 @@ class DeployManager {
             let domainDetails = { repository, branch, rootDirectory, installCommand, buildCommand, envVars };
             if (subdomain !== projectName) {
                 const domainResult = await pool.query(
-                    `SELECT repository, branch, root_directory, install_command, build_command, env_vars
-                     FROM domains
-                     WHERE domain_name = $1 AND project_id = (SELECT project_id FROM projects WHERE name = $2)`,
+                    `
+                        SELECT repository, branch, root_directory, install_command, build_command, env_vars
+                        FROM domains
+                        WHERE domain_name = $1 AND project_id = (SELECT project_id FROM projects WHERE name = $2)
+                    `,
                     [subdomain, projectName]
                 );
                 if (domainResult.rows.length > 0) {
@@ -1437,18 +1452,20 @@ class DeployManager {
                 if (existingDomainResult.rows.length > 0) {
                     domainId = existingDomainResult.rows[0].domain_id;
                     await pool.query(
-                        `UPDATE domains
-                         SET updated_at = $1, 
-                             deployment_id = $2, 
-                             repository = $3, 
-                             branch = $4, 
-                             root_directory = $5, 
-                             output_directory = $6, 
-                             build_command = $7, 
-                             install_command = $8, 
-                             env_vars = $9,
-                             deployment_protection = $10
-                         WHERE domain_id = $11`,
+                        `
+                            UPDATE domains
+                            SET updated_at = $1, 
+                                deployment_id = $2, 
+                                repository = $3, 
+                                branch = $4, 
+                                root_directory = $5, 
+                                output_directory = $6, 
+                                build_command = $7, 
+                                install_command = $8, 
+                                env_vars = $9,
+                                deployment_protection = $10
+                            WHERE domain_id = $11
+                        `,
                         [
                             timestamp,
                             deploymentId,
@@ -1466,9 +1483,11 @@ class DeployManager {
                 } else {
                     domainId = uuidv4();
                     await pool.query(
-                        `INSERT INTO domains 
-                         (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection) 
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+                        `
+                            INSERT INTO domains 
+                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                        `,
                         [
                             organizationID,
                             userID,
@@ -1536,23 +1555,27 @@ class DeployManager {
                 targetGroupArn
             });
             await pool.query(
-                `UPDATE deployments 
-                 SET root_directory = $1, build_command = $2, install_command = $3, env_vars = $4
-                 WHERE deployment_id = $5`,
+                `
+                    UPDATE deployments 
+                    SET root_directory = $1, build_command = $2, install_command = $3, env_vars = $4
+                    WHERE deployment_id = $5
+                `,
                 [domainDetails.rootDirectory, domainDetails.buildCommand, domainDetails.installCommand, JSON.stringify(domainDetails.envVars), deploymentId]
             );
     
             if (subdomain !== projectName) {
                 await pool.query(
-                    `UPDATE domains
-                     SET repository = $1, 
-                         branch = $2, 
-                         root_directory = $3, 
-                         install_command = $4, 
-                         build_command = $5, 
-                         env_vars = $6,
-                         deployment_protection = $7
-                     WHERE domain_name = $8 AND project_id = (SELECT project_id FROM projects WHERE name = $9)`,
+                    `
+                        UPDATE domains
+                        SET repository = $1, 
+                            branch = $2, 
+                            root_directory = $3, 
+                            install_command = $4, 
+                            build_command = $5, 
+                            env_vars = $6,
+                            deployment_protection = $7
+                        WHERE domain_name = $8 AND project_id = (SELECT project_id FROM projects WHERE name = $9)
+                    `,
                     [
                         domainDetails.repository,
                         domainDetails.branch,
@@ -1600,9 +1623,11 @@ class DeployManager {
     
             if (isNewProject) {
                 await pool.query(
-                    `INSERT INTO projects 
-                     (orgid, username, project_id, name, description, branch, team_name, created_by, created_at, updated_at, url, repository, previous_deployment, current_deployment, image) 
-                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+                    `
+                        INSERT INTO projects 
+                            (orgid, username, project_id, name, description, branch, team_name, created_by, created_at, updated_at, url, repository, previous_deployment, current_deployment, image) 
+                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                    `,
                     [
                         organizationID,
                         userID,
@@ -1626,9 +1651,11 @@ class DeployManager {
                     const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
                     const domainId = domainIds[subdomain];
                     await pool.query(
-                        `INSERT INTO domains 
-                         (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection, dns_records) 
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+                        `
+                            INSERT INTO domains 
+                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection, dns_records) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                        `,
                         [
                             organizationID,
                             userID,
@@ -1654,9 +1681,11 @@ class DeployManager {
                 }
     
                 await pool.query(
-                    `INSERT INTO deployments 
-                     (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+                    `
+                        INSERT INTO deployments 
+                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                    `,
                     [
                         organizationID,
                         userID,
@@ -1680,9 +1709,11 @@ class DeployManager {
                 );
     
                 await pool.query(
-                    `INSERT INTO deployment_logs 
-                     (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    `
+                        INSERT INTO deployment_logs 
+                            (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    `,
                     [
                         organizationID,
                         userID,
@@ -1702,9 +1733,11 @@ class DeployManager {
                 );
     
                 await pool.query(
-                    `INSERT INTO deployments 
-                     (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+                    `
+                        INSERT INTO deployments 
+                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                    `,
                     [
                         organizationID,
                         userID,
@@ -1855,18 +1888,22 @@ class DeployManager {
                     domainId = existingDomainResult.rows[0].domain_id;
                     onData(`Existing domain found, ID: ${domainId}\n`);
                     await pool.query(
-                        `UPDATE domains
-                         SET updated_at = $1, deployment_id = $2, repository = $3, branch = $4, root_directory = $5, output_directory = $6, build_command = $7, install_command = $8, env_vars = $9
-                         WHERE domain_id = $10`,
+                        `
+                            UPDATE domains
+                            SET updated_at = $1, deployment_id = $2, repository = $3, branch = $4, root_directory = $5, output_directory = $6, build_command = $7, install_command = $8, env_vars = $9
+                            WHERE domain_id = $10
+                        `,
                         [timestamp, deploymentId, repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, JSON.stringify(envVars), domainId]
                     );
                     onData(`Updated domain timestamp and deployment_id\n`);
                 } else {
                     domainId = uuidv4();
                     await pool.query(
-                        `INSERT INTO domains 
-                         (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars) 
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+                        `
+                            INSERT INTO domains 
+                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                        `,
                         [
                             organizationID,
                             userID,
@@ -2003,9 +2040,11 @@ class DeployManager {
             if (isNewProject) {
                 onData(`Creating new project record\n`);
                 await pool.query(
-                    `INSERT INTO projects 
-                     (orgid, username, project_id, name, description, branch, team_name, created_by, created_at, updated_at, url, repository, previous_deployment, current_deployment, image)
-                     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+                    `
+                        INSERT INTO projects 
+                            (orgid, username, project_id, name, description, branch, team_name, created_by, created_at, updated_at, url, repository, previous_deployment, current_deployment, image)
+                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                    `,
                     [
                         organizationID,
                         userID,
@@ -2029,9 +2068,11 @@ class DeployManager {
                 for (const domainName of domainNames) {
                     const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
                     await pool.query(
-                        `INSERT INTO domains 
-                         (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, dns_records) 
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+                        `
+                            INSERT INTO domains 
+                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, dns_records) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                        `,
                         [
                             organizationID,
                             userID,
@@ -2058,9 +2099,11 @@ class DeployManager {
                 }
     
                 await pool.query(
-                    `INSERT INTO deployments 
-                     (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+                    `
+                        INSERT INTO deployments 
+                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                    `,
                     [
                         organizationID,
                         userID,
@@ -2084,9 +2127,11 @@ class DeployManager {
                 );
                 onData(`Deployment record created\n`);
                 await pool.query(
-                    `INSERT INTO deployment_logs 
-                     (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    `
+                        INSERT INTO deployment_logs 
+                            (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    `,
                     [
                         organizationID,
                         userID,
@@ -2107,9 +2152,11 @@ class DeployManager {
                     ["inactive", now, projectID, "active"]
                 );
                 await pool.query(
-                    `INSERT INTO deployments 
-                     (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+                    `
+                        INSERT INTO deployments 
+                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                    `,
                     [
                         organizationID,
                         userID,
@@ -2182,9 +2229,11 @@ class DeployManager {
         }
         const combined = fileLogs + streamBuffer;
         await pool.query(
-            `INSERT INTO build_logs 
-             (orgid, username, deployment_id, build_log_id, timestamp, log_path, log_messages)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            `
+                INSERT INTO build_logs 
+                    (orgid, username, deployment_id, build_log_id, timestamp, log_path, log_messages)
+                VALUES ($1,$2,$3,$4,$5,$6,$7)
+            `,
             [
                 orgid,
                 username,
@@ -2226,7 +2275,7 @@ class DeployManager {
                     events = resp.events || [];
                     break;
                 } catch (error) {
-                    if (error.name === 'ResourceNotFoundException' && attempt < 5) {
+                    if (error.name === "ResourceNotFoundException" && attempt < 5) {
                         await new Promise(resolve => setTimeout(resolve, 5000));
                     } else {
                         throw new Error(`Failed to fetch logs: ${error.message}.`);
@@ -2236,8 +2285,8 @@ class DeployManager {
     
             const logMessages = events.map(e => ({ timestamp: e.timestamp, message: e.message }));
             for (const log of logMessages) {
-                if (log.message.includes('200 OK')) break;
-                if (log.message.includes('500 Internal Server Error')) break;
+                if (log.message.includes("200 OK")) break;
+                if (log.message.includes("500 Internal Server Error")) break;
             }
     
             const runtimeLogPath = `runtime-logs/${deploymentId}/${uuidv4()}.log`;
@@ -2485,15 +2534,15 @@ class DeployManager {
     }) {
         const ts = new Date().toUTCString();
         const depQ = await pool.query(`
-        SELECT d.*, p.name AS project_name,
-               p.current_deployment, p.previous_deployment
-          FROM deployments d
-          JOIN projects p ON p.project_id = d.project_id
-         WHERE d.deployment_id = $1
-           AND d.project_id    = $2
-           AND d.orgid         = $3
-           AND d.username      = $4`,
-            [deploymentID, projectID, organizationID, userID]);
+            SELECT d.*, p.name AS project_name, p.current_deployment, p.previous_deployment
+            FROM deployments d
+            JOIN projects p ON p.project_id = d.project_id
+            WHERE d.deployment_id = $1
+                AND d.project_id = $2
+                AND d.orgid = $3
+                AND d.username = $4
+        `,
+        [deploymentID, projectID, organizationID, userID]);
         if (!depQ.rowCount) throw new Error("Deployment not found or access denied.");
         const deployment = depQ.rows[0];
         const projectName = deployment.project_name.toLowerCase();
@@ -2505,10 +2554,11 @@ class DeployManager {
             throw new Error(`Domain “${domainName}” does not belong to project “${projectName}.`);
     
         const domQ = await pool.query(`
-        SELECT domain_id, deployment_id AS current_deployment
-          FROM domains
-         WHERE project_id = $1 AND domain_name = $2`,
-            [projectID, dn]);
+            SELECT domain_id, deployment_id AS current_deployment
+            FROM domains
+            WHERE project_id = $1 AND domain_name = $2
+        `,
+        [projectID, dn]);
         if (!domQ.rowCount)
             throw new Error(`Domain “${domainName}” is unknown for this project.`);
         const { domain_id: domainId, current_deployment: oldActiveId } = domQ.rows[0];
@@ -2535,39 +2585,48 @@ class DeployManager {
     
             if (oldActiveId) {
                 const r1 = await client.query(
-                    `UPDATE deployments
-              SET status='inactive', updated_at=$1
-            WHERE deployment_id=$2 RETURNING deployment_id`,
+                    `
+                        UPDATE deployments
+                        SET status='inactive', updated_at=$1
+                        WHERE deployment_id=$2 RETURNING deployment_id
+                    `,
                     [ts, oldActiveId]);
             }
     
             const r2 = await client.query(
-                `UPDATE deployments
-            SET status='active',
-                updated_at=$1,
-                last_deployed_at=$1
-          WHERE deployment_id=$2 RETURNING deployment_id`,
+                `
+                    UPDATE deployments
+                    SET status='active',
+                        updated_at=$1,
+                        last_deployed_at=$1
+                    WHERE deployment_id=$2 RETURNING deployment_id
+                `,
                 [ts, deploymentID]);
     
             const r3 = await client.query(
-                `UPDATE domains
-            SET deployment_id=$1, updated_at=$2
-          WHERE domain_id=$3`,
+                `
+                    UPDATE domains
+                    SET deployment_id=$1, updated_at=$2
+                    WHERE domain_id=$3
+                `,
                 [deploymentID, ts, domainId]);
     
             const r4 = await client.query(
-                `UPDATE projects
-            SET previous_deployment=$1,
-                current_deployment =$2,
-                updated_at=$3
-          WHERE project_id=$4`,
+                `
+                    UPDATE projects
+                    SET previous_deployment=$1,
+                        current_deployment =$2,
+                        updated_at=$3
+                    WHERE project_id=$4
+                `,
                 [oldActiveId, deploymentID, ts, projectID]);
     
             await client.query(
-                `INSERT INTO deployment_logs
-               (orgid,username,project_id,project_name,
-                action,deployment_id,timestamp,ip_address)
-         VALUES ($1,$2,$3,$4,'rollback',$5,$6,'127.0.0.1')`,
+                `
+                    INSERT INTO deployment_logs
+                        (orgid,username,project_id,project_name,action,deployment_id,timestamp,ip_address)
+                    VALUES ($1,$2,$3,$4,'rollback',$5,$6,'127.0.0.1')
+                `,
                 [organizationID, userID, projectID, projectName, deploymentID, ts]);
     
             await client.query("COMMIT");
@@ -2717,7 +2776,7 @@ class DeployManager {
                 .filter(arn => arn))];
             try {
                 const certList = await acmClient.send(new ListCertificatesCommand({
-                    CertificateStatuses: ['ISSUED', 'PENDING_VALIDATION']
+                    CertificateStatuses: ["ISSUED", "PENDING_VALIDATION"]
                 }));
                 for (const cert of certList.CertificateSummaryList || []) {
                     if (cert.DomainName.toLowerCase().includes(projectName.toLowerCase())) {
@@ -2918,9 +2977,11 @@ class DeployManager {
     
             try {
                 await client.query(
-                    `INSERT INTO deployment_logs 
-                     (orgid, username, project_id, project_name, action, timestamp, ip_address) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                    `
+                        INSERT INTO deployment_logs 
+                            (orgid, username, project_id, project_name, action, timestamp, ip_address) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    `,
                     [organizationID, userID, projectID, projectName, "delete", timestamp, "127.0.0.1"]
                 );
             } catch (error) {}
@@ -3153,9 +3214,11 @@ class DeployManager {
     
             try {
                 await client.query(
-                    `INSERT INTO deployment_logs 
-                     (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                    `
+                        INSERT INTO deployment_logs 
+                            (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    `,
                     [organizationID, userID, projectID, projectName, "cleanup_failed", deploymentId, timestamp, "127.0.0.1"]
                 );
             } catch (error) {}

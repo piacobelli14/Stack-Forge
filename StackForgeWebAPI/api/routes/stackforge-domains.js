@@ -3,7 +3,7 @@
 const express = require("express");
 const router = express.Router();
 const dns = require("dns").promises;
-const https = require('https');
+const https = require("https");
 const axios = require("axios");
 const { authenticateToken } = require("../middleware/auth");
 const { pool } = require("../config/db");
@@ -19,8 +19,8 @@ const {
   RemoveListenerCertificatesCommand,
   DescribeListenerCertificatesCommand,
   DescribeTargetHealthCommand,
-} = require('@aws-sdk/client-elastic-load-balancing-v2');
-const { Route53Client, ChangeResourceRecordSetsCommand } = require('@aws-sdk/client-route-53'); const {
+} = require("@aws-sdk/client-elastic-load-balancing-v2");
+const { Route53Client, ChangeResourceRecordSetsCommand } = require("@aws-sdk/client-route-53"); const {
   ACMClient,
   RequestCertificateCommand,
   DescribeCertificateCommand
@@ -28,11 +28,11 @@ const { Route53Client, ChangeResourceRecordSetsCommand } = require('@aws-sdk/cli
 const {
   CloudFrontClient,
   CreateInvalidationCommand
-} = require('@aws-sdk/client-cloudfront');
+} = require("@aws-sdk/client-cloudfront");
 
 const deployManager = require("./drivers/deployManager");
 
-require('dotenv').config();
+require("dotenv").config();
 secretKey = process.env.JWT_SECRET_KEY;
 
 router.post("/validate-domain", authenticateToken, async (req, res, next) => {
@@ -51,11 +51,13 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   const albDns = process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`;
 
   const projResult = await pool.query(
-    `SELECT name, current_deployment, created_at
-       FROM projects
+    ` 
+      SELECT name, current_deployment, created_at
+      FROM projects
       WHERE project_id = $1
         AND orgid      = $2
-        AND username   = $3`,
+        AND username   = $3
+    `,
     [projectID, organizationID, userID]
   );
   if (!projResult.rows.length) {
@@ -66,14 +68,15 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   const currentDeployment = projResult.rows[0].current_deployment;
 
   const parentResult = await pool.query(
-    `SELECT dep.env_vars,
+    `
+      SELECT dep.env_vars,
             d.repository, d.branch, d.root_directory, d.output_directory,
             d.build_command, d.install_command,
             dep.task_def_arn
-       FROM domains d
-       JOIN deployments dep ON d.deployment_id = dep.deployment_id
-      WHERE d.project_id = $1
-        AND d.is_primary = true`,
+      FROM domains d
+      JOIN deployments dep ON d.deployment_id = dep.deployment_id
+      WHERE d.project_id = $1 AND d.is_primary = true
+    `,
     [projectID]
   );
   let parentCfg = parentResult.rows[0] || {};
@@ -81,11 +84,12 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   if (parentRawEnv === undefined || parentRawEnv === null) {
     const fallbackRes = await pool.query(
-      `SELECT dep.env_vars
-         FROM deployments dep
-         JOIN domains d ON dep.deployment_id = d.deployment_id
-        WHERE d.project_id = $1
-          AND d.is_primary = true`,
+      `
+        SELECT dep.env_vars
+        FROM deployments dep
+        JOIN domains d ON dep.deployment_id = d.deployment_id
+        WHERE d.project_id = $1 AND d.is_primary = true
+      `,
       [projectID]
     );
     parentRawEnv = fallbackRes.rows[0]?.env_vars || [];
@@ -109,17 +113,17 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   const fqdn       = `${storedName}.stackforgeengine.com`;
 
   const domResult = await pool.query(
-    `SELECT domain_id, certificate_arn, target_group_arn,
-            redirect_target, deployment_id
-       FROM domains
-      WHERE project_id = $1
-        AND domain_name = $2`,
+    `
+      SELECT domain_id, certificate_arn, target_group_arn, redirect_target, deployment_id
+      FROM domains
+      WHERE project_id = $1 AND domain_name = $2
+    `,
     [projectID, storedName]
   );
 
   const existing = domResult.rows[0] || null;
 
-  const projectAgeMs = Date.now() - new Date(projResult.rows[0].created_at + 'Z').getTime();
+  const projectAgeMs = Date.now() - new Date(projResult.rows[0].created_at + "Z").getTime();
   const delayMs = 300_000;
   if (!existing && !isParent && projectAgeMs < delayMs) {
     const waitSec = Math.ceil((delayMs - projectAgeMs) / 1000);
@@ -353,11 +357,13 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   }
 
   const deploymentCheck = await pool.query(
-    `SELECT domain_id
-       FROM domains
+    `
+      SELECT domain_id
+      FROM domains
       WHERE deployment_id = $1
-        AND domain_id    != $2
-        AND orgid         = $3`,
+        AND domain_id != $2
+        AND orgid = $3
+    `,
     [deploymentId, domainId, organizationID]
   );
   if (deploymentCheck.rows.length > 0 && !isParent) {
@@ -365,27 +371,28 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   }
 
   const existingDeployment = await pool.query(
-    `SELECT deployment_id
-       FROM deployments
-      WHERE deployment_id = $1
-        AND orgid         = $2`,
+    `
+      SELECT deployment_id
+      FROM deployments
+      WHERE deployment_id = $1 AND orgid = $2
+    `,
     [deploymentId, organizationID]
   );
 
   if (existingDeployment.rows.length === 0) {
     await pool.query(
-      `INSERT INTO deployments
-         (orgid, username, deployment_id, project_id, domain_id,
+      `
+        INSERT INTO deployments (orgid, username, deployment_id, project_id, domain_id,
           status, url, template,
           created_at, updated_at, last_deployed_at,
           task_def_arn, commit_sha,
           root_directory, output_directory, build_command, install_command, env_vars)
-       VALUES
-         ($1,$2,$3,$4,$5,
+        VALUES ($1,$2,$3,$4,$5,
           $6,$7,$8,
           $9,$10,$11,
           $12,$13,
-          $14,$15,$16,$17,$18)`,
+          $14,$15,$16,$17,$18)
+      `,
       [
         organizationID, userID, deploymentId, projectID, domainId,
         "active", `https://${fqdn}`, "default",
@@ -398,12 +405,10 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     );
 
     await pool.query(
-      `INSERT INTO deployment_logs
-         (orgid, username, project_id, project_name,
-          action, deployment_id, timestamp, ip_address)
-       VALUES
-         ($1,$2,$3,$4,
-          $5,$6,$7,$8)`,
+      `
+        INSERT INTO deployment_logs (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address)
+        VALUES ($1,$2,$3,$4, $5,$6,$7,$8)
+      `,
       [
         organizationID, userID, projectID, projectName,
         "validate-domain", deploymentId, timestamp, "127.0.0.1"
@@ -411,22 +416,22 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     );
   } else {
     await pool.query(
-      `UPDATE deployments
-          SET updated_at = $1,
-              last_deployed_at = $1,
-              status = $2,
-              url = $3,
-              task_def_arn = $4,
-              commit_sha = $5,
-              root_directory  = $6,
-              output_directory = $7,
-              build_command = $8,
-              install_command = $9,
-              env_vars = $10,
-              domain_id = $11
-        WHERE deployment_id = $12 
-          AND orgid = $13
-        `,
+      `
+        UPDATE deployments
+        SET updated_at = $1,
+            last_deployed_at = $1,
+            status = $2,
+            url = $3,
+            task_def_arn = $4,
+            commit_sha = $5,
+            root_directory  = $6,
+            output_directory = $7,
+            build_command = $8,
+            install_command = $9,
+            env_vars = $10,
+            domain_id = $11
+        WHERE deployment_id = $12 AND orgid = $13
+      `,
       [
         timestamp, "active", `https://${fqdn}`,
         parentCfg.task_def_arn || null, commitSha,
@@ -440,12 +445,11 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   if (isParent && currentDeployment !== deploymentId) {
     await pool.query(
-      `UPDATE projects
-          SET current_deployment = $1,
-              updated_at = $2
-        WHERE project_id = $3
-          AND orgid = $4
-        `,
+      `
+        UPDATE projects
+        SET current_deployment = $1, updated_at = $2
+        WHERE project_id = $3 AND orgid = $4
+      `,
       [deploymentId, timestamp, projectID, organizationID]
     );
   }
@@ -466,37 +470,39 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   if (existing) {
     await pool.query(
-      `UPDATE domains
-          SET updated_at = $1,
-              deployment_id = $2,
-              certificate_arn = $3,
-              repository = $4,
-              branch = $5,
-              root_directory = $6,
-              output_directory = $7,
-              build_command = $8,
-              install_command = $9,
-              env_vars = $10,
-              target_group_arn = $11
-        WHERE domain_id = $12`,
+      `
+        UPDATE domains
+        SET updated_at = $1,
+          deployment_id = $2,
+          certificate_arn = $3,
+          repository = $4,
+          branch = $5,
+          root_directory = $6,
+          output_directory = $7,
+          build_command = $8,
+          install_command = $9,
+          env_vars = $10,
+          target_group_arn = $11
+        WHERE domain_id = $12
+      `,
       [...valsCommon, domainId]
     );
   } else {
     await pool.query(
-      `INSERT INTO domains
-         (orgid, username, domain_id, domain_name,
+      `
+        INSERT INTO domains (orgid, username, domain_id, domain_name,
           project_id, created_by, created_at, updated_at,
           environment, is_primary,
           deployment_id, certificate_arn,
           repository, branch, root_directory, output_directory,
           build_command, install_command, env_vars, target_group_arn)
-       VALUES
-         ($1,$2,$3,$4,
+       VALUES ($1,$2,$3,$4,
           $5,$6,$7,$8,
           $9,$10,
           $11,$12,
           $13,$14,$15,$16,
-          $17,$18,$19,$20)`,
+          $17,$18,$19,$20)
+      `,
       [
         organizationID, userID, domainId, storedName,
         projectID, userID, timestamp, timestamp,
@@ -626,7 +632,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
       const { TargetHealthDescriptions } = await elbv2.send(
         new DescribeTargetHealthCommand({ TargetGroupArn: tgArn })
       );
-      return TargetHealthDescriptions.some(t => t.TargetHealth.State === 'healthy');
+      return TargetHealthDescriptions.some(t => t.TargetHealth.State === "healthy");
     } catch (error) {
       throw new Error(`Failed to validate target group health: ${error.message}`);
     }
@@ -661,9 +667,11 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
         [domainID, projectID, organizationID]
       ),
       pool.query(
-        `SELECT dep.task_def_arn FROM domains d
-         JOIN deployments dep ON dep.deployment_id = d.deployment_id
-         WHERE d.project_id=$1 AND d.is_primary=true LIMIT 1`,
+        `
+          SELECT dep.task_def_arn FROM domains d
+          JOIN deployments dep ON dep.deployment_id = d.deployment_id
+           WHERE d.project_id=$1 AND d.is_primary=true LIMIT 1
+        `,
         [projectID]
       )
     ]);
@@ -738,7 +746,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
             healthCheckRetries--;
           }
           if (!isTgHealthy) {
-            throw new Error(`Target group ${tgArn} has no healthy targets after service deployment`);
+            throw new Error(`Target group ${tgArn} has no healthy targets after service deployment.`);
           }
         } catch (error) {
           return res.status(500).json({
@@ -888,9 +896,11 @@ router.post("/edit-environment", authenticateToken, async (req, res, next) => {
     );
 
     await pool.query(
-      `INSERT INTO deployment_logs
-             (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `
+        INSERT INTO deployment_logs
+          (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `,
       [organizationID, userID, projectID, projectName, "edit_environment", uuidv4(), timestamp, "127.0.0.1"]
     );
 
@@ -915,25 +925,25 @@ router.post("/project-domains", authenticateToken, async (req, res, next) => {
 
   try {
     const domainFetchQuery = `
-            SELECT 
-                domain_id,
-                domain_name,
-                project_id,
-                created_by,
-                created_at,
-                updated_at,
-                is_accessible,
-                dns_records,
-                checked_at,
-                is_primary,
-                redirect_target, 
-                environment, 
-                deployment_id
-            FROM domains
-            WHERE orgid = $1
-            AND username = $2
-            AND project_id = $3
-        `;
+        SELECT 
+            domain_id,
+            domain_name,
+            project_id,
+            created_by,
+            created_at,
+            updated_at,
+            is_accessible,
+            dns_records,
+            checked_at,
+            is_primary,
+            redirect_target, 
+            environment, 
+            deployment_id
+        FROM domains
+        WHERE orgid = $1
+        AND username = $2
+        AND project_id = $3
+    `;
 
     const domainFetchInfo = await pool.query(domainFetchQuery, [organizationID, userID, projectID]);
     const domains = domainFetchInfo.rows.map(domain => ({
