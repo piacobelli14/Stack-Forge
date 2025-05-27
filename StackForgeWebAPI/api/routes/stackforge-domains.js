@@ -39,20 +39,16 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   const { userID, organizationID, projectID, domain, repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, envVars, internalCall = false } = req.body;
 
   if (!userID || !organizationID || !projectID || !domain) {
-    return res
-      .status(400)
-      .json({ message: "userID, organizationID, projectID, and domain are required." });
+    return res.status(400).json({ message: "userID, organizationID, projectID, and domain are required." });
   }
 
   const timestamp = new Date().toISOString();
-  const elbv2  = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
-  const r53    = new Route53Client({ region: process.env.AWS_REGION });
-  const acm    = new ACMClient({ region: process.env.AWS_REGION });
+  const elbv2 = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
+  const r53 = new Route53Client({ region: process.env.AWS_REGION });
+  const acm = new ACMClient({ region: process.env.AWS_REGION });
   const L_HTTPS = process.env.ALB_LISTENER_ARN_HTTPS;
-  const L_HTTP  = process.env.ALB_LISTENER_ARN_HTTP;
-  const albDns  = process.env.LOAD_BALANCER_DNS.endsWith(".")
-    ? process.env.LOAD_BALANCER_DNS
-    : `${process.env.LOAD_BALANCER_DNS}.`;
+  const L_HTTP = process.env.ALB_LISTENER_ARN_HTTP;
+  const albDns = process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`;
 
   const projResult = await pool.query(
     `SELECT name, current_deployment, created_at
@@ -62,11 +58,12 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         AND username   = $3`,
     [projectID, organizationID, userID]
   );
-  if (!projResult.rows.length)
+  if (!projResult.rows.length) {
     return res.status(404).json({ message: "Project not found." });
+  }
 
-  const projectName        = projResult.rows[0].name.toLowerCase();
-  const currentDeployment  = projResult.rows[0].current_deployment;
+  const projectName = projResult.rows[0].name.toLowerCase();
+  const currentDeployment = projResult.rows[0].current_deployment;
 
   const parentResult = await pool.query(
     `SELECT dep.env_vars,
@@ -96,14 +93,16 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   let fallbackEnvVars = [];
   if (typeof parentRawEnv === "string") {
-    try { fallbackEnvVars = JSON.parse(parentRawEnv); } catch { fallbackEnvVars = []; }
+    try { 
+      fallbackEnvVars = JSON.parse(parentRawEnv); 
+    } catch { 
+      fallbackEnvVars = []; 
+    }
   } else if (Array.isArray(parentRawEnv)) {
     fallbackEnvVars = parentRawEnv;
   }
 
-  let raw = domain.trim().toLowerCase()
-    .replace(/\.stackforgeengine\.com$/i, "")
-    .replace(new RegExp(`\\.${projectName}$`), "");
+  let raw = domain.trim().toLowerCase().replace(/\.stackforgeengine\.com$/i, "").replace(new RegExp(`\\.${projectName}$`), "");
   const isParent   = raw === projectName || raw === "";
   const subLabel   = isParent ? projectName : raw.split(".")[0];
   const storedName = isParent ? projectName : `${subLabel}.${projectName}`;
@@ -117,32 +116,31 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         AND domain_name = $2`,
     [projectID, storedName]
   );
+
   const existing = domResult.rows[0] || null;
 
-  const projectAgeMs = Date.now() - new Date(projRes.rows[0].created_at + 'Z').getTime();
+  const projectAgeMs = Date.now() - new Date(projResult.rows[0].created_at + 'Z').getTime();
   const delayMs = 300_000;
-  if (!existing && projectAgeMs < delayMs) {
-      const waitSec = Math.ceil((delayMs - projectAgeMs) / 1000);
-      return res.status(429).json({
-          code: "DOMAIN_THROTTLED",
-          message: `New domains may be added starting five minutes after project creation. ` +
-                  `Please wait approximately ${waitSec} more second${waitSec !== 1 ? "s" : ""} ` +
-                  `and try again.`
-      });
+  if (!existing && !isParent && projectAgeMs < delayMs) {
+    const waitSec = Math.ceil((delayMs - projectAgeMs) / 1000);
+    return res.status(429).json({
+      code: "DOMAIN_THROTTLED",
+      message: `New domains may be added starting five minutes after project creation. ` +
+               `Please wait approximately ${waitSec} more second${waitSec !== 1 ? "s" : ""} ` +
+               `and try again.`
+    });
   }
 
   const domainId = existing?.domain_id || uuidv4();
-  let   certArn = existing?.certificate_arn || null;
-  let   tgArn = existing?.target_group_arn || null;
+  let certArn = existing?.certificate_arn || null;
+  let tgArn = existing?.target_group_arn || null;
   const existingRedirect = existing?.redirect_target || null;
   const existingDeploymentId = existing?.deployment_id || null;
 
-  const wildcard  = `*.${projectName}.stackforgeengine.com`;
-  const altNames  = [wildcard, `${projectName}.stackforgeengine.com`];
+  const wildcard = `*.${projectName}.stackforgeengine.com`;
+  const altNames = [wildcard, `${projectName}.stackforgeengine.com`];
 
-  let   deploymentId = isParent
-    ? (existingDeploymentId || currentDeployment || uuidv4())
-    : (existingDeploymentId || uuidv4());
+  let deploymentId = isParent ? (existingDeploymentId || currentDeployment || uuidv4()) : (existingDeploymentId || uuidv4());
 
   if (!certArn) {
     const reqCert = await acm.send(
@@ -185,7 +183,10 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     const info = await acm.send(
       new DescribeCertificateCommand({ CertificateArn: certArn })
     );
-    if (info.Certificate.Status === "ISSUED") { certReady = true; break; }
+    if (info.Certificate.Status === "ISSUED") {
+      certReady = true;
+      break;
+    }
     await new Promise(r => setTimeout(r, 10_000));
   }
   if (!certReady) {
@@ -220,18 +221,22 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   let parsedEnv = null;
   if (envVars !== undefined && envVars !== null) {
-    try { parsedEnv = typeof envVars === "string" ? JSON.parse(envVars) : envVars; } catch { parsedEnv = null; }
+    try {
+      parsedEnv = typeof envVars === "string" ? JSON.parse(envVars) : envVars;
+    } catch {
+      parsedEnv = null;
+    }
   }
   let finalEnvVars = Array.isArray(parsedEnv) ? parsedEnv : fallbackEnvVars;
 
   const cfg = {
-    repository      : repository      || parentCfg.repository      || null,
-    branch          : branch          || parentCfg.branch          || "main",
-    rootDirectory   : rootDirectory   || parentCfg.root_directory  || ".",
-    outputDirectory : outputDirectory || parentCfg.output_directory|| "",
-    buildCommand    : buildCommand    || parentCfg.build_command   || "",
-    installCommand  : installCommand  || parentCfg.install_command || "npm install",
-    envVars         : finalEnvVars
+    repository : repository || parentCfg.repository || null,
+    branch : branch || parentCfg.branch || "main",
+    rootDirectory : rootDirectory || parentCfg.root_directory  || ".",
+    outputDirectory : outputDirectory || parentCfg.output_directory || "",
+    buildCommand : buildCommand || parentCfg.build_command || "",
+    installCommand : installCommand || parentCfg.install_command || "npm install",
+    envVars : finalEnvVars
   };
   if (!Array.isArray(cfg.envVars)) cfg.envVars = [];
 
@@ -250,7 +255,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   }
 
   async function upsertDns(host) {
-    const isApex = host.split(".").length === 3;  
+    const isApex = host.split(".").length === 3;
     if (isApex) {
       const lb = await elbv2.send(
         new DescribeLoadBalancersCommand({ Names: [process.env.LOAD_BALANCER_NAME] })
@@ -258,7 +263,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       await r53.send(
         new ChangeResourceRecordSetsCommand({
           HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
-          ChangeBatch : {
+          ChangeBatch: {
             Changes: [
               {
                 Action: "UPSERT",
@@ -266,8 +271,8 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
                   Name: host,
                   Type: "A",
                   AliasTarget: {
-                    HostedZoneId : lb.LoadBalancers[0].CanonicalHostedZoneId,
-                    DNSName : albDns,
+                    HostedZoneId       : lb.LoadBalancers[0].CanonicalHostedZoneId,
+                    DNSName            : albDns,
                     EvaluateTargetHealth: false
                   }
                 }
@@ -280,15 +285,15 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       await r53.send(
         new ChangeResourceRecordSetsCommand({
           HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
-          ChangeBatch : {
+          ChangeBatch: {
             Changes: [
               {
                 Action: "UPSERT",
                 ResourceRecordSet: {
-                  Name: host,
-                  Type: "CNAME",
-                  TTL : 60,
-                  ResourceRecords: [{ Value: albDns }]
+                  Name            : host,
+                  Type            : "CNAME",
+                  TTL             : 60,
+                  ResourceRecords : [{ Value: albDns }]
                 }
               }
             ]
@@ -297,7 +302,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       );
     }
   }
-  
+
   await upsertDns(fqdn);
 
   if (!existingRedirect) {
@@ -314,13 +319,14 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       );
       if (missing) {
         const used = new Set(Rules.filter(r => !r.IsDefault).map(r => Number(r.Priority)));
-        let pr = 1; while (used.has(pr)) pr++;
+        let pr = 1;
+        while (used.has(pr)) pr++;
         await elbv2.send(
           new CreateRuleCommand({
             ListenerArn: L,
-            Priority   : pr,
+            Priority : pr,
             Conditions : [{ Field: "host-header", Values: [fqdn] }],
-            Actions    : [{ Type: "forward", TargetGroupArn: tgArn }]
+            Actions : [{ Type: "forward", TargetGroupArn: tgArn }]
           })
         );
       }
@@ -337,14 +343,14 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     } catch {}
   }
 
-  if (!existingRedirect && parentCfg.task_def_arn) {     
+  if (!existingRedirect && parentCfg.task_def_arn) {
     await deployManager.createOrUpdateService({
       projectName,
       subdomain : isParent ? null : subLabel,
-      taskDefArn: parentCfg.task_def_arn,
+      taskDefArn : parentCfg.task_def_arn,
       targetGroupArn: tgArn
     });
-  } else if (!parentCfg.task_def_arn) {}
+  }
 
   const deploymentCheck = await pool.query(
     `SELECT domain_id
@@ -354,7 +360,9 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         AND orgid         = $3`,
     [deploymentId, domainId, organizationID]
   );
-  if (deploymentCheck.rows.length > 0 && !isParent) deploymentId = uuidv4();
+  if (deploymentCheck.rows.length > 0 && !isParent) {
+    deploymentId = uuidv4();
+  }
 
   const existingDeployment = await pool.query(
     `SELECT deployment_id
@@ -384,7 +392,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         timestamp, timestamp, timestamp,
         parentCfg.task_def_arn || null, commitSha,
         cfg.rootDirectory, cfg.outputDirectory,
-        cfg.buildCommand,  cfg.installCommand,
+        cfg.buildCommand, cfg.installCommand,
         JSON.stringify(cfg.envVars)
       ]
     );
@@ -404,25 +412,26 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   } else {
     await pool.query(
       `UPDATE deployments
-          SET updated_at      = $1,
-              last_deployed_at= $1,
-              status          = $2,
-              url             = $3,
-              task_def_arn    = $4,
-              commit_sha      = $5,
+          SET updated_at = $1,
+              last_deployed_at = $1,
+              status = $2,
+              url = $3,
+              task_def_arn = $4,
+              commit_sha = $5,
               root_directory  = $6,
-              output_directory= $7,
-              build_command   = $8,
+              output_directory = $7,
+              build_command = $8,
               install_command = $9,
-              env_vars        = $10,
-              domain_id       = $11
-        WHERE deployment_id   = $12
-          AND orgid           = $13`,
+              env_vars = $10,
+              domain_id = $11
+        WHERE deployment_id = $12 
+          AND orgid = $13
+        `,
       [
         timestamp, "active", `https://${fqdn}`,
         parentCfg.task_def_arn || null, commitSha,
         cfg.rootDirectory, cfg.outputDirectory,
-        cfg.buildCommand,  cfg.installCommand,
+        cfg.buildCommand, cfg.installCommand,
         JSON.stringify(cfg.envVars),
         domainId, deploymentId, organizationID
       ]
@@ -433,9 +442,10 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     await pool.query(
       `UPDATE projects
           SET current_deployment = $1,
-              updated_at         = $2
-        WHERE project_id        = $3
-          AND orgid             = $4`,
+              updated_at = $2
+        WHERE project_id = $3
+          AND orgid = $4
+        `,
       [deploymentId, timestamp, projectID, organizationID]
     );
   }
@@ -457,18 +467,18 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   if (existing) {
     await pool.query(
       `UPDATE domains
-          SET updated_at        = $1,
-              deployment_id     = $2,
-              certificate_arn   = $3,
-              repository        = $4,
-              branch            = $5,
-              root_directory    = $6,
-              output_directory  = $7,
-              build_command     = $8,
-              install_command   = $9,
-              env_vars          = $10,
-              target_group_arn  = $11
-        WHERE domain_id         = $12`,
+          SET updated_at = $1,
+              deployment_id = $2,
+              certificate_arn = $3,
+              repository = $4,
+              branch = $5,
+              root_directory = $6,
+              output_directory = $7,
+              build_command = $8,
+              install_command = $9,
+              env_vars = $10,
+              target_group_arn = $11
+        WHERE domain_id = $12`,
       [...valsCommon, domainId]
     );
   } else {
@@ -510,16 +520,18 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     [JSON.stringify(recs), domainId]
   );
 
-  if (!existingRedirect)
+  if (!existingRedirect) {
     await deployManager.recordRuntimeLogs(
-      organizationID, userID, deploymentId, projectName,
+      organizationID, 
+      userID, 
+      deploymentId, 
+      projectName,
       isParent ? null : subLabel
     );
+  }
 
   return res.status(200).json({
-    message: existingRedirect
-      ? `Subdomain ${subLabel} refreshed (redirect still → ${existingRedirect}).`
-      : `Subdomain ${subLabel} validated${existing ? "" : " and deployment initiated"}.`,
+    message: existingRedirect ? `Subdomain ${subLabel} refreshed (redirect still → ${existingRedirect}).` : `Subdomain ${subLabel} validated${existing ? "" : " and deployment initiated"}.`,
     url           : `https://${fqdn}`,
     certificateArn: certArn,
     dnsRecords    : recs,
@@ -527,65 +539,6 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   });
 });
 
-router.post("/project-domains", authenticateToken, async (req, res, next) => {
-  const { userID, organizationID, projectID } = req.body;
-
-  if (!userID || !organizationID || !projectID) {
-    return res.status(400).json({
-      message: "userID, organizationID, and projectID are required."
-    });
-  }
-
-  try {
-    const domainFetchQuery = `
-            SELECT 
-                domain_id,
-                domain_name,
-                project_id,
-                created_by,
-                created_at,
-                updated_at,
-                is_accessible,
-                dns_records,
-                checked_at,
-                is_primary,
-                redirect_target, 
-                environment, 
-                deployment_id
-            FROM domains
-            WHERE orgid = $1
-            AND username = $2
-            AND project_id = $3
-        `;
-
-    const domainFetchInfo = await pool.query(domainFetchQuery, [organizationID, userID, projectID]);
-    const domains = domainFetchInfo.rows.map(domain => ({
-      domainID: domain.domain_id,
-      domainName: domain.domain_name,
-      projectID: domain.project_id,
-      createdBy: domain.created_by,
-      createdAt: domain.created_at,
-      updatedAt: domain.updated_at,
-      isAccessible: domain.is_accessible,
-      dnsRecords: domain.dns_records,
-      checkedAt: domain.checked_at,
-      isPrimary: domain.is_primary,
-      redirectTarget: domain.redirect_target,
-      environment: domain.environment,
-      deploymentID: domain.deployment_id
-    }));
-
-    res.status(200).json({
-      domains: domains,
-      count: domains.length
-    });
-  } catch (error) {
-    if (!res.headersSent) {
-      res.status(500).json({ message: `Failed to retrieve domains: ${error.message}.` });
-    }
-    next(error);
-  }
-});
 
 router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
   const { userID, organizationID, projectID, domainID, redirectTarget } = req.body;
@@ -679,8 +632,26 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     }
   }
 
+  async function asyncCloudfrontInvalidation(distributionId, domainId, type) {
+    if (!distributionId) return;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await cloudfront.send(new CreateInvalidationCommand({
+          DistributionId: distributionId,
+          InvalidationBatch: {
+            CallerReference: `${type}-${domainId}-${Date.now()}`,
+            Paths: { Quantity: 2, Items: ["/", "/*"] }
+          }
+        }));
+        break;
+      } catch (error) {
+        await new Promise(resolve => setTimeout(resolve, 3000)); 
+      }
+    }
+  }
+
   try {
-    const [projRes, domRes, parentRes] = await Promise.all([
+    const [projResult, domRes, parentRes] = await Promise.all([
       pool.query(
         "SELECT name FROM projects WHERE project_id=$1 AND orgid=$2 AND username=$3",
         [projectID, organizationID, userID]
@@ -696,10 +667,10 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
         [projectID]
       )
     ]);
-    if (!projRes.rows.length || !domRes.rows.length)
+    if (!projResult.rows.length || !domRes.rows.length)
       return res.status(404).json({ message: "Project or domain not found." });
 
-    const projectName = projRes.rows[0].name.toLowerCase();
+    const projectName = projResult.rows[0].name.toLowerCase();
     const sourceSub = domRes.rows[0].domain_name.toLowerCase();
     const sourceFqdn = `${sourceSub}.stackforgeengine.com`;
     let tgArn = domRes.rows[0].target_group_arn || null;
@@ -726,15 +697,16 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
       await upsertRecord(targetFqdn);
     }
 
-    for (const arn of [httpArn, httpsArn]) {
-      const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: arn }));
-      for (const r of Rules) {
-        if (!r.IsDefault &&
+    const { Rules: httpRules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: httpArn }));
+    const { Rules: httpsRules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: httpsArn }));
+    const deletePromises = [];
+    for (const r of [...httpRules, ...httpsRules]) {
+      if (!r.IsDefault &&
           r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(sourceFqdn))) {
-          await elbv2.send(new DeleteRuleCommand({ RuleArn: r.RuleArn }));
-        }
+        deletePromises.push(elbv2.send(new DeleteRuleCommand({ RuleArn: r.RuleArn })));
       }
     }
+    await Promise.all(deletePromises);
 
     if (redirectTarget === null) {
       if (!tgArn) {
@@ -747,9 +719,9 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
         );
       }
 
-      const isTgHealthy = await validateTargetGroupHealth(tgArn);
+      let isTgHealthy = await validateTargetGroupHealth(tgArn);
 
-      if (parentTaskDef) {
+      if (parentTaskDef && !isTgHealthy) {
         try {
           await deployManager.createOrUpdateService({
             projectName,
@@ -758,15 +730,14 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
             targetGroupArn: tgArn
           });
 
-          let healthCheckRetries = 5;
-          let isTgHealthyPostDeploy = false;
+          let healthCheckRetries = 3;
           while (healthCheckRetries > 0) {
-            isTgHealthyPostDeploy = await validateTargetGroupHealth(tgArn);
-            if (isTgHealthyPostDeploy) break;
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            isTgHealthy = await validateTargetGroupHealth(tgArn);
+            if (isTgHealthy) break;
+            await new Promise(resolve => setTimeout(resolve, 5000)); 
             healthCheckRetries--;
           }
-          if (!isTgHealthyPostDeploy) {
+          if (!isTgHealthy) {
             throw new Error(`Target group ${tgArn} has no healthy targets after service deployment`);
           }
         } catch (error) {
@@ -774,21 +745,30 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
             message: `Failed to deploy ECS service: ${error.message}.`
           });
         }
-      } else {
+      } else if (!parentTaskDef) {
         return res.status(400).json({
           message: "No parent task definition found; cannot restore service."
         });
       }
 
-      for (const arn of [httpArn, httpsArn]) {
-        const prio = await getFreePriority(arn);
-        await elbv2.send(new CreateRuleCommand({
-          ListenerArn: arn,
-          Priority: prio,
+      const [httpPrio, httpsPrio] = await Promise.all([
+        getFreePriority(httpArn),
+        getFreePriority(httpsArn)
+      ]);
+      await Promise.all([
+        elbv2.send(new CreateRuleCommand({
+          ListenerArn: httpArn,
+          Priority: httpPrio,
           Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
           Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
-        }));
-      }
+        })),
+        elbv2.send(new CreateRuleCommand({
+          ListenerArn: httpsArn,
+          Priority: httpsPrio,
+          Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
+          Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
+        }))
+      ]);
 
       await pool.query(
         "UPDATE domains SET redirect_target=NULL, updated_at=$1 WHERE domain_id=$2",
@@ -796,32 +776,24 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
       );
 
       if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
-        let invalidationSuccess = false;
-        for (let attempt = 1; attempt <= 3; attempt++) {
-          try {
-            await cloudfront.send(new CreateInvalidationCommand({
-              DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
-              InvalidationBatch: {
-                CallerReference: `redirect-remove-${domainID}-${Date.now()}`,
-                Paths: { Quantity: 2, Items: ["/", "/*"] }
-              }
-            }));
-            invalidationSuccess = true;
-            break;
-          } catch (error) {
-            await new Promise(resolve => setTimeout(resolve, 5000));
-          }
-        }
+        asyncCloudfrontInvalidation(
+          process.env.CLOUDFRONT_DISTRIBUTION_ID,
+          domainID,
+          "redirect-remove"
+        );
       }
 
       return res.json({ success: true, message: "Redirect removed & host restored." });
     }
 
-    for (const arn of [httpArn, httpsArn]) {
-      const prio = await getFreePriority(arn);
-      await elbv2.send(new CreateRuleCommand({
-        ListenerArn: arn,
-        Priority: prio,
+    const [httpPrio, httpsPrio] = await Promise.all([
+      getFreePriority(httpArn),
+      getFreePriority(httpsArn)
+    ]);
+    await Promise.all([
+      elbv2.send(new CreateRuleCommand({
+        ListenerArn: httpArn,
+        Priority: httpPrio,
         Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
         Actions: [{
           Type: "redirect",
@@ -834,8 +806,24 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
             StatusCode: "HTTP_302"
           }
         }]
-      }));
-    }
+      })),
+      elbv2.send(new CreateRuleCommand({
+        ListenerArn: httpsArn,
+        Priority: httpsPrio,
+        Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
+        Actions: [{
+          Type: "redirect",
+          RedirectConfig: {
+            Protocol: "HTTPS",
+            Port: "443",
+            Host: targetFqdn,
+            Path: "/",
+            Query: "",
+            StatusCode: "HTTP_302"
+          }
+        }]
+      }))
+    ]);
 
     await pool.query(
       "UPDATE domains SET redirect_target=$1, updated_at=$2 WHERE domain_id=$3",
@@ -843,22 +831,11 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     );
 
     if (process.env.CLOUDFRONT_DISTRIBUTION_ID) {
-      let invalidationSuccess = false;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          await cloudfront.send(new CreateInvalidationCommand({
-            DistributionId: process.env.CLOUDFRONT_DISTRIBUTION_ID,
-            InvalidationBatch: {
-              CallerReference: `redirect-${domainID}-${Date.now()}`,
-              Paths: { Quantity: 2, Items: ["/", "/*"] }
-            }
-          }));
-          invalidationSuccess = true;
-          break;
-        } catch (error) {
-          await new Promise(resolve => setTimeout(resolve, 5000));
-        }
-      }
+      asyncCloudfrontInvalidation(
+        process.env.CLOUDFRONT_DISTRIBUTION_ID,
+        domainID,
+        "redirect"
+      );
     }
 
     return res.json({ success: true, message: "Redirect updated." });
@@ -925,5 +902,67 @@ router.post("/edit-environment", authenticateToken, async (req, res, next) => {
     next(error);
   }
 });
+
+
+router.post("/project-domains", authenticateToken, async (req, res, next) => {
+  const { userID, organizationID, projectID } = req.body;
+
+  if (!userID || !organizationID || !projectID) {
+    return res.status(400).json({
+      message: "userID, organizationID, and projectID are required."
+    });
+  }
+
+  try {
+    const domainFetchQuery = `
+            SELECT 
+                domain_id,
+                domain_name,
+                project_id,
+                created_by,
+                created_at,
+                updated_at,
+                is_accessible,
+                dns_records,
+                checked_at,
+                is_primary,
+                redirect_target, 
+                environment, 
+                deployment_id
+            FROM domains
+            WHERE orgid = $1
+            AND username = $2
+            AND project_id = $3
+        `;
+
+    const domainFetchInfo = await pool.query(domainFetchQuery, [organizationID, userID, projectID]);
+    const domains = domainFetchInfo.rows.map(domain => ({
+      domainID: domain.domain_id,
+      domainName: domain.domain_name,
+      projectID: domain.project_id,
+      createdBy: domain.created_by,
+      createdAt: domain.created_at,
+      updatedAt: domain.updated_at,
+      isAccessible: domain.is_accessible,
+      dnsRecords: domain.dns_records,
+      checkedAt: domain.checked_at,
+      isPrimary: domain.is_primary,
+      redirectTarget: domain.redirect_target,
+      environment: domain.environment,
+      deploymentID: domain.deployment_id
+    }));
+
+    res.status(200).json({
+      domains: domains,
+      count: domains.length
+    });
+  } catch (error) {
+    if (!res.headersSent) {
+      res.status(500).json({ message: `Failed to retrieve domains: ${error.message}.` });
+    }
+    next(error);
+  }
+});
+
 
 module.exports = router;
