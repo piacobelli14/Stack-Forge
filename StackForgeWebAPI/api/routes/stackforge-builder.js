@@ -11,7 +11,7 @@ const { pool } = require("../config/db");
 const { authenticateToken } = require("../middleware/auth");
 const deployManager = require("./drivers/deployManager");
 
-router.get("/deploy-project-stream", (req, res, next) => {
+router.get("/deploy-project-stream", authenticateToken, (req, res, next) => {
     if (req.query.token) req.headers.authorization = `Bearer ${req.query.token}`;
 
     authenticateToken(req, res, async () => {

@@ -668,6 +668,7 @@
     font-size: 0.8rem;
     font-style: italic;
     display: flex;
+    justify-content: center;
     align-items: center;
     gap: 0.4rem;
     cursor: pointer;

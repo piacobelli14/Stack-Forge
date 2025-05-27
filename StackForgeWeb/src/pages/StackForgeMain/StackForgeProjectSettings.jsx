@@ -277,12 +277,7 @@ const StackForgeProjectSettings = () => {
       if (!response.ok) {
         throw new Error(`Failed to validate domain: ${response.status}`);
       }
-      const data = await response.json();
-      setDomains((prev) =>
-        prev.map((d) =>
-          d.domainID === domainID ? { ...d, ...data, dnsRecords: data.dnsRecords || [] } : d
-        )
-      );
+      await fetchDomains();
     } catch (error) {
       await showDialog({
         title: "Error",
@@ -292,6 +287,7 @@ const StackForgeProjectSettings = () => {
       setDomainLoadingStates((prev) => ({ ...prev, [domainID]: false }));
     }
   };
+  
 
   const deleteDomain = async (domainID, domainName) => {
     if (domainName.toLowerCase() === projectName.toLowerCase()) {
@@ -582,9 +578,13 @@ const StackForgeProjectSettings = () => {
         inputs: [{ name: "confirmation", type: "text", defaultValue: "" }],
         showCancel: true,
       });
-      if (!result) return;
+      if (!result) {
+        return; 
+      }
       if (result.confirmation === `delete my project - ${projectName}`) {
         isConfirmed = true;
+      } else {
+        continue;
       }
     }
     setIsLoaded(false);
@@ -594,13 +594,18 @@ const StackForgeProjectSettings = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer <?xml version="1.0" encoding="UTF-8"?>`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ userID, organizationID, projectID, projectName, domainName: projectName }),
       });
-      if (response.status !== 200) throw new Error("Internal Server Error");
-      navigate("/stackforge");
-    } catch {}
+      if (response.status !== 200) {
+        throw new Error("Internal Server Error");
+      } else {
+        navigate("/stackforge");
+      }
+    } catch {
+      return;
+    }
   };
 
   const handleProjectIDCopy = () => {

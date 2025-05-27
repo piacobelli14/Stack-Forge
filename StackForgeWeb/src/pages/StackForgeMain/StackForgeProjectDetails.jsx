@@ -18,6 +18,9 @@ import {
   faExclamationTriangle,
   faMagnifyingGlass,
   faXmarkSquare,
+  faXmarkCircle,
+  faGears,
+  faGear,
 } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import "../../styles/mainStyles/StackForgeMainStyles/StackForgeProjectDetails.css";
@@ -353,6 +356,19 @@ const StackForgeProjectDetails = () => {
               >
                 <p>Domains</p>
               </button>
+
+              <button
+                onClick={() => {
+                  navigate("/project-settings", {
+                    state: {
+                      project: projectDetails.project,
+                      settingsState: "general",
+                    },
+                  });
+                }}
+              >
+                <p>Settings</p>
+              </button>
             </span>
           </div>
 
@@ -550,28 +566,56 @@ const StackForgeProjectDetails = () => {
                 </div>
               </div>
               <div className="productionDeploymentFooter">
-                <button>Deployment Configuration</button>
+                <button
+                  onClick={() => {
+                    navigate("/project-settings", {
+                      state: {
+                        project: projectDetails.project,
+                        settingsState: "deployments",
+                      },
+                    });
+                  }}
+                >
+                  Deployment Configuration
+                </button>
                 <div className="deploymentProtectionToggles">
                   <p>
                     <FontAwesomeIcon
-                      icon={faCircleCheck}
-                      style={{ color: "#21BF68" }}
-                    />
-                    Fluid Compute
-                  </p>
-                  <p>
-                    <FontAwesomeIcon
-                      icon={faCircleCheck}
-                      style={{ color: "#21BF68" }}
+                      icon={
+                        projectDetails.domains.find(d => d.domain_name === selectedSubdomain)
+                          ?.deployment_protection
+                          ? faCircleCheck
+                          : faXmarkCircle
+                      }
+                      style={{
+                        color:
+                          projectDetails.domains.find(d => d.domain_name === selectedSubdomain)
+                            ?.deployment_protection
+                            ? "#21BF68"
+                            : "#E54B4B",
+                      }}
                     />
                     Deployment Protection
                   </p>
+
+
                   <p>
                     <FontAwesomeIcon
-                      icon={faCircleCheck}
-                      style={{ color: "#21BF68" }}
+                      icon={
+                        projectDetails.domains.find(d => d.domain_name === selectedSubdomain)
+                          ?.deployment_protection
+                          ? faCircleCheck
+                          : faXmarkCircle
+                      }
+                      style={{
+                        color:
+                          projectDetails.domains.find(d => d.domain_name === selectedSubdomain)
+                            ?.deployment_authentication
+                            ? "#21BF68"
+                            : "#E54B4B",
+                      }}
                     />
-                    Skew Protection
+                    Deployment Authentication
                   </p>
                 </div>
               </div>
