@@ -25,7 +25,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type','Authorization','X-Visitor-Id']
 }));
 
-
+app.use(express.json({ limit: '1gb' }));
+app.use(express.urlencoded({ extended: true, limit: '1gb' }));
 app.use(bodyParser.json({ limit: '1gb' }));
 app.use(cookieParser());
 app.use(errorLogger);
@@ -66,3 +67,8 @@ process.on('uncaughtException', (error) => {
 app.get('/', (req, res) => {
   res.sendFile(path.resolve(__dirname, 'public', 'catchall.html'));
 });
+
+app.get('/auth/redirect/login/', (req, res) => {
+  res.sendFile(path.resolve(__dirname, 'public', 'login.html'));
+});
+

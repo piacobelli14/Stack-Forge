@@ -1,5 +1,4 @@
 (function(){
-  // generate or read a single cookie on .stackforgeengine.com
   function getVisitorId(){
     const m = document.cookie.match(/(?:^|; )sf_visitor_id=([^;]+)/);
     if(m) return m[1];
@@ -10,6 +9,13 @@
     return id;
   }
   const visitorId = getVisitorId();
+
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+  }
 
   async function checkAuth() {
     try {
@@ -27,10 +33,24 @@
 
       const data = await response.json();
 
-      if (response.status === 403 || (data.protected && !data.isAuthenticated)) {
-        const loginUrl = `http://localhost:5173/login?return=${encodeURIComponent(window.location.href)}`;
+      if (data.protected && !data.isAuthenticated) {
+        const loginUrl =
+          `http://localhost:5173/login` +
+          `?return=${encodeURIComponent(window.location.href)}`;
         window.location.href = loginUrl;
         return false;
+      }
+      
+      if (data.deployment_authentication && !data.isProjectAuthenticated) {
+        const existing = getCookie('sf_signed_into_project');
+        if (existing !== data.projectUrl) {
+          const loginUrl =
+            `http://localhost:3000/auth/redirect/login` +
+            `?projectUrl=${encodeURIComponent(data.projectUrl)}` +
+            `&return=${encodeURIComponent(window.location.href)}`;
+          window.location.href = loginUrl;
+          return false;
+        }
       }
 
       return true;
@@ -127,10 +147,12 @@
     try {
       new PerformanceObserver((list) => {
         list.getEntries().forEach(entry => {
-          if (entry.entryType === 'resource' &&
-              entry.initiatorType !== 'navigation' &&
-              edgeRequests.length < MAX_REQUESTS &&
-              isEdgeRequest(entry.name)) {
+          if (
+            entry.entryType === 'resource' &&
+            entry.initiatorType !== 'navigation' &&
+            edgeRequests.length < MAX_REQUESTS &&
+            isEdgeRequest(entry.name)
+          ) {
             edgeRequests.push({
               url: entry.name,
               method: 'GET',
@@ -151,9 +173,11 @@
     if (!('PerformanceObserver' in window)) {
       const checkResources = () => {
         performance.getEntriesByType('resource').forEach(entry => {
-          if (entry.initiatorType !== 'navigation' &&
-              edgeRequests.length < MAX_REQUESTS &&
-              isEdgeRequest(entry.name)) {
+          if (
+            entry.initiatorType !== 'navigation' &&
+            edgeRequests.length < MAX_REQUESTS &&
+            isEdgeRequest(entry.name)
+          ) {
             edgeRequests.push({
               url: entry.name,
               method: 'GET',

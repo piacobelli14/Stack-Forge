@@ -60,7 +60,6 @@ const StackForgeBuildProject = () => {
   const buildLogsString = buildLogs.join("\n");
   const [successfulDeployment, setSuccessfulDeployment] = useState(false);
 
-  // Handles pasting a full .env file into any env-var input (key OR value)
   const handleEnvVarsPaste = (index, e) => {
     const text = e.clipboardData.getData("text");
     if (text.includes("\n") && text.includes("=")) {
@@ -198,7 +197,7 @@ const StackForgeBuildProject = () => {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userID, owner, repo: repoName })
       });
-      if (!r.ok) throw new Error("Error fetching branches");
+      if (!r.ok) throw new Error("Error fetching branches.");
       const data = await r.json();
       setBranches(data);
       if (data.length > 0) setSelectedBranch(data[0].name);

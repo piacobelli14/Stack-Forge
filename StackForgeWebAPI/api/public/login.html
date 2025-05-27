@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/svg+xml" href="/assets/StackForgeLogo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stack Forge Login</title>
+    <link rel="stylesheet" href="/app.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+       
+    </style>
+</head>
+<body>
+    <div class="mainContainer">
+        <div class="mainCell">
+            <img src="/assets/StackForgeLogo.png" alt="Stack Forge Logo" class="mainLogo">
+            <label class="mainTitle">Stack Forge Project Login</label>
+            <div class="loginContainer">
+                <div class="inputWrapper">
+                    <input type="text" id="username" class="loginInput" placeholder="Username or Email" required>
+                </div>
+                <div class="inputWrapper">
+                    <input type="password" id="password" class="loginInput" placeholder="Password" required>
+                    <button type="button" class="togglePassword" id="togglePassword" aria-label="Show password">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+                <button class="loginButton" onclick="handleLogin()">Log In</button>
+                <p class="errorMessage" id="errorMessage"></p>
+            </div>
+        </div>
+    </div>
+    <script>
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+        togglePassword.addEventListener('click', () => {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            togglePassword.innerHTML = type === 'password'
+                ? '<i class="fas fa-eye"></i>'
+                : '<i class="fas fa-eye-slash"></i>';
+        });
+        async function handleLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMessage = document.getElementById('errorMessage');
+            const urlParams = new URLSearchParams(window.location.search);
+            const returnUrl = urlParams.get('return');
+            const projectUrl = urlParams.get('projectUrl');
+            errorMessage.textContent = '';
+            if (!returnUrl || !projectUrl) {
+                errorMessage.textContent = 'Missing return or project URL. Please access via a valid redirect link.';
+                errorMessage.style.display = 'block';
+                return;
+            }
+            try {
+                const response = await fetch('http://localhost:3000/projects-user-authentication', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, returnUrl, projectUrl })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    errorMessage.textContent = data.message || 'Login failed. Please try again.';
+                    errorMessage.style.display = 'block';
+                    return;
+                }
+                if (!data.returnUrl) {
+                    errorMessage.textContent = 'No valid return URL received from server.';
+                    errorMessage.style.display = 'block';
+                    return;
+                }
+                window.location.href = data.returnUrl;
+            } catch (error) {
+                errorMessage.textContent = 'Error connecting to the server. Please try again later.';
+                errorMessage.style.display = 'block';
+            }
+        }
+        document.getElementById('password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleLogin();
+        });
+    </script>
+</body>
+</html>

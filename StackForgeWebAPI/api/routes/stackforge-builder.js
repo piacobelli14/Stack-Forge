@@ -723,7 +723,6 @@ router.post("/project-details", authenticateToken, async (req, res, next) => {
                 WHERE project_id = $1 AND orgid = $2
                 ${domainFilter}
                 ORDER BY
-                    (status = "active") DESC,
                     last_deployed_at DESC NULLS LAST,
                     updated_at DESC NULLS LAST,
                     created_at DESC

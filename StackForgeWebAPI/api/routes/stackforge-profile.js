@@ -1,20 +1,20 @@
-const express = require("express");
-const axios = require("axios");
-const crypto = require("crypto");
-const { pool } = require("../config/db");
-const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require("../config/smtp");
-const { s3Client, storage, upload, PutObjectCommand } = require("../config/s3");
-const { authenticateToken } = require("../middleware/auth");
+const express = require('express');
+const axios = require('axios');
+const crypto = require('crypto');
+const { pool } = require('../config/db');
+const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require('../config/smtp');
+const { s3Client, storage, upload, PutObjectCommand } = require('../config/s3');
+const { authenticateToken } = require('../middleware/auth');
 
-require("dotenv").config();
+require('dotenv').config();
 secretKey = process.env.JWT_SECRET_KEY;
 
 const router = express.Router();
 
-router.post("/user-info", authenticateToken, async (req, res, next) => {
+router.post('/user-info', authenticateToken, async (req, res, next) => {
     const { userID, organizationID } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -22,11 +22,11 @@ router.post("/user-info", authenticateToken, async (req, res, next) => {
         const gatherUserInfoQuery = `
             SELECT 
                 u.*, 
-                COALESCE(o.orgname, "") AS orgname,
-                COALESCE(o.orgemail, "") AS orgemail,
-                COALESCE(o.orgphone, "") AS orgphone,
-                COALESCE(o.orgdescription, "") AS orgdescription,
-                COALESCE(o.orgimage, "") AS orgimage, 
+                COALESCE(o.orgname, '') AS orgname,
+                COALESCE(o.orgemail, '') AS orgemail,
+                COALESCE(o.orgphone, '') AS orgphone,
+                COALESCE(o.orgdescription, '') AS orgdescription,
+                COALESCE(o.orgimage, '') AS orgimage, 
                 COALESCE(o.created_at) AS orgcreatedat
             FROM users u
             LEFT JOIN organizations o ON u.orgid = o.orgid
@@ -35,7 +35,7 @@ router.post("/user-info", authenticateToken, async (req, res, next) => {
         const gatherUserInfoInfo = await pool.query(gatherUserInfoQuery, [userID, organizationID]);
 
         if (gatherUserInfoInfo.error) {
-            return res.status(500).json({ message: "Unable to fetch user info at this time. Please try again later." });
+            return res.status(500).json({ message: 'Unable to fetch user info at this time. Please try again later.' });
         }
 
         const formattedInfo = gatherUserInfoInfo.rows.map(row => ({
@@ -75,23 +75,23 @@ router.post("/user-info", authenticateToken, async (req, res, next) => {
         return res.status(200).json(formattedInfo);
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/usage-info", authenticateToken, async (req, res, next) => {
+router.post('/usage-info', authenticateToken, async (req, res, next) => {
     const { userID, organizationID } = req.body; 
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
     try {
         const personalUsagePerDayQuery = `
             WITH days AS (
-                SELECT generate_series(CURRENT_DATE - INTERVAL "29 days", CURRENT_DATE, "1 day")::date AS day
+                SELECT generate_series(CURRENT_DATE - INTERVAL '29 days', CURRENT_DATE, '1 day')::date AS day
             )
             SELECT d.day, COALESCE(COUNT(a.timestamp), 0) AS usage_count
             FROM days d
@@ -104,7 +104,7 @@ router.post("/usage-info", authenticateToken, async (req, res, next) => {
         const usageLanguagesQuery = `
             SELECT a.language, COUNT(a.language) AS language_count
             FROM ide_edit_logs a
-            WHERE a.timestamp >= CURRENT_DATE - INTERVAL "29 days"
+            WHERE a.timestamp >= CURRENT_DATE - INTERVAL '29 days'
               AND a.username = $1
               AND a.orgid = $2
             GROUP BY a.language
@@ -117,22 +117,22 @@ router.post("/usage-info", authenticateToken, async (req, res, next) => {
         ]);
 
         return res.status(200).json({  
-            message: "Admin signin summary data fetched successfully.", 
+            message: 'Admin signin summary data fetched successfully.', 
             personalUsageInfo: personalUsagePerDay.rows,
             usageLanguages: usageLanguages.rows
         });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/update-user-show-values", authenticateToken, async (req, res, next) => {
+router.post('/update-user-show-values', authenticateToken, async (req, res, next) => {
     let { userID, organizationID, showColumn, showColumnValue } = req.body; 
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -144,36 +144,36 @@ router.post("/update-user-show-values", authenticateToken, async (req, res, next
         `;
 
         await pool.query(updateShowColumnsQuery, [userID, organizationID, showColumnValue]);
-        return res.status(200).json({ message: "Successfully updated column value." });
+        return res.status(200).json({ message: 'Successfully updated column value.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/edit-user-image", authenticateToken, async (req, res, next) => {
+router.post('/edit-user-image', authenticateToken, async (req, res, next) => {
     const { userID, image } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
     if (!userID || !image) {
-        return res.status(400).json({ message: "User ID and image are required." });
+        return res.status(400).json({ message: 'User ID and image are required.' });
     }
 
     try {
         const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
         if (!matches) {
-            return res.status(400).json({ message: "Invalid image format." });
+            return res.status(400).json({ message: 'Invalid image format.' });
         }
         const mimeType = matches[1];
-        const imageBuffer = Buffer.from(matches[2], "base64");
-        const extension = mimeType.split("/")[1];
+        const imageBuffer = Buffer.from(matches[2], 'base64');
+        const extension = mimeType.split('/')[1];
 
-        const imageName = `${crypto.randomBytes(16).toString("hex")}.${extension}`;
+        const imageName = `${crypto.randomBytes(16).toString('hex')}.${extension}`;
 
         const uploadParams = {
             Bucket: process.env.S3_IMAGE_BUCKET_NAME,
@@ -194,39 +194,39 @@ router.post("/edit-user-image", authenticateToken, async (req, res, next) => {
         const updateImageInfo = await pool.query(updateImageQuery, [imageUrl, userID]);
 
         if (updateImageInfo.rowCount === 0) {
-            return res.status(404).json({ message: "User not found or image not updated." });
+            return res.status(404).json({ message: 'User not found or image not updated.' });
         }
 
-        return res.status(200).json({ message: "User image updated successfully." });
+        return res.status(200).json({ message: 'User image updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/edit-team-image", authenticateToken, async (req, res, next) => {
+router.post('/edit-team-image', authenticateToken, async (req, res, next) => {
     const { userID, organizationID, image } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
     if (!userID || !image) {
-        return res.status(400).json({ message: "User ID, Organization ID, and image are required." });
+        return res.status(400).json({ message: 'User ID, Organization ID, and image are required.' });
     }
 
     try {
         const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
         if (!matches) {
-            return res.status(400).json({ message: "Invalid image format." });
+            return res.status(400).json({ message: 'Invalid image format.' });
         }
         const mimeType = matches[1];
-        const imageBuffer = Buffer.from(matches[2], "base64");
-        const extension = mimeType.split("/")[1];
+        const imageBuffer = Buffer.from(matches[2], 'base64');
+        const extension = mimeType.split('/')[1];
 
-        const imageName = `${crypto.randomBytes(16).toString("hex")}.${extension}`;
+        const imageName = `${crypto.randomBytes(16).toString('hex')}.${extension}`;
 
         const uploadParams = {
             Bucket: process.env.S3_IMAGE_BUCKET_NAME,
@@ -247,22 +247,22 @@ router.post("/edit-team-image", authenticateToken, async (req, res, next) => {
         const updateImageInfo = await pool.query(updateImageQuery, [imageUrl, organizationID]);
 
         if (updateImageInfo.rowCount === 0) {
-            return res.status(404).json({ message: "Team not found or image not updated." });
+            return res.status(404).json({ message: 'Team not found or image not updated.' });
         }
 
-        return res.status(200).json({ message: "Team image updated successfully." });
+        return res.status(200).json({ message: 'Team image updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/edit-user-first-name", authenticateToken, async (req, res, next) => {
+router.post('/edit-user-first-name', authenticateToken, async (req, res, next) => {
     const { userID, firstName } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -276,22 +276,22 @@ router.post("/edit-user-first-name", authenticateToken, async (req, res, next) =
         const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [firstName, userID]);
 
         if (updateFirstNameInfo.error) {
-            return res.status(500).json({ message: "Unable to update user info at this time. Please try again." });
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
         }
 
-        return res.status(200).json({ message: "First name updated successfully." });
+        return res.status(200).json({ message: 'First name updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/edit-user-last-name", authenticateToken, async (req, res, next) => {
+router.post('/edit-user-last-name', authenticateToken, async (req, res, next) => {
     const { userID, lastName } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -306,22 +306,22 @@ router.post("/edit-user-last-name", authenticateToken, async (req, res, next) =>
         const updateLastNameInfo = await pool.query(updateLastNameQuery, [lastName, userID]);
 
         if (updateLastNameInfo.error) {
-            return res.status(500).json({ message: "Unable to update user info at this time. Please try again." });
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
         }
 
-        return res.status(200).json({ message: "Last name updated successfully." });
+        return res.status(200).json({ message: 'Last name updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/edit-team-name", authenticateToken, async (req, res, next) => {
+router.post('/edit-team-name', authenticateToken, async (req, res, next) => {
     const { userID, organizationID, orgName } = req.body;
     
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -335,22 +335,22 @@ router.post("/edit-team-name", authenticateToken, async (req, res, next) => {
         const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [orgName, organizationID]);
 
         if (updateFirstNameInfo.error) {
-            return res.status(500).json({ message: "Unable to update team info at this time. Please try again." });
+            return res.status(500).json({ message: 'Unable to update team info at this time. Please try again.' });
         }
 
-        return res.status(200).json({ message: "Team name updated successfully." });
+        return res.status(200).json({ message: 'Team name updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/edit-user-email", authenticateToken, async (req, res, next) => {
+router.post('/edit-user-email', authenticateToken, async (req, res, next) => {
     const { userID, email } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -363,22 +363,22 @@ router.post("/edit-user-email", authenticateToken, async (req, res, next) => {
 
         const updateEmailInfo = await pool.query(updateEmailQuery, [email, userID]);
         if (updateEmailInfo.error) {
-            return res.status(500).json({ message: "Unable to update user info at this time. Please try again." });
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
         }
 
-        return res.status(200).json({ message: "Email updated successfully." });
+        return res.status(200).json({ message: 'Email updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/edit-team-email", authenticateToken, async (req, res, next) => {
+router.post('/edit-team-email', authenticateToken, async (req, res, next) => {
     const { userID, organizationID, orgEmail } = req.body;
     
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -392,22 +392,22 @@ router.post("/edit-team-email", authenticateToken, async (req, res, next) => {
         const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [orgEmail, organizationID]);
 
         if (updateFirstNameInfo.error) {
-            return res.status(500).json({ message: "Unable to update team info at this time. Please try again." });
+            return res.status(500).json({ message: 'Unable to update team info at this time. Please try again.' });
         }
 
-        return res.status(200).json({ message: "Team name updated successfully." });
+        return res.status(200).json({ message: 'Team name updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/edit-user-phone", authenticateToken, async (req, res, next) => {
+router.post('/edit-user-phone', authenticateToken, async (req, res, next) => {
     const { userID, phone } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -420,22 +420,22 @@ router.post("/edit-user-phone", authenticateToken, async (req, res, next) => {
 
         const updatePhoneInfo = await pool.query(updatePhoneQuery, [phone, userID]);
         if (updatePhoneInfo.error) {
-            return res.status(500).json({ message: "Unable to update user info at this time. Please try again." });
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
         }
 
-        return res.status(200).json({ message: "Phone updated successfully." });
+        return res.status(200).json({ message: 'Phone updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/edit-team-phone", authenticateToken, async (req, res, next) => {
+router.post('/edit-team-phone', authenticateToken, async (req, res, next) => {
     const { userID, organizationID, orgPhone } = req.body;
     
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -449,22 +449,22 @@ router.post("/edit-team-phone", authenticateToken, async (req, res, next) => {
         const updateFirstNameInfo = await pool.query(updateFirstNameQuery, [orgPhone, organizationID]);
 
         if (updateFirstNameInfo.error) {
-            return res.status(500).json({ message: "Unable to update team info at this time. Please try again." });
+            return res.status(500).json({ message: 'Unable to update team info at this time. Please try again.' });
         }
 
-        return res.status(200).json({ message: "Team name updated successfully." });
+        return res.status(200).json({ message: 'Team name updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/edit-user-role", authenticateToken, async (req, res, next) => {
+router.post('/edit-user-role', authenticateToken, async (req, res, next) => {
     const { userID, role } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -477,22 +477,22 @@ router.post("/edit-user-role", authenticateToken, async (req, res, next) => {
 
         const updateRoleInfo = await pool.query(updateRoleQuery, [role, userID]);
         if (updateRoleInfo.error) {
-            return res.status(500).json({ message: "Unable to update user info at this time. Please try again." });
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
         }
 
-        return res.status(200).json({ message: "Role updated successfully." });
+        return res.status(200).json({ message: 'Role updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/delete-account", authenticateToken, async (req, res, next) => {
+router.post('/delete-account', authenticateToken, async (req, res, next) => {
     const { userID } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -504,22 +504,22 @@ router.post("/delete-account", authenticateToken, async (req, res, next) => {
 
         const deleteAccountInfo = await pool.query(deleteAccountQuery, [userID]);
         if (deleteAccountInfo.error) {
-            return res.status(500).json({ message: "Unable to update user info at this time. Please try again." });
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
         }
 
-        return res.status(200).json({ message: "Role updated successfully." });
+        return res.status(200).json({ message: 'Role updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/delete-team", authenticateToken, async (req, res, next) => {
+router.post('/delete-team', authenticateToken, async (req, res, next) => {
     const { userID, organizationID } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -538,22 +538,22 @@ router.post("/delete-team", authenticateToken, async (req, res, next) => {
         const deleteAccountInfo = await pool.query(deleteAccountQuery, [organizationID]);
         const updateIDInfo = await pool.query(updateIDQuery, [organizationID]);
         if (deleteAccountInfo.error || updateIDInfo.error) {
-            return res.status(500).json({ message: "Unable to update user info at this time. Please try again." });
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
         }
 
-        return res.status(200).json({ message: "Team updated successfully." });
+        return res.status(200).json({ message: 'Team updated successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/join-team", authenticateToken, (req, res) => {
+router.post('/join-team', authenticateToken, (req, res) => {
     const { userID, firstName, lastName, teamCode } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -580,7 +580,7 @@ router.post("/join-team", authenticateToken, (req, res) => {
         isCodeValid(teamCode, (error, isValid) => {
             if (error) {
                 if (!res.headersSent) {
-                    return res.status(500).json({ message: "Unable to request team access at this time. Please try again." });
+                    return res.status(500).json({ message: 'Unable to request team access at this time. Please try again.' });
                 }
                 return;
             }
@@ -589,12 +589,12 @@ router.post("/join-team", authenticateToken, (req, res) => {
                 const adminEmailQuery = `
                     SELECT email 
                     FROM users 
-                    WHERE orgid = $1 AND is_admin = "admin"
+                    WHERE orgid = $1 AND is_admin = 'admin'
                 `;
                 pool.query(adminEmailQuery, [teamCode], (error, adminEmailInfo) => {
                     if (error) {
                         if (!res.headersSent) {
-                            return res.status(500).json({ message: "Unable to request team access at this time. Please try again." });
+                            return res.status(500).json({ message: 'Unable to request team access at this time. Please try again.' });
                         }
                         return;
                     }
@@ -604,13 +604,13 @@ router.post("/join-team", authenticateToken, (req, res) => {
                     const checkActiveRequestQuery = `
                         SELECT * 
                         FROM access_requests 
-                        WHERE request_username = $1 AND request_status = "Current"
+                        WHERE request_username = $1 AND request_status = 'Current'
                     `;
 
                     pool.query(checkActiveRequestQuery, [userID], (error, checkActiveRequestInfo) => {
                         if (error) {
                             if (!res.headersSent) {
-                                return res.status(500).json({ message: "Unable to request team access at this time. Please try again." });
+                                return res.status(500).json({ message: 'Unable to request team access at this time. Please try again.' });
                             }
                             return;
                         }
@@ -619,38 +619,38 @@ router.post("/join-team", authenticateToken, (req, res) => {
                             const updateActiveRequestQuery = `
                                 UPDATE access_requests
                                 SET request_timestamp = NOW()
-                                WHERE request_username = $1 AND request_orgid = $2 AND request_status = "Current"
+                                WHERE request_username = $1 AND request_orgid = $2 AND request_status = 'Current'
                             `;
 
                             pool.query(updateActiveRequestQuery, [userID, teamCode], (error, info) => {
                                 if (error) {
                                     if (!res.headersSent) {
-                                        return res.status(500).json({ message: "Unable to request team access at this time. Please try again." });
+                                        return res.status(500).json({ message: 'Unable to request team access at this time. Please try again.' });
                                     }
                                     return;
                                 }
 
                                 if (!res.headersSent) {
-                                    return res.status(200).json({ message: "Access request sent successfully." });
+                                    return res.status(200).json({ message: 'Access request sent successfully.' });
                                 }
                             });
                         } else {
                             const requestLogQuery = `
                                 INSERT INTO access_requests 
                                 (request_username, request_orgid, request_timestamp, request_status)
-                                VALUES ($1, $2, NOW(), "Current")
+                                VALUES ($1, $2, NOW(), 'Current')
                             `;
 
                             pool.query(requestLogQuery, [userID, teamCode], (error, requestLogInfo) => {
                                 if (error) {
                                     if (!res.headersSent) {
-                                        return res.status(500).json({ message: "Unable to request team access at this time. Please try again." });
+                                        return res.status(500).json({ message: 'Unable to request team access at this time. Please try again.' });
                                     }
                                     return;
                                 }
 
                                 if (!res.headersSent) {
-                                    return res.status(200).json({ message: "Access request sent successfully." });
+                                    return res.status(200).json({ message: 'Access request sent successfully.' });
                                 }
                             });
                         }
@@ -658,7 +658,7 @@ router.post("/join-team", authenticateToken, (req, res) => {
                 });
             } else {
                 if (!res.headersSent) {
-                    return res.status(401).json({ message: "There are no teams associated with that code. Please try again or contact your admin to get the correct code." });
+                    return res.status(401).json({ message: 'There are no teams associated with that code. Please try again or contact your admin to get the correct code.' });
                 }
             }
         });
@@ -667,10 +667,10 @@ router.post("/join-team", authenticateToken, (req, res) => {
     requestAccess();
 });
 
-router.post("/create-team", authenticateToken, async (req, res, next) => {
+router.post('/create-team', authenticateToken, async (req, res, next) => {
     const { userID, teamName } = req.body;
 
-    req.on("close", () => {
+    req.on('close', () => {
         return;
     });
 
@@ -713,12 +713,12 @@ router.post("/create-team", authenticateToken, async (req, res, next) => {
 
             const teamUpdateQuery = `
                 UPDATE users
-                SET orgid = $1, is_admin = "admin"
+                SET orgid = $1, is_admin = 'admin'
                 WHERE username = $2
             `;
             await pool.query(teamUpdateQuery, [organizationID, userID]);
 
-            res.status(200).json({ message: "Team created successfully.", orgid: organizationID });
+            res.status(200).json({ message: 'Team created successfully.', orgid: organizationID });
         };
 
         const getUserEmail = async (userID) => {
@@ -732,7 +732,7 @@ router.post("/create-team", authenticateToken, async (req, res, next) => {
                 const email = userEmailInfo.rows[0].email;
                 return email;
             } else {
-                throw new Error("User email not found");
+                throw new Error('User email not found');
             }
         };
 
@@ -743,12 +743,12 @@ router.post("/create-team", authenticateToken, async (req, res, next) => {
                 uniqueOrgId = generateRandomOrgId();
             }
 
-            if (await isTeamNameUnique(teamName) && teamName !== "" && teamName !== null) {
+            if (await isTeamNameUnique(teamName) && teamName !== '' && teamName !== null) {
                 const userEmail = await getUserEmail(userID);
                 await insertTeam(uniqueOrgId, userEmail);
             } else {
                 if (!res.headersSent) {
-                    res.status(401).json({ message: "Unable to create team at this time. Please try again." });
+                    res.status(401).json({ message: 'Unable to create team at this time. Please try again.' });
                 }
             }
         };
@@ -756,84 +756,84 @@ router.post("/create-team", authenticateToken, async (req, res, next) => {
         await checkAndInsert();
     } catch (error) {
         if (!res.headersSent) {
-            res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.get("/git-repos", authenticateToken, async (req, res, next) => {
+router.get('/git-repos', authenticateToken, async (req, res, next) => {
     try {
-        const result = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [req.user.userid]);
+        const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [req.user.userid]);
         if (result.rows.length === 0 || !result.rows[0].github_access_token) {
-            return res.status(400).json({ message: "GitHub account not connected." });
+            return res.status(400).json({ message: 'GitHub account not connected.' });
         }
         const githubAccessToken = result.rows[0].github_access_token;
-        const gitResponse = await axios.get("https://api.github.com/user/repos", {
+        const gitResponse = await axios.get('https://api.github.com/user/repos', {
             headers: {
                 Authorization: `token ${githubAccessToken}`,
-                Accept: "application/json"
+                Accept: 'application/json'
             }
         });
         return res.status(200).json(gitResponse.data);
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/git-branches", authenticateToken, async (req, res, next) => {
+router.post('/git-branches', authenticateToken, async (req, res, next) => {
     const { userID, owner, repo } = req.body;
     try {
         if (!owner || !repo) {
-            return res.status(400).json({ message: "Owner and repository are required." });
+            return res.status(400).json({ message: 'Owner and repository are required.' });
         }
-        const result = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [userID]);
+        const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [userID]);
         if (result.rows.length === 0 || !result.rows[0].github_access_token) {
-            return res.status(400).json({ message: "GitHub account not connected." });
+            return res.status(400).json({ message: 'GitHub account not connected.' });
         }
         const githubAccessToken = result.rows[0].github_access_token;
         const gitResponse = await axios.get(`https://api.github.com/repos/${owner}/${repo}/branches`, {
             headers: {
                 Authorization: `token ${githubAccessToken}`,
-                Accept: "application/json"
+                Accept: 'application/json'
             }
         });
         return res.status(200).json(gitResponse.data);
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }
 });
 
-router.post("/delete-github", authenticateToken, async (req, res, next) => {
+router.post('/delete-github', authenticateToken, async (req, res, next) => {
     try {
-        const result = await pool.query("SELECT github_access_token FROM users WHERE username = $1", [req.user.userid]);
+        const result = await pool.query('SELECT github_access_token FROM users WHERE username = $1', [req.user.userid]);
         if (result.rows.length === 0 || !result.rows[0].github_access_token) {
-            return res.status(400).json({ message: "GitHub account not connected." });
+            return res.status(400).json({ message: 'GitHub account not connected.' });
         }
         const githubAccessToken = result.rows[0].github_access_token;
         const clientID = process.env.GITHUB_CLIENT_ID;
         const clientSecret = process.env.GITHUB_CLIENT_SECRET;
         const revokeUrl = `https://api.github.com/applications/${clientID}/token`;
-        const authString = Buffer.from(`${clientID}:${clientSecret}`).toString("base64");
+        const authString = Buffer.from(`${clientID}:${clientSecret}`).toString('base64');
         await axios.delete(revokeUrl, {
             headers: {
                 Authorization: `Basic ${authString}`,
-                Accept: "application/vnd.github+json"
+                Accept: 'application/vnd.github+json'
             },
             data: { access_token: githubAccessToken }
         });
-        const updateQuery = "UPDATE users SET github_id = null, github_username = null, github_access_token = null, github_avatar_url = null WHERE username = $1";
+        const updateQuery = 'UPDATE users SET github_id = null, github_username = null, github_access_token = null, github_avatar_url = null WHERE username = $1';
         await pool.query(updateQuery, [req.user.userid]);
-        res.status(200).json({ message: "GitHub access revoked successfully." });
+        res.status(200).json({ message: 'GitHub access revoked successfully.' });
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
         }
         next(error);
     }

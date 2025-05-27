@@ -64,7 +64,6 @@ router.post("/user-authentication", rateLimiter(10, 20, authRateLimitExceededHan
             { algorithm: "HS256" }
         );
 
-        // ← GENERATE & SET VISITOR COOKIE FOR ALL SUBDOMAINS
         const visitorId = uuidv4();
         res.cookie("sf_visitor_id", visitorId, {
             domain: ".stackforgeengine.com",
@@ -103,6 +102,103 @@ router.post("/user-authentication", rateLimiter(10, 20, authRateLimitExceededHan
 });
 
 
+router.post("/projects-user-authentication", rateLimiter(10, 20, authRateLimitExceededHandler), async (req, res, next) => {
+    const { username, password, returnUrl, projectUrl } = req.body;
+
+    req.on("close", () => {
+    return;
+    });
+
+    try {
+    const loginQuery = `
+        SELECT u.username, u.salt, u.hashed_password, u.orgid, u.verified,
+                u.twofaenabled, u.multifaenabled,
+                CASE WHEN EXISTS (
+                SELECT 1 FROM admins a WHERE a.username = u.username
+                ) THEN true ELSE false END AS isadmin
+        FROM users u
+        WHERE u.username = $1 OR u.email = $1
+    `;
+    const info = await pool.query(loginQuery, [username]);
+
+    if (info.rows.length === 0) {
+        return res.status(401).json({ message: "Invalid login credentials." });
+    }
+
+    const userData = info.rows[0];
+    if (!userData.verified) {
+        return res.status(401).json({ message: "Email not verified. Please verify your account." });
+    }
+
+    const { salt, hashed_password, username: userID, orgid: orgID, twofaenabled, multifaenabled, isadmin } = userData;
+    if (hashPassword(password, salt) !== hashed_password) {
+        return res.status(401).json({ message: "Invalid login credentials." });
+    }
+
+    const token = jwt.sign(
+        {
+        userid: userID,
+        orgid: orgID,
+        isadmin,
+        permissions: { twofaenabled, multifaenabled },
+        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
+        },
+        secretKey,
+        { algorithm: "HS256" }
+    );
+
+    const visitorId = uuidv4();
+    res.cookie("sf_visitor_id", visitorId, {
+        domain: ".stackforgeengine.com",
+        path: "/",
+        httpOnly: false,
+        secure: true,
+        sameSite: "None",
+        maxAge: 365 * 24 * 60 * 60 * 1000
+    });
+
+    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+    const locationResponse = await axios.get(`http://ip-api.com/json/${ip}`);
+    const loc = locationResponse.data;
+    const signinTimestamp = new Date().toISOString();
+
+    if (projectUrl) {
+        await pool.query(
+        `INSERT INTO project_signin_logs
+            (orgid, username, project_url, signin_timestamp, ip_address,
+            city, region, country, zip, lat, lon, timezone)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [orgID, userID, projectUrl, signinTimestamp, ip, loc.city, loc.region,
+            loc.country, loc.zip, loc.lat, loc.lon, loc.timezone]
+        );
+
+        res.cookie("sf_signed_into_project", projectUrl, {
+            domain: ".stackforgeengine.com",
+            path: "/",
+            httpOnly: false,
+            secure: true,
+            sameSite: "None",
+            maxAge: 60 * 60 * 1000  
+        });
+    }
+
+    return res.status(200).json({
+        token,
+        userid: userID,
+        orgid: orgID,
+        isadmin,
+        twofaenabled,
+        multifaenabled,
+        returnUrl
+    });
+    } catch (error) {
+    if (!res.headersSent) {
+        res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+    }
+    next(error);
+    }
+});
+  
 router.post("/send-admin-auth-code", rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { email } = req.body;
 
@@ -436,8 +532,9 @@ router.get("/connect-github", async (req, res, next) => {
 router.get("/github-success", async (req, res, next) => {
     const { code, state } = req.query;
     if (!code || !state) {
-        return res.status(400).send("Missing code or state");
+        return res.status(400).send("Missing code or state.");
     }
+
     let decoded;
     try {
         decoded = JSON.parse(Buffer.from(state, "base64").toString("ascii"));
@@ -445,55 +542,80 @@ router.get("/github-success", async (req, res, next) => {
         return res.status(400).send("Invalid state parameter");
     }
     const { token, userID } = decoded;
+
     try {
         const payload = jwt.verify(token, secretKey);
         if (payload.userid !== userID) {
-            return res.status(401).send("Invalid token");
+            return res.status(401).send("Invalid token.");
         }
     } catch (error) {
-        return res.status(401).send("Invalid token");
+        return res.status(401).send("Invalid token.");
     }
+
     const clientID = process.env.GITHUB_CLIENT_ID;
     const clientSecret = process.env.GITHUB_CLIENT_SECRET;
     const redirectUri = process.env.GITHUB_REDIRECT_URI;
+
     try {
-        const tokenResponse = await axios.post("https://github.com/login/oauth/access_token", {
-            client_id: clientID,
-            client_secret: clientSecret,
-            code: code,
-            redirect_uri: redirectUri,
-            state: state
-        }, {
-            headers: { Accept: "application/json" }
-        });
+        const params = new URLSearchParams();
+        params.append("client_id", clientID);
+        params.append("client_secret", clientSecret);
+        params.append("code", code);
+        params.append("redirect_uri", redirectUri);
+        params.append("state", state);
+
+        const tokenResponse = await axios.post(
+            "https://github.com/login/oauth/access_token",
+            params.toString(),
+            {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    Accept: "application/json",
+                },
+            }
+        );
+
+        if (tokenResponse.data.error) {
+            return res.status(400).send(`GitHub OAuth error: ${tokenResponse.data.error_description || tokenResponse.data.error}`);
+        }
+
         const githubAccessToken = tokenResponse.data.access_token;
         if (!githubAccessToken) {
-            return res.status(400).send("GitHub access token not received");
+            return res.status(400).send("GitHub access token not received.");
         }
+
         const githubUserResponse = await axios.get("https://api.github.com/user", {
             headers: {
-                Authorization: `token ${githubAccessToken}`,
-                Accept: "application/json"
-            }
+                Authorization: `Bearer ${githubAccessToken}`,
+                Accept: "application/json",
+            },
         });
-        const githubUserData = githubUserResponse.data;
-        const github_id = githubUserData.id;
-        const github_username = githubUserData.login;
-        const github_avatar_url = githubUserData.avatar_url;
+        const { id: github_id, login: github_username, avatar_url: github_avatar_url } = githubUserResponse.data;
+
         const updateQuery = `
             UPDATE users
-            SET github_id = $1, github_username = $2, github_access_token = $3, github_avatar_url = $4
-            WHERE username = $5
-            ;
+            SET github_id = $1,
+                github_username = $2,
+                github_access_token = $3,
+                github_avatar_url = $4
+            WHERE username = $5;
         `;
-        const result = await pool.query(updateQuery, [github_id, github_username, githubAccessToken, github_avatar_url, userID]);
+        const result = await pool.query(updateQuery, [
+            github_id,
+            github_username,
+            githubAccessToken,
+            github_avatar_url,
+            userID,
+        ]);
+
         if (result.rowCount === 0) {
             return res.status(400).send("Failed to update user information in the database.");
         }
+
         return res.sendFile(path.resolve(__dirname, "../public", "github.html"));
     } catch (error) {
         if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+            return res.status(500).json({ message: "Error connecting to GitHub or database. Please try again later." });
         }
         next(error);
     }

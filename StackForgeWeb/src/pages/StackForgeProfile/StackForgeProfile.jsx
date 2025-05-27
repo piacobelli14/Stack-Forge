@@ -427,7 +427,7 @@ const StackForgeProfile = () => {
             if (!token) {
                 return;
             }
-            window.open(`http://localhost:3000/connect-github?token=${t}&userID=${userID}`, "_self");
+            window.open(`http://localhost:3000/connect-github?token=${token}&userID=${userID}`, "_self");
         } catch (error) {
             await showDialog({ title: "Alert", message: "Error connecting GitHub: " + error.message });
         }

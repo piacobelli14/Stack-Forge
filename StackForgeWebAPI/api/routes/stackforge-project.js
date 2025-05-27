@@ -15,7 +15,7 @@ secretKey = process.env.JWT_SECRET_KEY;
 const router = express.Router();
 
 router.post("/snapshot", authenticateToken, async (req, res, next) => {
-    const { domainName } = req.body;    
+    const { domainName } = req.body;
     try {
         if (!domainName || typeof domainName !== "string" || !domainName.trim()) {
             return res
@@ -180,7 +180,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                     );
                     deploymentStatus = updateResult.rows[0].status;
                 }
-            } catch (error) {}
+            } catch (error) { }
         }
 
         if (resolvedWebsiteURL) {
@@ -809,60 +809,93 @@ router.post("/build-logs", authenticateToken, async (req, res, next) => {
 });
 
 router.post("/get-deployment-protections", authenticateToken, async (req, res, next) => {
-  const { userID, organizationID, projectID } = req.body;
-  console.log(userID, organizationID, projectID); 
+    const { userID, organizationID, projectID } = req.body;
 
-  if (!userID || !organizationID || !projectID) {
-    return res.status(400).json({
-      message: "userID, organizationID, and projectID are required."
-    });
-  }
+    if (!userID || !organizationID || !projectID) {
+        return res.status(400).json({
+            message: "userID, organizationID, and projectID are required."
+        });
+    }
 
-  try {
-    const result = await pool.query(
-      `
+    try {
+        const result = await pool.query(
+            `
         SELECT domain_id, deployment_protection
           FROM domains
          WHERE orgid = $1
            AND username = $2
            AND project_id = $3
       `,
-      [organizationID, userID, projectID]
-    );
+            [organizationID, userID, projectID]
+        );
 
-    const deploymentProtection = result.rows.map(row => ({
-      domainID: row.domain_id,
-      protectionEnabled: row.deployment_protection
-    }));
+        const deploymentProtection = result.rows.map(row => ({
+            domainID: row.domain_id,
+            protectionEnabled: row.deployment_protection
+        }));
 
-    console.log(deploymentProtection); 
-
-    res.status(200).json({ deploymentProtection });
-  } catch (err) {
-    if (!res.headersSent) {
-      res.status(500).json({
-        message: `Failed to fetch deployment protection states: ${err.message}`
-      });
+        res.status(200).json({ deploymentProtection });
+    } catch (err) {
+        if (!res.headersSent) {
+            res.status(500).json({
+                message: `Failed to fetch deployment protection states: ${err.message}`
+            });
+        }
+        next(err);
     }
-    next(err);
-  }
+});
+
+router.post("/get-deployment-authentications", authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, projectID } = req.body;
+
+    if (!userID || !organizationID || !projectID) {
+        return res.status(400).json({
+            message: "userID, organizationID, and projectID are required."
+        });
+    }
+
+    try {
+        const result = await pool.query(
+            `
+          SELECT domain_id, deployment_authentication
+            FROM domains
+           WHERE orgid = $1
+             AND username = $2
+             AND project_id = $3
+        `,
+            [organizationID, userID, projectID]
+        );
+
+        const deploymentAuthentication = result.rows.map(row => ({
+            domainID: row.domain_id,
+            authenticationEnabled: row.deployment_authentication
+        }));
+
+        res.status(200).json({ deploymentAuthentication });
+    } catch (err) {
+        if (!res.headersSent) {
+            res.status(500).json({
+                message: `Failed to fetch deployment authentication states: ${err.message}`
+            });
+        }
+        next(err);
+    }
 });
 
 router.post("/edit-deployment-protections", authenticateToken, async (req, res, next) => {
-  const { userID, organizationID, projectID, domainIDs, protectionEnabled } = req.body;
-  console.log( userID, organizationID, projectID, domainIDs, protectionEnabled); 
+    const { userID, organizationID, projectID, domainIDs, protectionEnabled } = req.body;
 
-  if (!userID || !organizationID || !projectID || !Array.isArray(domainIDs) || typeof protectionEnabled !== "boolean") {
-    return res.status(400).json({
-      message: "userID, organizationID, projectID, domainIDs (array), and protectionEnabled (boolean) are required."
-    });
-  }
+    if (!userID || !organizationID || !projectID || !Array.isArray(domainIDs) || typeof protectionEnabled !== "boolean") {
+        return res.status(400).json({
+            message: "userID, organizationID, projectID, domainIDs (array), and protectionEnabled (boolean) are required."
+        });
+    }
 
-  const timestamp = new Date().toISOString();
+    const timestamp = new Date().toISOString();
 
-  try {
-    await pool.query(
-      `
+    try {
+        await pool.query(
+            `
         UPDATE domains
         SET deployment_protection = $1, updated_at = $2
         WHERE orgid = $3
@@ -870,21 +903,61 @@ router.post("/edit-deployment-protections", authenticateToken, async (req, res, 
           AND project_id = $5
           AND domain_id = ANY($6)
       `,
-      [protectionEnabled, timestamp, organizationID, userID, projectID, domainIDs]
-    );
+            [protectionEnabled, timestamp, organizationID, userID, projectID, domainIDs]
+        );
 
-    return res.status(200).json({
-      message: "Deployment protection updated successfully.",
-      domainIDs,
-      protectionEnabled
-    });
-  } catch (err) {
-    if (!res.headersSent) {
-      res.status(500).json({ message: `Failed to toggle deployment protection: ${err.message}` });
+        return res.status(200).json({
+            message: "Deployment protection updated successfully.",
+            domainIDs,
+            protectionEnabled
+        });
+    } catch (err) {
+        if (!res.headersSent) {
+            res.status(500).json({ message: `Failed to toggle deployment protection: ${err.message}` });
+        }
+        next(err);
     }
-    next(err);
-  }
 });
+
+router.post("/edit-deployment-authentications", authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, projectID, domainIDs, authenticationEnabled } = req.body;
+
+    if (!userID || !organizationID || !projectID || !Array.isArray(domainIDs) || typeof authenticationEnabled !== "boolean") {
+        return res.status(400).json({
+            message: "userID, organizationID, projectID, domainIDs (array), and authenticationEnabled (boolean) are required."
+        });
+    }
+
+    const timestamp = new Date().toISOString();
+
+    try {
+        await pool.query(
+            `
+          UPDATE domains
+             SET deployment_authentication = $1, updated_at = $2
+           WHERE orgid = $3
+             AND username = $4
+             AND project_id = $5
+             AND domain_id = ANY($6)
+        `,
+            [authenticationEnabled, timestamp, organizationID, userID, projectID, domainIDs]
+        );
+
+        return res.status(200).json({
+            message: "Deployment authentication updated successfully.",
+            domainIDs,
+            authenticationEnabled
+        });
+    } catch (err) {
+        if (!res.headersSent) {
+            res.status(500).json({
+                message: `Failed to toggle deployment authentication: ${err.message}`
+            });
+        }
+        next(err);
+    }
+});
+
 
 router.post("/edit-project-image", authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, image } = req.body;

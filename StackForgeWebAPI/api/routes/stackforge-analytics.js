@@ -7,43 +7,108 @@ const { authenticateToken } = require('../middleware/auth');
 
 router.post('/auth/check', async (req, res) => {
   try {
-      const { domain } = req.body;
-      const visitorId = req.cookies.sf_visitor_id || req.headers['x-visitor-id'];
+    const { domain } = req.body;
+    const visitorId = req.cookies.sf_visitor_id || req.headers['x-visitor-id'];
 
-      const domainResult = await pool.query(
-          'SELECT deployment_protection, orgid FROM domains WHERE domain_name = $1',
-          [domain.split('.')[0]]
-      );
+    const domainResult = await pool.query(
+      `SELECT
+         deployment_protection,
+         deployment_authentication,
+         orgid
+       FROM domains
+       WHERE domain_name = $1`,
+      [domain.split('.')[0]]
+    );
 
-      if (domainResult.rows.length === 0) {
-          return res.status(404).json({ error: 'Domain not found' });
-      }
+    if (domainResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Domain not found' });
+    }
 
-      const { deployment_protection, orgid } = domainResult.rows[0];
+    const {
+      deployment_protection,
+      deployment_authentication,
+      orgid
+    } = domainResult.rows[0];
 
-      if (!deployment_protection) {
-          return res.json({ protected: false, isAuthenticated: true });
-      }
+    if (!deployment_protection && !deployment_authentication) {
+      return res.json({
+        protected: false,
+        deployment_authentication: false,
+        isAuthenticated: true,
+        isProjectAuthenticated: true,
+        projectUrl: domain
+      });
+    }
 
+    let isAuthenticated = true;
+    let isProjectAuthenticated = true;
+    let authenticationRequired = false;
+
+    if (deployment_protection) {
       const userResult = await pool.query(
-          'SELECT orgid FROM users WHERE github_id = $1 OR github_username = $1',
-          [visitorId]
+        `SELECT orgid
+         FROM users
+         WHERE github_id = $1 OR github_username = $1`,
+        [visitorId]
       );
 
-      if (userResult.rows.length === 0 || userResult.rows[0].orgid !== orgid) {
-          const signinResult = await pool.query(
-              'SELECT orgid FROM signin_logs WHERE orgid = $1 AND signin_timestamp > NOW() - INTERVAL \'1 hour\' LIMIT 1',
-              [orgid]
-          );
+      if (
+        userResult.rows.length === 0 ||
+        userResult.rows[0].orgid !== orgid
+      ) {
+        const signinResult = await pool.query(
+          `SELECT orgid
+           FROM signin_logs
+           WHERE orgid = $1
+             AND signin_timestamp > NOW() - INTERVAL '1 hour'
+           LIMIT 1`,
+          [orgid]
+        );
 
-          if (signinResult.rows.length === 0) {
-              return res.status(403).json({ protected: true, isAuthenticated: false });
-          }
+        if (signinResult.rows.length === 0) {
+          isAuthenticated = false;
+          authenticationRequired = true;
+        }
       }
+    }
 
-      return res.json({ protected: true, isAuthenticated: true });
+    if (deployment_authentication) {
+      const projectSignin = await pool.query(
+        `SELECT project_url
+         FROM project_signin_logs
+         WHERE orgid = $1
+           AND username = $2
+           AND project_url = $3
+           AND signin_timestamp >= CURRENT_DATE - INTERVAL '1 day'
+         LIMIT 1`,
+        [orgid, visitorId, domain]
+      );
+
+      if (projectSignin.rows.length === 0) {
+        isProjectAuthenticated = false;
+        authenticationRequired = true;
+      }
+    }
+
+    if (authenticationRequired) {
+      return res.status(403).json({
+        protected: deployment_protection,
+        deployment_authentication,
+        isAuthenticated,
+        isProjectAuthenticated,
+        projectUrl: domain
+      });
+    }
+
+    return res.json({
+      protected: deployment_protection,
+      deployment_authentication,
+      isAuthenticated: true,
+      isProjectAuthenticated: true,
+      projectUrl: domain
+    });
   } catch (error) {
-      res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

@@ -42,6 +42,7 @@ const StackForgeProjectSettings = () => {
   const [selectedDomainStates, setSelectedDomainStates] = useState({});
   const [domainEditModes, setDomainEditModes] = useState({});
   const [protectionStates, setProtectionStates] = useState({});
+  const [authenticationStates, setAuthenticationStates] = useState({});
   const redirectButtonRefs = useRef({});
   const redirectDropdownRefs = useRef({});
   const environmentButtonRefs = useRef({});
@@ -61,6 +62,7 @@ const StackForgeProjectSettings = () => {
         setIsLoaded(true);
         await fetchDomains();
         await fetchProtectionStates();
+        await fetchAuthenticationStates();
       } catch {}
     };
     if (!loading && token) fetchData();
@@ -191,6 +193,33 @@ const StackForgeProjectSettings = () => {
       await showDialog({
         title: "Error",
         message: `Failed to load protection states: ${error.message}`,
+      });
+    }
+  };
+
+  const fetchAuthenticationStates = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/get-deployment-authentications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userID, organizationID, projectID }),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch authentication states: ${res.status}`);
+      }
+      const { deploymentAuthentication } = await res.json();
+      const states = {};
+      deploymentAuthentication.forEach(({ domainID, authenticationEnabled }) => {
+        states[domainID] = authenticationEnabled;
+      });
+      setAuthenticationStates(states);
+    } catch (error) {
+      await showDialog({
+        title: "Error",
+        message: `Failed to load authentication states: ${error.message}`,
       });
     }
   };
@@ -395,6 +424,43 @@ const StackForgeProjectSettings = () => {
       await showDialog({
         title: "Error",
         message: `Failed to update deployment protection: ${error.message}`,
+      });
+    }
+  };
+
+  const editDeploymentAuthentication = async (domainID) => {
+    const newEnabled = !authenticationStates[domainID];
+    setAuthenticationStates((prev) => ({
+      ...prev,
+      [domainID]: newEnabled,
+    }));
+    try {
+      const response = await fetch("http://localhost:3000/edit-deployment-authentications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userID,
+          organizationID,
+          projectID,
+          domainIDs: [domainID],
+          authenticationEnabled: newEnabled,
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Error ${response.status}`);
+      }
+    } catch (error) {
+      setAuthenticationStates((prev) => ({
+        ...prev,
+        [domainID]: !newEnabled,
+      }));
+      await showDialog({
+        title: "Error",
+        message: `Failed to update deployment authentication: ${error.message}`,
       });
     }
   };
@@ -981,6 +1047,41 @@ const StackForgeProjectSettings = () => {
                                       type="checkbox"
                                       checked={protectionStates[domain.domainID] || false}
                                       onChange={() => editDeploymentProtection(domain.domainID)}
+                                  />
+                                  <strong style={{"padding": 0, "margin": 0}}>{domain.domainName}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="projectSettingsContentFlexCellBottom">
+                        <p>Changes to these settings will save automatically.</p>
+                      </div>
+                    </div>
+                    <div className="projectSettingsContentFlexCell">
+                      <div className="projectSettingsContentFlexCellTop">
+                        <div className="projectSettingsLeadingCellStack">
+                          <h3>Deployment Authentication</h3>
+                          <p>
+                            Control whether visitors must authenticate to view your deployment. 
+                            Enabling deployment protection ensures team-only access, while authentication prompts visitors to log in.
+                          </p>
+                        </div>
+                        <div
+                          className="projectSettingsTrailingCellStack"
+                          style={{ justifyContent: "center", alignItems: "center" }}
+                        >
+                          <div className="projectSettingsFieldInputLarge">
+                            <strong>Enable Deployment Authentication</strong>
+                            <div className="projectSettingsSwitchList">
+                              {domains.map((domain) => (
+                                <div className="projectSettingsSwitchInputWrapper" key={domain.domainID}> 
+                                  <input
+                                      className="stackforgeIDESettingsCheckbox"
+                                      type="checkbox"
+                                      checked={authenticationStates[domain.domainID] || false}
+                                      onChange={() => editDeploymentAuthentication(domain.domainID)}
                                   />
                                   <strong style={{"padding": 0, "margin": 0}}>{domain.domainName}</strong>
                                 </div>
