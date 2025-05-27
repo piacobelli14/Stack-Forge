@@ -347,10 +347,12 @@
     height: auto;
     padding: 0 0.4rem;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 .projectSettingsFieldInputLarge strong {
     margin-top: 2rem;
+    min-height: 0.8rem !important; 
 }
 
 .projectSettingsFieldInput span, 

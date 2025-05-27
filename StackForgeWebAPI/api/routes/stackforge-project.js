@@ -893,7 +893,7 @@ router.post("/edit-deployment-protections", authenticateToken, async (req, res, 
 
     const timestamp = new Date().toISOString();
 
-    try {
+    try {3
         await pool.query(
             `
         UPDATE domains

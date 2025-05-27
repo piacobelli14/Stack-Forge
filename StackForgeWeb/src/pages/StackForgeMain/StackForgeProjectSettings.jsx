@@ -293,6 +293,55 @@ const StackForgeProjectSettings = () => {
     }
   };
 
+  const deleteDomain = async (domainID, domainName) => {
+    if (domainName.toLowerCase() === projectName.toLowerCase()) {
+      return;
+    }
+    let isConfirmed = false;
+    while (!isConfirmed) {
+      const result = await showDialog({
+        title: "Confirm Subdomain Deletion",
+        message: `Type 'delete subdomain - ${domainName}' to confirm deletion.`,
+        inputs: [{ name: "confirmation", type: "text", defaultValue: "" }],
+        showCancel: true,
+      });
+      if (!result) return;
+      if (result.confirmation === `delete subdomain - ${domainName}`) {
+        isConfirmed = true;
+      } else {
+        await showDialog({
+          title: "Alert",
+          message: "Confirmation text did not match.",
+        });
+      }
+    }
+
+    setDomainLoadingStates((prev) => ({ ...prev, [domainID]: true }));
+    try {
+      const response = await fetch("http://localhost:3000/delete-domain", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userID, organizationID, projectID, domainID }),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || `Failed to delete domain: ${response.status}`);
+      }
+      setDomains((prev) => prev.filter((d) => d.domainID !== domainID));
+    } catch (error) {
+      await showDialog({
+        title: "Error",
+        message: `Failed to delete domain "${domainName}": ${error.message}`,
+      });
+    } finally {
+      setDomainLoadingStates((prev) => ({ ...prev, [domainID]: false }));
+    }
+  };
+
+
   const updateRedirect = async (domainID, redirectTarget) => {
     setDomainLoadingStates((prev) => ({ ...prev, [domainID]: true }));
     const payload = { userID, organizationID, projectID, domainID, redirectTarget };
@@ -410,7 +459,7 @@ const StackForgeProjectSettings = () => {
           projectID,
           domainIDs: [domainID],
           protectionEnabled: newEnabled,
-        }),
+        }),   
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -545,7 +594,7 @@ const StackForgeProjectSettings = () => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer <?xml version="1.0" encoding="UTF-8"?>`,
         },
         body: JSON.stringify({ userID, organizationID, projectID, projectName, domainName: projectName }),
       });
@@ -826,7 +875,25 @@ const StackForgeProjectSettings = () => {
                                   }
                                   disabled={domainLoadingStates[domain.domainID]}
                                 >
-                                  {domainEditModes[domain.domainID] ? "Save" : "Edit"}
+                                  {domainEditModes[domain.domainID] ? "Close" : "Edit"}
+                                </button>
+
+                                <button
+                                  style={{
+                                    backgroundColor: "rgba(229, 75, 75, 0.1)",
+                                    border: "1px solid #E54B4B",
+                                    color: "#c1c1c1", 
+                                    opacity: (domainLoadingStates[domain.domainID] || domain.domainName.toLowerCase() === projectName.toLowerCase()) ? "0.6" : "1.0"
+                                  }}
+                                  onClick={() =>
+                                    deleteDomain(domain.domainID, domain.domainName)
+                                  }
+                                  disabled={
+                                    domainLoadingStates[domain.domainID] ||
+                                    domain.domainName.toLowerCase() === projectName.toLowerCase()
+                                  }
+                                >
+                                  Delete
                                 </button>
                               </div>
                             </div>

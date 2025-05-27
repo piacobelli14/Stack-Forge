@@ -8,27 +8,22 @@ const axios = require("axios");
 const { authenticateToken } = require("../middleware/auth");
 const { pool } = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
-const {
-  ElasticLoadBalancingV2Client,
-  DescribeListenersCommand,
+const { 
+  ElasticLoadBalancingV2Client, 
+  DescribeListenersCommand, 
   DescribeRulesCommand,
-  CreateRuleCommand,
-  DeleteRuleCommand,
-  DescribeLoadBalancersCommand,
-  AddListenerCertificatesCommand,
-  RemoveListenerCertificatesCommand,
+  CreateRuleCommand, 
+  DeleteRuleCommand, 
+  DescribeLoadBalancersCommand, 
+  AddListenerCertificatesCommand, 
+  RemoveListenerCertificatesCommand, 
   DescribeListenerCertificatesCommand,
   DescribeTargetHealthCommand,
+  DeleteTargetGroupCommand
 } = require("@aws-sdk/client-elastic-load-balancing-v2");
-const { Route53Client, ChangeResourceRecordSetsCommand } = require("@aws-sdk/client-route-53"); const {
-  ACMClient,
-  RequestCertificateCommand,
-  DescribeCertificateCommand
-} = require("@aws-sdk/client-acm");
-const {
-  CloudFrontClient,
-  CreateInvalidationCommand
-} = require("@aws-sdk/client-cloudfront");
+const { Route53Client, ChangeResourceRecordSetsCommand } = require("@aws-sdk/client-route-53"); 
+const { ACMClient, RequestCertificateCommand, DescribeCertificateCommand } = require("@aws-sdk/client-acm");
+const { CloudFrontClient, CreateInvalidationCommand } = require("@aws-sdk/client-cloudfront");
 
 const deployManager = require("./drivers/deployManager");
 
@@ -545,6 +540,159 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   });
 });
 
+router.post("/delete-domain", authenticateToken, async (req, res, next) => {
+  const { userID, organizationID, projectID, domainID } = req.body;
+
+  if (!userID || !organizationID || !projectID || !domainID) {
+      return res.status(400).json({
+          message: "userID, organizationID, projectID, and domainID are required."
+      });
+  }
+
+  let client;
+  try {
+      client = await pool.connect();
+      await client.query("BEGIN");
+
+      const domainResult = await client.query(
+          `
+            SELECT domain_name, certificate_arn, target_group_arn, deployment_id
+            FROM domains
+            WHERE domain_id = $1
+              AND project_id = $2
+              AND orgid = $3
+              AND username = $4
+          `,
+          [domainID, projectID, organizationID, userID]
+      );
+      if (domainResult.rows.length === 0) {
+          throw new Error("Domain not found or access denied.");
+      }
+      const {
+          domain_name,
+          certificate_arn: certArn,
+          target_group_arn: tgArn,
+          deployment_id: deploymentId
+      } = domainResult.rows[0];
+      const fqdn = `${domain_name}.stackforgeengine.com`;
+
+      const acmClient = new ACMClient({ region: process.env.AWS_REGION });
+      const route53Client = new Route53Client({ region: process.env.AWS_REGION });
+      const elbv2Client = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
+      const L_HTTP = process.env.ALB_LISTENER_ARN_HTTP;
+      const L_HTTPS = process.env.ALB_LISTENER_ARN_HTTPS;
+
+      if (certArn) {
+          const listenersResp = await elbv2Client.send(new DescribeListenersCommand({
+              LoadBalancerArn: process.env.LOAD_BALANCER_ARN
+          }));
+          for (const listener of listenersResp.Listeners || []) {
+              const certsResp = await elbv2Client.send(new DescribeListenerCertificatesCommand({
+                  ListenerArn: listener.ListenerArn
+              }));
+              if (certsResp.Certificates?.some(c => c.CertificateArn === certArn)) {
+                  await elbv2Client.send(new RemoveListenerCertificatesCommand({
+                      ListenerArn: listener.ListenerArn,
+                      Certificates: [{ CertificateArn: certArn }]
+                  }));
+              }
+          }
+          try {
+              await acmClient.send(new DeleteCertificateCommand({
+                  CertificateArn: certArn
+              }));
+          } catch {}
+      }
+
+      const deleteChanges = [];
+      deleteChanges.push({
+          Action: "DELETE",
+          ResourceRecordSet: {
+              Name: fqdn,
+              Type: "A",
+              AliasTarget: {
+                  HostedZoneId : (await elbv2Client.send(new DescribeLoadBalancersCommand({
+                    Names: [process.env.LOAD_BALANCER_NAME]
+                  }))).LoadBalancers[0].CanonicalHostedZoneId,
+                  DNSName : process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`,
+                  EvaluateTargetHealth: false
+              }
+          }
+      });
+      deleteChanges.push({
+          Action: "DELETE",
+          ResourceRecordSet: {
+              Name : fqdn,
+              Type : "CNAME",
+              TTL : 60,
+              ResourceRecords : [{ Value: process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.` }]
+          }
+      });
+      try {
+          await route53Client.send(new ChangeResourceRecordSetsCommand({
+              HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+              ChangeBatch: { Changes: deleteChanges }
+          }));
+      } catch (err) {
+          if (!err.message.includes("but it was not found")) {
+              throw err;
+          }
+      }
+
+      if (typeof deployManager.deleteService === "function") {
+          await deployManager.deleteService({
+              projectName: domain_name.split(".")[1],
+              subdomain: domain_name.includes(".") ? domain_name.split(".")[0] : null
+          });
+      }
+
+      if (tgArn) {
+          for (const listenerArn of [L_HTTP, L_HTTPS]) {
+              try {
+                  const { Rules } = await elbv2Client.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+                  for (const rule of Rules || []) {
+                      if (!rule.IsDefault &&
+                          rule.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === tgArn)) {
+                          await elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn }));
+                      }
+                  }
+              } catch {}
+          }
+      }
+
+      if (tgArn) {
+          await elbv2Client.send(new DeleteTargetGroupCommand({
+              TargetGroupArn: tgArn
+          }));
+      }
+
+      await client.query("DELETE FROM metrics_events WHERE domain = $1", [domain_name]);
+      await client.query("DELETE FROM metrics_daily WHERE domain = $1", [domain_name]);
+      await client.query("DELETE FROM metrics_edge_requests WHERE domain = $1", [domain_name]);
+      if (deploymentId) {
+          await client.query("DELETE FROM deployment_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentId, organizationID]);
+          await client.query("DELETE FROM build_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentId, organizationID]);
+          await client.query("DELETE FROM runtime_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentId, organizationID]);
+          await client.query("DELETE FROM deployments WHERE deployment_id = $1 AND orgid = $2", [deploymentId, organizationID]);
+      }
+      await client.query("DELETE FROM domains WHERE domain_id = $1", [domainID]);
+
+      await client.query("COMMIT");
+
+      return res.status(200).json({
+          success: true,
+          message: `Subdomain "${domain_name}" and its resources have been deleted.`
+      });
+  } catch (err) {
+      if (client) await client.query("ROLLBACK");
+      if (!res.headersSent) {
+          res.status(500).json({ message: `Failed to delete subdomain: ${err.message}.` });
+      }
+      next(err);
+  } finally {
+      if (client) client.release();
+  }
+});
 
 router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
   const { userID, organizationID, projectID, domainID, redirectTarget } = req.body;
@@ -913,7 +1061,6 @@ router.post("/edit-environment", authenticateToken, async (req, res, next) => {
   }
 });
 
-
 router.post("/project-domains", authenticateToken, async (req, res, next) => {
   const { userID, organizationID, projectID } = req.body;
 
@@ -973,6 +1120,5 @@ router.post("/project-domains", authenticateToken, async (req, res, next) => {
     next(error);
   }
 });
-
 
 module.exports = router;
