@@ -71,6 +71,7 @@ const StackForgeProjects = () => {
   });
   const [isLoadingMonitoring, setIsLoadingMonitoring] = useState(false);
   const [selectedDomain, setSelectedDomain] = useState("");
+  const [allSubdomains, setAllSubdomains] = useState([]); 
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const today = new Date();
     const dayOfWeek = today.getDay();
@@ -295,6 +296,38 @@ const StackForgeProjects = () => {
     };
     fetchMonitoringData();
   }, [projectsPage, token, organizationID, selectedDomain, currentWeekStart]);
+
+  useEffect(() => {
+    const fetchAllSubdomains = async () => {
+      const subs = new Set();
+      for (const proj of projects) {
+        try {
+          const res = await fetch("http://localhost:3000/project-domains", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              userID,
+              organizationID,
+              projectID: proj.project_id,
+            }),
+          });
+          if (!res.ok) continue;
+          const data = await res.json();
+          data.domains.forEach((d) => {
+            subs.add(`${d.domainName}.stackforgeengine.com`);
+          });
+        } catch {}
+      }
+      setAllSubdomains(Array.from(subs));
+    };
+    if (projectsPage === "monitoring" && token && projects.length > 0) {
+      fetchAllSubdomains();
+    }
+  }, [projectsPage, projects, token, userID, organizationID]);
+
   const getProjects = async () => {
     const token = localStorage.getItem("token");
     try {
@@ -954,7 +987,7 @@ const StackForgeProjects = () => {
                         <button onClick={() => handleDomainSelect("")}>
                           <i>All Domains</i>
                         </button>
-                        {getUniqueDomains().map((domain, index) => (
+                        {allSubdomains.map((domain, index) => (
                           <button
                             key={index}
                             onClick={() => handleDomainSelect(domain)}

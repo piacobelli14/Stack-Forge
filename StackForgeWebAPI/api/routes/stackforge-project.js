@@ -808,6 +808,84 @@ router.post("/build-logs", authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post("/get-deployment-protections", authenticateToken, async (req, res, next) => {
+  const { userID, organizationID, projectID } = req.body;
+  console.log(userID, organizationID, projectID); 
+
+  if (!userID || !organizationID || !projectID) {
+    return res.status(400).json({
+      message: "userID, organizationID, and projectID are required."
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        SELECT domain_id, deployment_protection
+          FROM domains
+         WHERE orgid = $1
+           AND username = $2
+           AND project_id = $3
+      `,
+      [organizationID, userID, projectID]
+    );
+
+    const deploymentProtection = result.rows.map(row => ({
+      domainID: row.domain_id,
+      protectionEnabled: row.deployment_protection
+    }));
+
+    console.log(deploymentProtection); 
+
+    res.status(200).json({ deploymentProtection });
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).json({
+        message: `Failed to fetch deployment protection states: ${err.message}`
+      });
+    }
+    next(err);
+  }
+});
+
+router.post("/edit-deployment-protections", authenticateToken, async (req, res, next) => {
+  const { userID, organizationID, projectID, domainIDs, protectionEnabled } = req.body;
+  console.log( userID, organizationID, projectID, domainIDs, protectionEnabled); 
+
+  if (!userID || !organizationID || !projectID || !Array.isArray(domainIDs) || typeof protectionEnabled !== "boolean") {
+    return res.status(400).json({
+      message: "userID, organizationID, projectID, domainIDs (array), and protectionEnabled (boolean) are required."
+    });
+  }
+
+  const timestamp = new Date().toISOString();
+
+  try {
+    await pool.query(
+      `
+        UPDATE domains
+        SET deployment_protection = $1, updated_at = $2
+        WHERE orgid = $3
+          AND username = $4
+          AND project_id = $5
+          AND domain_id = ANY($6)
+      `,
+      [protectionEnabled, timestamp, organizationID, userID, projectID, domainIDs]
+    );
+
+    return res.status(200).json({
+      message: "Deployment protection updated successfully.",
+      domainIDs,
+      protectionEnabled
+    });
+  } catch (err) {
+    if (!res.headersSent) {
+      res.status(500).json({ message: `Failed to toggle deployment protection: ${err.message}` });
+    }
+    next(err);
+  }
+});
+
 router.post("/edit-project-image", authenticateToken, async (req, res, next) => {
     const { userID, organizationID, projectID, image } = req.body;
 

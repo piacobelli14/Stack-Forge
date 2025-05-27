@@ -1,50 +1,47 @@
-@media (min-width: 700px) and (max-width: 5399px) {
-    .consoleSwitch {
-        position: relative;
-        display: inline-block;
-        width: 1.8vw;
-        height: 1vw;
-        color: #222222;
-    }
 
-    .consoleSwitch input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
+.consoleSwitch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+    color: #222222;
+}
 
-    .consoleSlider {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: #f5f5f5;
-        transition: 0.4s;
-        border-radius: 1rem;
-        box-shadow: 0 0 0.4vh white;
-    }
+.consoleSwitch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
 
-    .consoleSlider:before {
-        position: absolute;
-        content: "";
-        height: 1vw;
-        width: 1vw;
-        margin-top: 0.2vw;
-        margin-bottom: 0.2vw;
-        background-color: #5C2BE2;
-        transition: 0.4s;
-        border-radius: 50%;
-        transform: translateX(-0.4vw);
-    }
+.consoleSlider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #f5f5f5;
+    transition: 0.4s;
+    border-radius: 1rem;
+    box-shadow: 0 0 0.4vh white;
+}
 
-    input:checked+.consoleSlider {
-        background-color: #5C2BE2;
-    }
+.consoleSlider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    background-color: #5BBA6F;
+    transition: 0.4s;
+    border-radius: 50%;
+    transform: translateX(-0.4vw);
+}
 
-    input:checked+.consoleSlider:before {
-        background-color: #f5f5f5;
-        transform: translateX(calc(1.6vw - 1.2vw));
-    }
+input:checked+.consoleSlider {
+    background-color: #5BBA6F;
+}
+
+input:checked+.consoleSlider:before {
+    background-color: #f5f5f5;
+    transform: translateX(100%);
 }

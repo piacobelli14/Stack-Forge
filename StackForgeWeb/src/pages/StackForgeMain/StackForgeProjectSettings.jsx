@@ -9,9 +9,11 @@ import {
   faGears,
   faIdCard,
   faCaretDown,
+  faRocket,
 } from "@fortawesome/free-solid-svg-icons";
 import "../../styles/mainStyles/StackForgemainStyles/StackForgeProjectSettings.css";
 import "../../styles/helperStyles/LoadingSpinner.css";
+import "../../styles/helperStyles/Switch.css";
 import StackForgeNav from "../../helpers/StackForgeNav";
 import { showDialog } from "../../helpers/StackForgeAlert";
 import useAuth from "../../UseAuth";
@@ -27,9 +29,7 @@ const StackForgeProjectSettings = () => {
   const [resizeTrigger, setResizeTrigger] = useState(false);
   const scrollContainerRef = useRef(null);
   const { project, settingsState: initialSettingsState } = location.state || {};
-  const [settingsState, setSettingsState] = useState(
-    initialSettingsState || "general"
-  );
+  const [settingsState, setSettingsState] = useState(initialSettingsState || "general");
   const [editModes, setEditModes] = useState({ projectName: false });
   const [projectImage, setProjectImage] = useState(project?.image || "");
   const [projectName, setProjectName] = useState(project?.name || "");
@@ -41,6 +41,7 @@ const StackForgeProjectSettings = () => {
   const [domains, setDomains] = useState([]);
   const [selectedDomainStates, setSelectedDomainStates] = useState({});
   const [domainEditModes, setDomainEditModes] = useState({});
+  const [protectionStates, setProtectionStates] = useState({});
   const redirectButtonRefs = useRef({});
   const redirectDropdownRefs = useRef({});
   const environmentButtonRefs = useRef({});
@@ -59,6 +60,7 @@ const StackForgeProjectSettings = () => {
       try {
         setIsLoaded(true);
         await fetchDomains();
+        await fetchProtectionStates();
       } catch {}
     };
     if (!loading && token) fetchData();
@@ -82,18 +84,16 @@ const StackForgeProjectSettings = () => {
       setRedirectDropdownOpen({});
       setEnvironmentDropdownOpen({});
     };
-
     const scrollContainer = scrollContainerRef.current;
     if (scrollContainer) {
       scrollContainer.addEventListener("scroll", handleScroll);
     }
-
     return () => {
       if (scrollContainer) {
         scrollContainer.removeEventListener("scroll", handleScroll);
       }
     };
-  }, []);
+  }, [redirectDropdownOpen, environmentDropdownOpen]);
 
   useEffect(() => {
     domains.forEach((domain) => {
@@ -110,14 +110,13 @@ const StackForgeProjectSettings = () => {
         if (newTop + dropdownRect.height > window.innerHeight) {
           newTop = window.innerHeight - dropdownRect.height;
         }
-        if (newLeft < 0) {
-          newLeft = 0;
-        }
+        if (newLeft < 0) newLeft = 0;
         setRedirectDropdownPositions((prev) => ({
           ...prev,
           [domainID]: { top: newTop, left: newLeft },
         }));
       }
+
       if (
         environmentDropdownOpen[domainID] &&
         environmentButtonRefs.current[domainID] &&
@@ -130,9 +129,7 @@ const StackForgeProjectSettings = () => {
         if (newTop + dropdownRect.height > window.innerHeight) {
           newTop = window.innerHeight - dropdownRect.height;
         }
-        if (newLeft < 0) {
-          newLeft = 0;
-        }
+        if (newLeft < 0) newLeft = 0;
         setEnvironmentDropdownPositions((prev) => ({
           ...prev,
           [domainID]: { top: newTop, left: newLeft },
@@ -150,38 +147,53 @@ const StackForgeProjectSettings = () => {
         if (
           redirectButtonRefs.current[domainID] &&
           redirectButtonRefs.current[domainID].contains(event.target)
-        ) {
-          shouldCloseRedirect = false;
-        }
+        ) shouldCloseRedirect = false;
         if (
           redirectDropdownRefs.current[domainID] &&
           redirectDropdownRefs.current[domainID].contains(event.target)
-        ) {
-          shouldCloseRedirect = false;
-        }
+        ) shouldCloseRedirect = false;
         if (
           environmentButtonRefs.current[domainID] &&
           environmentButtonRefs.current[domainID].contains(event.target)
-        ) {
-          shouldCloseEnvironment = false;
-        }
+        ) shouldCloseEnvironment = false;
         if (
           environmentDropdownRefs.current[domainID] &&
           environmentDropdownRefs.current[domainID].contains(event.target)
-        ) {
-          shouldCloseEnvironment = false;
-        }
+        ) shouldCloseEnvironment = false;
       });
-      if (shouldCloseRedirect) {
-        setRedirectDropdownOpen({});
-      }
-      if (shouldCloseEnvironment) {
-        setEnvironmentDropdownOpen({});
-      }
+      if (shouldCloseRedirect) setRedirectDropdownOpen({});
+      if (shouldCloseEnvironment) setEnvironmentDropdownOpen({});
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [domains]);
+
+  const fetchProtectionStates = async () => {
+    try {
+      const res = await fetch("http://localhost:3000/get-deployment-protections", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userID, organizationID, projectID }),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch protection states: ${res.status}`);
+      }
+      const { deploymentProtection } = await res.json();
+      const states = {};
+      deploymentProtection.forEach(({ domainID, protectionEnabled }) => {
+        states[domainID] = protectionEnabled;
+      });
+      setProtectionStates(states);
+    } catch (error) {
+      await showDialog({
+        title: "Error",
+        message: `Failed to load protection states: ${error.message}`,
+      });
+    }
+  };
 
   const fetchDomains = async () => {
     setDomainsLoading(true);
@@ -194,11 +206,9 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID }),
       });
-
       if (!response.ok) {
         throw new Error(`Failed to fetch domains: ${response.status}`);
       }
-
       const data = await response.json();
       setDomains(
         data.domains.map((domain) => ({
@@ -209,7 +219,6 @@ const StackForgeProjectSettings = () => {
             : domain.environment,
         })) || []
       );
-
       const recordStates = {};
       (data.domains || []).forEach((domain) => {
         recordStates[domain.domainID] = "ARecord";
@@ -236,11 +245,9 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID, domain: domainName }),
       });
-
       if (!response.ok) {
         throw new Error(`Failed to validate domain: ${response.status}`);
       }
-
       const data = await response.json();
       setDomains((prev) =>
         prev.map((d) =>
@@ -269,12 +276,10 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify(payload),
       });
-  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to update redirect: ${response.status}`);
       }
-  
       setDomains((prev) =>
         prev.map((d) => (d.domainID === domainID ? { ...d, redirectTarget } : d))
       );
@@ -286,7 +291,7 @@ const StackForgeProjectSettings = () => {
     } finally {
       setDomainLoadingStates((prev) => ({ ...prev, [domainID]: false }));
     }
-  };  
+  };
 
   const updateEnvironment = async (domainID, environment) => {
     setDomainLoadingStates((prev) => ({ ...prev, [domainID]: true }));
@@ -300,12 +305,10 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify(payload),
       });
-  
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to update environment: ${response.status}`);
       }
-  
       setDomains((prev) =>
         prev.map((d) => (d.domainID === domainID ? { ...d, environment } : d))
       );
@@ -317,7 +320,7 @@ const StackForgeProjectSettings = () => {
     } finally {
       setDomainLoadingStates((prev) => ({ ...prev, [domainID]: false }));
     }
-  };  
+  };
 
   const toggleRedirectDropdown = (domainID) => {
     setRedirectDropdownOpen((prev) => ({
@@ -357,6 +360,43 @@ const StackForgeProjectSettings = () => {
       ...prev,
       [domainID]: false,
     }));
+  };
+
+  const editDeploymentProtection = async (domainID) => {
+    const newEnabled = !protectionStates[domainID];
+    setProtectionStates((prev) => ({
+      ...prev,
+      [domainID]: newEnabled,
+    }));
+    try {
+      const response = await fetch("http://localhost:3000/edit-deployment-protections", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userID,
+          organizationID,
+          projectID,
+          domainIDs: [domainID],
+          protectionEnabled: newEnabled,
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Error ${response.status}`);
+      }
+    } catch (error) {
+      setProtectionStates((prev) => ({
+        ...prev,
+        [domainID]: !newEnabled,
+      }));
+      await showDialog({
+        title: "Error",
+        message: `Failed to update deployment protection: ${error.message}`,
+      });
+    }
   };
 
   const copyText = (text) => {
@@ -427,13 +467,9 @@ const StackForgeProjectSettings = () => {
         inputs: [{ name: "confirmation", type: "text", defaultValue: "" }],
         showCancel: true,
       });
-      if (!result) {
-        return; 
-      }
+      if (!result) return;
       if (result.confirmation === `delete my project - ${projectName}`) {
         isConfirmed = true;
-      } else {
-        continue;
       }
     }
     setIsLoaded(false);
@@ -447,14 +483,9 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID, projectName, domainName: projectName }),
       });
-      if (response.status !== 200) {
-        throw new Error("Internal Server Error");
-      } else {
-        navigate("/stackforge");
-      }
-    } catch {
-      return;
-    }
+      if (response.status !== 200) throw new Error("Internal Server Error");
+      navigate("/stackforge");
+    } catch {}
   };
 
   const handleProjectIDCopy = () => {
@@ -507,9 +538,23 @@ const StackForgeProjectSettings = () => {
                   </span>
                   <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
                 </button>
+                <button
+                  className={
+                    "projectSettingsSideBarButton " +
+                    (settingsState === "deployments"
+                      ? "projectSettingsSideBarButton--selected"
+                      : "")
+                  }
+                  onClick={() => setSettingsState("deployments")}
+                >
+                  <span>
+                    <FontAwesomeIcon icon={faRocket} />
+                    Deployments
+                  </span>
+                  <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                </button>
               </div>
             </div>
-
             <div className="projectsettingsContentMainFlex">
               <div className="projectSettingsContentMainScroll" ref={scrollContainerRef}>
                 {settingsState === "general" && (
@@ -553,7 +598,6 @@ const StackForgeProjectSettings = () => {
                         </p>
                       </div>
                     </div>
-
                     <div className="projectSettingsContentFlexCell">
                       <div className="projectSettingsContentFlexCellTop">
                         <div className="projectSettingsLeadingCellStack">
@@ -611,7 +655,6 @@ const StackForgeProjectSettings = () => {
                         <p>A project name is required.</p>
                       </div>
                     </div>
-
                     <div
                       className="projectSettingsContentFlexCell"
                       style={{ border: "1px solid #E54B4B" }}
@@ -721,7 +764,7 @@ const StackForgeProjectSettings = () => {
                                 </button>
                               </div>
                             </div>
-                                  
+
                             {!domainEditModes[domain.domainID] && (
                               <div className="projectSettingsDomainContent">
                                 <div className="projectSettingsRecordStatusBar">
@@ -910,6 +953,46 @@ const StackForgeProjectSettings = () => {
                         );
                       })
                     )}
+                  </>
+                )}
+
+                {settingsState === "deployments" && (
+                  <>
+                    <div className="projectSettingsContentFlexCell">
+                      <div className="projectSettingsContentFlexCellTop">
+                        <div className="projectSettingsLeadingCellStack">
+                          <h3>Deployment Protection</h3>
+                          <p>
+                            This will ensure that visitors to your deployment are signed into Stack Forge and a part of your team. 
+                            Enabling deployment authentication will prompt visitors to sign in with their Stack Forge credentials.
+                          </p>
+                        </div>
+                        <div
+                          className="projectSettingsTrailingCellStack"
+                          style={{ justifyContent: "center", alignItems: "center" }}
+                        >
+                          <div className="projectSettingsFieldInputLarge">
+                            <strong>Enable Deployment Protection</strong>
+                            <div className="projectSettingsSwitchList">
+                              {domains.map((domain) => (
+                                <div className="projectSettingsSwitchInputWrapper" key={domain.domainID}> 
+                                  <input
+                                      className="stackforgeIDESettingsCheckbox"
+                                      type="checkbox"
+                                      checked={protectionStates[domain.domainID] || false}
+                                      onChange={() => editDeploymentProtection(domain.domainID)}
+                                  />
+                                  <strong style={{"padding": 0, "margin": 0}}>{domain.domainName}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="projectSettingsContentFlexCellBottom">
+                        <p>Changes to these settings will save automatically.</p>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>

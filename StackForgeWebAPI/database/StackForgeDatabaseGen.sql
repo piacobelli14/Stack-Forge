@@ -246,7 +246,8 @@ CREATE TABLE domains
     certificate_arn TEXT, 
     target_group_arn TEXT,
     image_tag TEXT, 
-    deployment_protection BOOLEAN DEFAULT FALSE
+    deployment_protection BOOLEAN DEFAULT FALSE, 
+    deployment_authentication BOOLEAN DEFAULT FALSE
 );
 DROP INDEX IF EXISTS idx_domains_orgid;
 CREATE INDEX idx_domains_orgid ON domains (orgid, username);

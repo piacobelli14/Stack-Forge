@@ -1368,7 +1368,8 @@ class DeployManager {
         buildCommand,
         installCommand,
         envVars,
-        deploymentProtection = false
+        deploymentProtection = false, 
+        deploymentAuthentication = false
     }) {
         const deploymentId = uuidv4();
         const timestamp = new Date().toUTCString();
@@ -1463,8 +1464,9 @@ class DeployManager {
                                 build_command = $7, 
                                 install_command = $8, 
                                 env_vars = $9,
-                                deployment_protection = $10
-                            WHERE domain_id = $11
+                                deployment_protection = $10, 
+                                deployment_authentication = $11
+                            WHERE domain_id = $12
                         `,
                         [
                             timestamp,
@@ -1477,6 +1479,7 @@ class DeployManager {
                             installCommand,
                             JSON.stringify(envVars),
                             deploymentProtection,
+                            deploymentAuthentication,
                             domainId
                         ]
                     );
@@ -1485,8 +1488,8 @@ class DeployManager {
                     await pool.query(
                         `
                             INSERT INTO domains 
-                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection, deployment_authentication) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
                         `,
                         [
                             organizationID,
@@ -1506,7 +1509,8 @@ class DeployManager {
                             buildCommand,
                             installCommand,
                             JSON.stringify(envVars),
-                            deploymentProtection
+                            deploymentProtection, 
+                            deploymentAuthentication
                         ]
                     );
                 }
@@ -1573,8 +1577,9 @@ class DeployManager {
                             install_command = $4, 
                             build_command = $5, 
                             env_vars = $6,
-                            deployment_protection = $7
-                        WHERE domain_name = $8 AND project_id = (SELECT project_id FROM projects WHERE name = $9)
+                            deployment_protection = $7, 
+                            deployment_authentication = $8
+                        WHERE domain_name = $9 AND project_id = (SELECT project_id FROM projects WHERE name = $10)
                     `,
                     [
                         domainDetails.repository,
@@ -1584,6 +1589,7 @@ class DeployManager {
                         domainDetails.buildCommand,
                         JSON.stringify(domainDetails.envVars),
                         deploymentProtection,
+                        deploymentAuthentication,
                         subdomain,
                         projectName
                     ]
@@ -1653,8 +1659,8 @@ class DeployManager {
                     await pool.query(
                         `
                             INSERT INTO domains 
-                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection, dns_records) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection, deployment_authentication, dns_records) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
                         `,
                         [
                             organizationID,
@@ -1675,6 +1681,7 @@ class DeployManager {
                             installCommand,
                             JSON.stringify(envVars),
                             deploymentProtection,
+                            deploymentAuthentication,
                             JSON.stringify(records[`${subdomain}.stackforgeengine.com`] || [])
                         ]
                     );
@@ -1763,8 +1770,8 @@ class DeployManager {
                 for (const domainName of domainNames) {
                     const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
                     await pool.query(
-                        "UPDATE domains SET dns_records = $1, deployment_protection = $2 WHERE domain_id = $3",
-                        [JSON.stringify(records[`${subdomain}.stackforgeengine.com`] || []), deploymentProtection, domainIds[subdomain]]
+                        "UPDATE domains SET dns_records = $1, deployment_protection = $2, deployment_authentication = $3 WHERE domain_id = $4",
+                        [JSON.stringify(records[`${subdomain}.stackforgeengine.com`] || []), deploymentProtection, deploymentAuthentication, domainIds[subdomain]]
                     );
                 }
             }

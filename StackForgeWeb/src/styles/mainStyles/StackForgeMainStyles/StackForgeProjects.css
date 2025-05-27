@@ -1617,8 +1617,10 @@
     flex-direction: column;
     z-index: 999;
     min-width: 200px;
+    max-height: 200px; 
     padding: 0.4rem 0;
     box-shadow: 0 0 20px black;
+    overflow: scroll;
 }
 
 .addDomainMonitoringCaretIconDropdownMenu button {
