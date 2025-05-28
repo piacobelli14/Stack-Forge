@@ -11,12 +11,14 @@ router.post('/auth/check', async (req, res) => {
     const visitorId = req.cookies.sf_visitor_id || req.headers['x-visitor-id'];
 
     const domainResult = await pool.query(
-      `SELECT
+      `
+        SELECT
          deployment_protection,
          deployment_authentication,
          orgid
-       FROM domains
-       WHERE domain_name = $1`,
+        FROM domains
+        WHERE domain_name = $1
+      `,
       [domain.split('.')[0]]
     );
 
@@ -46,9 +48,11 @@ router.post('/auth/check', async (req, res) => {
 
     if (deployment_protection) {
       const userResult = await pool.query(
-        `SELECT orgid
-         FROM users
-         WHERE github_id = $1 OR github_username = $1`,
+        `
+          SELECT orgid
+          FROM users
+          WHERE github_id = $1 OR github_username = $1
+        `,
         [visitorId]
       );
 
@@ -115,36 +119,40 @@ router.post('/auth/check', async (req, res) => {
 router.post('/metrics', async (req, res) => {
   try {
     const { domain, visitorId, url, metrics, userAgent } = req.body;
-    const sessionId = typeof visitorId === 'string' && visitorId.trim()
-                     ? visitorId
-                     : 'unknown-session';
+
+    const sessionId = typeof visitorId === 'string' && visitorId.trim() ? visitorId : 'unknown-session';
+
     const pv = 1;
     const loadTimeMs = typeof metrics.loadTimeMs === 'number' ? metrics.loadTimeMs : 0;
     const lcpMs = typeof metrics.lcpMs === 'number' ? metrics.lcpMs : 0;
     const bounce = typeof metrics.bounce === 'boolean' ? metrics.bounce : false;
     const edgeRequests = Array.isArray(metrics.edgeRequests) ? metrics.edgeRequests : [];
-    const ip = req.headers['x-forwarded-for']?.split(',')[0].trim()
-              || req.connection.remoteAddress
-              || null;
+    const suffix = '.stackforgeengine.com';
+    const shortDomain = domain.endsWith(suffix) ? domain.slice(0, -suffix.length) : domain;
+    const domainResult = await pool.query(
+      `
+        SELECT username, orgid
+        FROM domains
+        WHERE domain_name = $1
+      `,
+      [shortDomain]
+    );
+    const username = domainResult.rows[0]?.username || null;
+    const orgid    = domainResult.rows[0]?.orgid    || null;
+
+    const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.connection.remoteAddress || null;
 
     const apiKey = process.env.IPGEO_API_KEY;
-    let latitude = null,
-        longitude = null,
-        city = null,
-        region = null,
-        country = null;
-
+    let latitude = null, longitude = null, city = null, region = null, country = null;
     if (ip && apiKey) {
       try {
-        const geoRes = await fetch(
-          `https://api.ipgeolocation.io/ipgeo?apiKey=${apiKey}&ip=${ip}`
-        );
+        const geoRes  = await fetch(`https://api.ipgeolocation.io/ipgeo?apiKey=${apiKey}&ip=${ip}`);
         const geoJson = await geoRes.json();
-        latitude = geoJson.latitude ? parseFloat(geoJson.latitude) : null;
+        latitude  = geoJson.latitude  ? parseFloat(geoJson.latitude)  : null;
         longitude = geoJson.longitude ? parseFloat(geoJson.longitude) : null;
-        city = geoJson.city || null;
-        region = geoJson.state_prov || null;
-        country = geoJson.country_name || null;
+        city      = geoJson.city      || null;
+        region    = geoJson.state_prov|| null;
+        country   = geoJson.country_name || null;
       } catch (error) {}
     }
 
@@ -153,14 +161,17 @@ router.post('/metrics', async (req, res) => {
         (domain, session_id, url, pageviews,
          load_time_ms, lcp_ms, bounce,
          ip_address, user_agent,
-         latitude, longitude, city, region, country)
+         latitude, longitude, city, region, country,
+         username, orgid)
       VALUES
         ($1,$2,$3,$4,
          $5,$6,$7,
          $8,$9,
-         $10,$11,$12,$13,$14)
+         $10,$11,$12,$13,$14,
+         $15,$16)
       RETURNING event_time
     `;
+
     const insertValues = [
       domain,
       sessionId,
@@ -175,7 +186,9 @@ router.post('/metrics', async (req, res) => {
       longitude,
       city,
       region,
-      country
+      country,
+      username,
+      orgid
     ];
     const { rows } = await pool.query(insertText, insertValues);
     const eventTime = rows[0].event_time;
@@ -183,27 +196,38 @@ router.post('/metrics', async (req, res) => {
     if (edgeRequests.length > 0) {
       const edgeInsertText = `
         INSERT INTO metrics_edge_requests
-          (domain, visitor_id, page_url, request_url, method, status, duration, type,
-           timing_dns, timing_connect, timing_response, event_time)
+          (domain, visitor_id, page_url, request_url, method,
+           status, duration, type,
+           timing_dns, timing_connect, timing_response,
+           username, orgid, event_time)
         VALUES
-          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+          ($1,$2,$3,$4,$5,
+           $6,$7,$8,
+           $9,$10,$11,
+           $12,$13,NOW())
       `;
-      for (const req of edgeRequests) {
-        try {
-          await pool.query(edgeInsertText, [
-            domain,
-            sessionId,
-            url,
-            typeof req.url === 'string' ? req.url : '',
-            typeof req.method === 'string' ? req.method.toUpperCase().slice(0, 10) : 'GET',
-            typeof req.status === 'number' ? req.status : 0,
-            typeof req.duration === 'number' ? Math.round(req.duration) : 0,
-            typeof req.type === 'string' ? req.type.slice(0, 50) : 'unknown',
-            req.timing && typeof req.timing.dns === 'number' ? Math.round(req.timing.dns) : 0,
-            req.timing && typeof req.timing.connect === 'number' ? Math.round(req.timing.connect) : 0,
-            req.timing && typeof req.timing.response === 'number' ? Math.round(req.timing.response) : 0
-          ]);
-        } catch (error) {}
+      for (const er of edgeRequests) {
+        await pool.query(edgeInsertText, [
+          domain,
+          sessionId,
+          url,
+          typeof er.url === 'string'   ? er.url   : '',
+          typeof er.method === 'string'
+            ? er.method.toUpperCase().slice(0, 10)
+            : 'GET',
+          typeof er.status === 'number' ? er.status : 0,
+          typeof er.duration === 'number'
+            ? Math.round(er.duration)
+            : 0,
+          typeof er.type === 'string'
+            ? er.type.slice(0, 50)
+            : 'unknown',
+          er.timing?.dns ? Math.round(er.timing.dns) : 0,
+          er.timing?.connect ? Math.round(er.timing.connect) : 0,
+          er.timing?.response ? Math.round(er.timing.response) : 0,
+          username,
+          orgid
+        ]);
       }
     }
 
@@ -219,18 +243,20 @@ router.post('/metrics', async (req, res) => {
         FROM metrics_events
         WHERE domain = $1
           AND event_time >= $2::date
-          AND event_time < ($2::date + INTERVAL '1 day')
+          AND event_time <  ($2::date + INTERVAL '1 day')
       )
       INSERT INTO metrics_daily
-        (domain, day, pageviews, unique_visitors, bounce_rate, avg_load_time, p75_lcp)
+        (domain, day, pageviews, unique_visitors,
+         bounce_rate, avg_load_time, p75_lcp,
+         username, orgid)
       SELECT
-        $1,
-        $2,
+        $1, $2,
         agg.pageviews,
         agg.unique_visitors,
         agg.bounce_rate,
         agg.avg_load_time,
-        agg.p75_lcp
+        agg.p75_lcp,
+        $3, $4
       FROM agg
       ON CONFLICT (domain, day)
       DO UPDATE SET
@@ -238,9 +264,11 @@ router.post('/metrics', async (req, res) => {
         unique_visitors = EXCLUDED.unique_visitors,
         bounce_rate = EXCLUDED.bounce_rate,
         avg_load_time = EXCLUDED.avg_load_time,
-        p75_lcp = EXCLUDED.p75_lcp;
+        p75_lcp = EXCLUDED.p75_lcp,
+        username = EXCLUDED.username,
+        orgid = EXCLUDED.orgid;
     `;
-    await pool.query(aggText, [domain, day]);
+    await pool.query(aggText, [domain, day, username, orgid]);
 
     res.sendStatus(204);
   } catch (error) {
@@ -253,15 +281,15 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+  const useUserFilter = !organizationID || organizationID === userID;
+  const orgFilterField = useUserFilter ? 'username' : 'orgid';
+  const filterValue = useUserFilter ? userID : organizationID;
+
   req.on('close', () => {
-      return;
+    return;
   });
 
   try {
-    if (!organizationID) {
-      return res.status(400).json({ message: 'organizationID is required' });
-    }
-
     const activityLogQuery = `
       SELECT activity_timestamp, activity_description, user_image
       FROM (
@@ -271,11 +299,13 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
           CONCAT('You created the project \"', p.name, '\".') AS activity_description,
           u.image AS user_image
         FROM projects p
-        LEFT JOIN users u ON p.username = u.username AND p.orgid = u.orgid
+        LEFT JOIN users u
+          ON p.username = u.username
+          AND p.orgid   = u.orgid
         WHERE p.created_at IS NOT NULL
           AND p.created_at >= $3
-          AND p.orgid = $1
-          ${userID ? 'AND p.username = $2' : ''}
+          AND p.${orgFilterField} = $1
+          ${ userID ? 'AND p.username = $2' : '' }
           AND CONCAT('You created the project \"', p.name, '\".') ILIKE $4
 
         UNION ALL
@@ -286,11 +316,13 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
           CONCAT('You added the domain \"', d.domain_name, '\".') AS activity_description,
           u.image AS user_image
         FROM domains d
-        LEFT JOIN users u ON d.username = u.username AND d.orgid = u.orgid
+        LEFT JOIN users u
+          ON d.username = u.username
+          AND d.orgid   = u.orgid
         WHERE d.created_at IS NOT NULL
           AND d.created_at >= $3
-          AND d.orgid = $1
-          ${userID ? 'AND d.username = $2' : ''}
+          AND d.${orgFilterField} = $1
+          ${ userID ? 'AND d.username = $2' : '' }
           AND CONCAT('You added the domain \"', d.domain_name, '\".') ILIKE $4
 
         UNION ALL
@@ -301,12 +333,14 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
           CONCAT('You updated the domain \"', d.domain_name, '\".') AS activity_description,
           u.image AS user_image
         FROM domains d
-        LEFT JOIN users u ON d.username = u.username AND d.orgid = u.orgid
+        LEFT JOIN users u
+          ON d.username = u.username
+          AND d.orgid   = u.orgid
         WHERE d.updated_at IS NOT NULL
           AND d.updated_at != d.created_at
           AND d.updated_at >= $3
-          AND d.orgid = $1
-          ${userID ? 'AND d.username = $2' : ''}
+          AND d.${orgFilterField} = $1
+          ${ userID ? 'AND d.username = $2' : '' }
           AND CONCAT('You updated the domain \"', d.domain_name, '\".') ILIKE $4
 
         UNION ALL
@@ -317,12 +351,15 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
           CONCAT('You created the deployment \"', d.deployment_id, '\" for the project \"', p.name, '\".') AS activity_description,
           u.image AS user_image
         FROM deployments d
-        JOIN projects p ON d.project_id = p.project_id
-        LEFT JOIN users u ON d.username = u.username AND d.orgid = u.orgid
+        JOIN projects p
+          ON d.project_id = p.project_id
+        LEFT JOIN users u
+          ON d.username = u.username
+          AND d.orgid   = u.orgid
         WHERE d.created_at IS NOT NULL
           AND d.created_at >= $3
-          AND d.orgid = $1
-          ${userID ? 'AND d.username = $2' : ''}
+          AND d.${orgFilterField} = $1
+          ${ userID ? 'AND d.username = $2' : '' }
           AND CONCAT('You created the deployment \"', d.deployment_id, '\" for the project \"', p.name, '\".') ILIKE $4
 
         UNION ALL
@@ -333,13 +370,16 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
           CONCAT('You updated the deployment \"', d.deployment_id, '\" for the project \"', p.name, '\".') AS activity_description,
           u.image AS user_image
         FROM deployments d
-        JOIN projects p ON d.project_id = p.project_id
-        LEFT JOIN users u ON d.username = u.username AND d.orgid = u.orgid
+        JOIN projects p
+          ON d.project_id = p.project_id
+        LEFT JOIN users u
+          ON d.username = u.username
+          AND d.orgid   = u.orgid
         WHERE d.updated_at IS NOT NULL
           AND d.updated_at != d.created_at
           AND d.updated_at >= $3
-          AND d.orgid = $1
-          ${userID ? 'AND d.username = $2' : ''}
+          AND d.${orgFilterField} = $1
+          ${ userID ? 'AND d.username = $2' : '' }
           AND CONCAT('You updated the deployment \"', d.deployment_id, '\" for the project \"', p.name, '\".') ILIKE $4
 
         UNION ALL
@@ -350,11 +390,13 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
           CONCAT('You performed the action \"', dl.action, '\" on the project \"', dl.project_name, '\".') AS activity_description,
           u.image AS user_image
         FROM deployment_logs dl
-        LEFT JOIN users u ON dl.username = u.username AND dl.orgid = u.orgid
+        LEFT JOIN users u
+          ON dl.username = u.username
+          AND dl.orgid   = u.orgid
         WHERE dl.timestamp IS NOT NULL
           AND dl.timestamp >= $3
-          AND dl.orgid = $1
-          ${userID ? 'AND dl.username = $2' : ''}
+          AND dl.${orgFilterField} = $1
+          ${ userID ? 'AND dl.username = $2' : '' }
           AND CONCAT('You performed the action \"', dl.action, '\" on the project \"', dl.project_name, '\".') ILIKE $4
 
         UNION ALL
@@ -362,15 +404,27 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         -- Permission changes
         SELECT 
           (pl.timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Chicago' AS activity_timestamp,
-          CONCAT('You changed the permission \"', pl.permission, '\" from \"', pl.old_value, '\" to \"', pl.new_value, '\" for the user \"', pl.username, '\".') AS activity_description,
+          CONCAT(
+            'You changed the permission \"', pl.permission,
+            '\" from \"', pl.old_value,
+            '\" to \"', pl.new_value,
+            '\" for the user \"', pl.username, '\".'
+          ) AS activity_description,
           u.image AS user_image
         FROM permission_logs pl
-        LEFT JOIN users u ON pl.changed_by = u.username AND pl.orgid = u.orgid
+        LEFT JOIN users u
+          ON pl.changed_by = u.username
+          AND pl.orgid     = u.orgid
         WHERE pl.timestamp IS NOT NULL
           AND pl.timestamp >= $3
-          AND pl.orgid = $1
-          ${userID ? 'AND pl.changed_by = $2' : ''}
-          AND CONCAT('You changed the permission \"', pl.permission, '\" from \"', pl.old_value, '\" to \"', pl.new_value, '\" for the user \"', pl.username, '\".') ILIKE $4
+          AND pl.${orgFilterField} = $1
+          ${ userID ? 'AND pl.changed_by = $2' : '' }
+          AND CONCAT(
+            'You changed the permission \"', pl.permission,
+            '\" from \"', pl.old_value,
+            '\" to \"', pl.new_value,
+            '\" for the user \"', pl.username, '\".'
+          ) ILIKE $4
 
         UNION ALL
 
@@ -382,8 +436,8 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         FROM users u
         WHERE u.created_at IS NOT NULL
           AND u.created_at >= $3
-          AND u.orgid = $1
-          ${userID ? 'AND u.username = $2' : ''}
+          AND u.${orgFilterField} = $1
+          ${ userID ? 'AND u.username = $2' : '' }
           AND CONCAT('You created the user account \"', u.username, '\".') ILIKE $4
 
         UNION ALL
@@ -391,41 +445,66 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
         -- Access request submissions
         SELECT 
           (ar.request_timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Chicago' AS activity_timestamp,
-          CONCAT('You submitted an access request with the status \"', ar.request_status, '\" for the organization \"', ar.request_orgid, '\".') AS activity_description,
+          CONCAT(
+            'You submitted an access request with the status \"', ar.request_status,
+            '\" for the organization \"', ar.request_orgid, '\".'
+          ) AS activity_description,
           u.image AS user_image
         FROM access_requests ar
-        LEFT JOIN users u ON ar.request_username = u.username AND ar.request_orgid = u.orgid
+        LEFT JOIN users u
+          ON ar.request_username = u.username
+          AND ar.request_orgid   = u.orgid
         WHERE ar.request_timestamp IS NOT NULL
           AND ar.request_timestamp >= $3
-          AND ar.request_orgid = $1
-          ${userID ? 'AND ar.request_username = $2' : ''}
-          AND CONCAT('You submitted an access request with the status \"', ar.request_status, '\" for the organization \"', ar.request_orgid, '\".') ILIKE $4
+          AND ar.request_${orgFilterField} = $1
+          ${ userID ? 'AND ar.request_username = $2' : '' }
+          AND CONCAT(
+            'You submitted an access request with the status \"', ar.request_status,
+            '\" for the organization \"', ar.request_orgid, '\".'
+          ) ILIKE $4
 
         UNION ALL
 
         -- Data export actions
         SELECT 
           (el.timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Chicago' AS activity_timestamp,
-          CONCAT('You exported the dataset \"', el.dataset, '\" as the file type \"', el.file_type, '\".') AS activity_description,
+          CONCAT(
+            'You exported the dataset \"', el.dataset,
+            '\" as the file type \"', el.file_type, '\".'
+          ) AS activity_description,
           u.image AS user_image
         FROM export_logs el
-        LEFT JOIN users u ON el.username = u.username AND el.orgid = u.orgid
+        LEFT JOIN users u
+          ON el.username = u.username
+          AND el.orgid   = u.orgid
         WHERE el.timestamp IS NOT NULL
           AND el.timestamp >= $3
-          AND el.orgid = $1
-          ${userID ? 'AND el.username = $2' : ''}
-          AND CONCAT('You exported the dataset \"', el.dataset, '\" as the file type \"', el.file_type, '\".') ILIKE $4
+          AND el.${orgFilterField} = $1
+          ${ userID ? 'AND el.username = $2' : '' }
+          AND CONCAT(
+            'You exported the dataset \"', el.dataset,
+            '\" as the file type \"', el.file_type, '\".'
+          ) ILIKE $4
       ) AS activity_log
       WHERE activity_description IS NOT NULL
       ORDER BY activity_timestamp DESC
     `;
 
     const queryParams = userID
-      ? [organizationID, userID, thirtyDaysAgo, `%${search}%`]
-      : [organizationID, thirtyDaysAgo, `%${search}%`];
+      ? [filterValue, userID, thirtyDaysAgo, `%${search}%`]
+      : [filterValue, thirtyDaysAgo, `%${search}%`];
+
     const activityLogInfo = await pool.query(activityLogQuery, queryParams);
+
+    if (!activityLogInfo.rows || activityLogInfo.rows.length === 0) {
+      return res.status(200).json({
+        message: 'Activity data retrieved successfully.',
+        data: [],
+      });
+    }
+
     const activities = activityLogInfo.rows.map(row => ({
-      timestamp: row.activity_timestamp.toISOString(), 
+      timestamp: row.activity_timestamp.toISOString(),
       description: row.activity_description,
       userImage: row.user_image || null,
     }));
@@ -437,14 +516,18 @@ router.post('/get-activity-data', authenticateToken, async (req, res, next) => {
 
   } catch (error) {
     if (!res.headersSent) {
-      return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+      return res.status(500).json({
+        message: 'Error connecting to the database. Please try again later.'
+      });
     }
     next(error);
   }
 });
-
 router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) => {
-  const { domain, startDate, endDate, groupBy = 'day' } = req.body;
+  const { userID, organizationID, domain, startDate, endDate, groupBy = 'day' } = req.body;
+  const useUserFilter = !organizationID || organizationID === userID;
+  const orgFilterField = useUserFilter ? 'username' : 'orgid';
+  const filterValue = useUserFilter ? userID : organizationID;
 
   req.on('close', () => {
     return;
@@ -454,49 +537,45 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
     if (!domain) {
       return res.status(400).json({ message: 'Error: domain is required.' });
     }
+
     if (!startDate || !endDate) {
       return res.status(400).json({ message: 'startDate and endDate are required.' });
     }
+
     if (!['day', 'week', 'month'].includes(groupBy)) {
       return res.status(400).json({ message: 'groupBy must be "day", "week", or "month".' });
     }
 
     const start = new Date(startDate);
-    const end = new Date(endDate);
+    const end   = new Date(endDate);
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       return res.status(400).json({ message: 'Invalid date format for startDate or endDate.' });
     }
+
     if (start > end) {
       return res.status(400).json({ message: 'startDate must be before endDate.' });
     }
 
-    const sevenDaysInMs = 6 * 24 * 60 * 60 * 1000;
-    const dateDiffInMs = end.getTime() - start.getTime();
-    if (dateDiffInMs !== sevenDaysInMs) {
-      return res.status(400).json({ message: 'The date range must be exactly 7 days (endDate - startDate = 6 days).' });
+    const sixDaysMs  = 6 * 24 * 60 * 60 * 1000;
+    const dateDiffMs = end.getTime() - start.getTime();
+    if (dateDiffMs !== sixDaysMs) {
+      return res.status(400).json({
+        message: 'The date range must be exactly 7 days (endDate - startDate = 6 days).'
+      });
     }
 
     const dateRange = [];
-    let currentDate = new Date(start);
-    while (currentDate <= end) {
-      dateRange.push(new Date(currentDate).toISOString().split('T')[0]);
-      currentDate.setDate(currentDate.getDate() + 1);
+    let cur = new Date(start);
+    while (cur <= end) {
+      dateRange.push(cur.toISOString().split('T')[0]);
+      cur.setDate(cur.getDate() + 1);
     }
 
-    let dateTrunc;
-    switch (groupBy) {
-      case 'week':
-        dateTrunc = 'week';
-        break;
-      case 'month':
-        dateTrunc = 'month';
-        break;
-      case 'day':
-      default:
-        dateTrunc = 'day';
-    }
+    let dateTrunc = 'day';
+    if (groupBy === 'week')  dateTrunc = 'week';
+    if (groupBy === 'month') dateTrunc = 'month';
 
-    let metricsQuery = `
+    const metricsQuery = `
       SELECT
         DATE_TRUNC($1, md.day) AS period,
         SUM(md.pageviews) AS total_pageviews,
@@ -514,36 +593,34 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
           COUNT(*) AS count,
           AVG(duration) AS avg_duration
         FROM metrics_edge_requests mer
-        WHERE event_time >= $2
-          AND event_time <= $3
-          ${domain !== 'all_domains' ? 'AND mer.domain = $4' : ''}
+        WHERE mer.event_time >= $2
+          AND mer.event_time <= $3
+          AND mer.${orgFilterField} = $4
         GROUP BY DATE_TRUNC($1, event_time), mer.domain
-      ) er ON DATE_TRUNC($1, md.day) = er.period
-          AND (md.domain = er.domain OR er.domain IS NULL)
+      ) er
+        ON DATE_TRUNC($1, md.day) = er.period
+       AND (md.domain = er.domain OR er.domain IS NULL)
       WHERE md.day >= $2
         AND md.day <= $3
-        ${domain !== 'all_domains' ? 'AND md.domain = $4' : ''}
+        AND md.${orgFilterField} = $4
       GROUP BY DATE_TRUNC($1, md.day)
       ORDER BY period ASC
     `;
-    const aggregateParams = [dateTrunc, start, end];
-    if (domain !== 'all_domains') {
-      aggregateParams.push(domain);
-    }
-
+    const aggregateParams = [dateTrunc, start, end, filterValue];
     const metricsResult = await pool.query(metricsQuery, aggregateParams);
-    const metricsInfo = metricsResult.rows.map(row => ({
-      period: row.period.toISOString().split('T')[0],
-      pageviews: parseInt(row.total_pageviews || 0, 10),
-      uniqueVisitors: parseInt(row.total_unique_visitors || 0, 10),
-      bounceRate: parseFloat((row.avg_bounce_rate || 0).toFixed(2)),
-      avgLoadTime: parseFloat((row.avg_load_time || 0).toFixed(2)),
-      p75Lcp: parseFloat((row.avg_p75_lcp || 0).toFixed(2)),
-      edgeRequests: parseInt(row.total_edge_requests || 0, 10),
-      avgEdgeDuration: parseFloat(parseFloat(row.avg_edge_duration || 0).toFixed(2))
+
+    const metricsInfo = metricsResult.rows.map(r => ({
+      period:          r.period.toISOString().split('T')[0],
+      pageviews:       parseInt(r.total_pageviews || 0, 10),
+      uniqueVisitors:  parseInt(r.total_unique_visitors || 0, 10),
+      bounceRate:      parseFloat((Number(r.avg_bounce_rate) || 0).toFixed(2)),
+      avgLoadTime:     parseFloat((Number(r.avg_load_time) || 0).toFixed(2)),
+      p75Lcp:          parseFloat((Number(r.avg_p75_lcp) || 0).toFixed(2)),
+      edgeRequests:    parseInt(r.total_edge_requests || 0, 10),
+      avgEdgeDuration: parseFloat((Number(r.avg_edge_duration) || 0).toFixed(2))
     }));
 
-    let individualMetricsQuery = `
+    const individualQuery = `
       SELECT
         md.day AS period,
         md.pageviews,
@@ -552,47 +629,45 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
       FROM metrics_daily md
       WHERE md.day >= $1
         AND md.day <= $2
-        ${domain !== 'all_domains' ? 'AND md.domain = $3' : ''}
+        AND md.${orgFilterField} = $3
       ORDER BY md.day ASC
     `;
-    const individualParams = [start, end];
-    if (domain !== 'all_domains') {
-      individualParams.push(domain);
-    }
+    const individualParams = [start, end, filterValue];
+    const individualResult = await pool.query(individualQuery, individualParams);
+    const individualRows = individualResult.rows;
 
-    const individualResult = await pool.query(individualMetricsQuery, individualParams);
-    const individualMetricsData = individualResult.rows;
-
-    let edgeQuery = `
+    const edgeQuery = `
       SELECT
         DATE_TRUNC('day', event_time) AS period,
         COUNT(*) AS edge_requests
       FROM metrics_edge_requests mer
-      WHERE event_time >= $1
-        AND event_time <= $2
-        ${domain !== 'all_domains' ? 'AND mer.domain = $3' : ''}
+      WHERE mer.event_time >= $1
+        AND mer.event_time <= $2
+        AND mer.${orgFilterField} = $3
       GROUP BY DATE_TRUNC('day', event_time)
       ORDER BY period ASC
     `;
-
     const edgeResult = await pool.query(edgeQuery, individualParams);
-    const edgeData = edgeResult.rows;
+    const edgeRows = edgeResult.rows;
 
-    const pageViewsData = dateRange.map(date => {
-      const entry = individualMetricsData.find(r => r.period.toISOString().split('T')[0] === date);
-      return { date, value: entry ? parseInt(entry.pageviews || 0, 10) : 0 };
+    const pageViewsData = dateRange.map(d => {
+      const e = individualRows.find(r => r.period.toISOString().split('T')[0] === d);
+      return { date: d, value: e ? parseInt(e.pageviews || 0, 10) : 0 };
     });
-    const uniqueVisitorsData = dateRange.map(date => {
-      const entry = individualMetricsData.find(r => r.period.toISOString().split('T')[0] === date);
-      return { date, value: entry ? parseInt(entry.unique_visitors || 0, 10) : 0 };
+
+    const uniqueVisitorsData = dateRange.map(d => {
+      const e = individualRows.find(r => r.period.toISOString().split('T')[0] === d);
+      return { date: d, value: e ? parseInt(e.unique_visitors || 0, 10) : 0 };
     });
-    const bounceRateData = dateRange.map(date => {
-      const entry = individualMetricsData.find(r => r.period.toISOString().split('T')[0] === date);
-      return { date, value: entry ? parseFloat((entry.bounce_rate || 0).toFixed(2)) : 0 };
+
+    const bounceRateData = dateRange.map(d => {
+      const e = individualRows.find(r => r.period.toISOString().split('T')[0] === d);
+      return { date: d, value: e ? parseFloat((e.bounce_rate || 0).toFixed(2)) : 0 };
     });
-    const edgeRequestsData = dateRange.map(date => {
-      const entry = edgeData.find(r => r.period.toISOString().split('T')[0] === date);
-      return { date, value: entry ? parseInt(entry.edge_requests || 0, 10) : 0 };
+
+    const edgeRequestsData = dateRange.map(d => {
+      const e = edgeRows.find(r => r.period.toISOString().split('T')[0] === d);
+      return { date: d, value: e ? parseInt(e.edge_requests || 0, 10) : 0 };
     });
 
     const individualMetrics = {
@@ -613,25 +688,22 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
         message: `No metrics found for the domain ${domain} in the specified date range.`,
         data: [],
         individualMetrics: {
-          pageViews: [],
-          uniqueVisitors: [],
-          bounceRate: [],
-          edgeRequests: []
+          pageViews: [], uniqueVisitors: [], bounceRate: [], edgeRequests: []
         }
       });
     }
 
     return res.status(200).json({
-      message: hasData
-        ? 'Aggregate and individual metrics retrieved successfully.'
-        : 'No metrics found for the specified criteria.',
+      message: hasData ? 'Aggregate and individual metrics retrieved successfully.'  : 'No metrics found for the specified criteria.',
       data: metricsInfo,
       individualMetrics
     });
 
   } catch (error) {
     if (!res.headersSent) {
-      return res.status(500).json({ message: 'Error retrieving aggregate metrics.', error: error.message });
+      return res.status(500).json({ message: 'Error retrieving aggregate metrics.',
+        error: error.message
+      });
     }
     next(error);
   }

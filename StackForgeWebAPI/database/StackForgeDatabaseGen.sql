@@ -92,6 +92,25 @@ CREATE TABLE signin_logs
 DROP INDEX IF EXISTS idx_signin_logs; 
 CREATE INDEX idx_signin_logs ON signin_logs (orgid, username, signin_timestamp);
 
+DROP TABLE IF EXISTS project_signin_logs;
+CREATE TABLE project_signin_logs
+	(
+        orgid TEXT, 
+  		username TEXT, 
+        project_url TEXT,
+    	signin_timestamp DATE, 
+        ip_address TEXT, 
+        city TEXT, 
+        region TEXT, 
+        country TEXT, 
+        zip TEXT, 
+        lat FLOAT, 
+        lon FLOAT, 
+        timezone TEXT
+  	);
+DROP INDEX IF EXISTS idx_project_signin_logs; 
+CREATE INDEX idx_project_signin_logs ON project_signin_logs (orgid, username, project_url, signin_timestamp);
+
 DROP TABLE IF EXISTS visitor_sessions; 
 CREATE TABLE visitor_sessions (
   visitor_id     TEXT PRIMARY KEY,
@@ -326,49 +345,55 @@ CREATE INDEX idx_runtime_logs ON build_logs (orgid, username, deployment_id);
 
 DROP TABLE IF EXISTS metrics_events; 
 CREATE TABLE metrics_events (
-  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  domain        TEXT    NOT NULL,
-  session_id    TEXT    NOT NULL,
-  url           TEXT    NOT NULL,
-  pageviews     INT     NOT NULL,
-  load_time_ms  DOUBLE PRECISION NOT NULL,
-  lcp_ms        DOUBLE PRECISION NOT NULL,
-  bounce        BOOLEAN NOT NULL,
-  event_time    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  ip_address    TEXT,
-  user_agent    TEXT,
-  latitude      DOUBLE PRECISION,
-  longitude     DOUBLE PRECISION,
-  city          TEXT,
-  region        TEXT,
-  country       TEXT
+    username TEXT, 
+    orgid TEXT,
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    domain        TEXT    NOT NULL,
+    session_id    TEXT    NOT NULL,
+    url           TEXT    NOT NULL,
+    pageviews     INT     NOT NULL,
+    load_time_ms  DOUBLE PRECISION NOT NULL,
+    lcp_ms        DOUBLE PRECISION NOT NULL,
+    bounce        BOOLEAN NOT NULL,
+    event_time    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ip_address    TEXT,
+    user_agent    TEXT,
+    latitude      DOUBLE PRECISION,
+    longitude     DOUBLE PRECISION,
+    city          TEXT,
+    region        TEXT,
+    country       TEXT
 );
 
 DROP TABLE IF EXISTS metrics_daily; 
 CREATE TABLE metrics_daily (
-  domain        TEXT    NOT NULL,
-  day           DATE    NOT NULL,
-  pageviews     BIGINT  NOT NULL,
-  unique_visitors BIGINT NOT NULL,
-  bounce_rate   DOUBLE PRECISION NOT NULL,
-  avg_load_time DOUBLE PRECISION,
-  p75_lcp       DOUBLE PRECISION,
-  PRIMARY KEY(domain, day)
+    username TEXT, 
+    orgid TEXT,
+    domain        TEXT    NOT NULL,
+    day           DATE    NOT NULL,
+    pageviews     BIGINT  NOT NULL,
+    unique_visitors BIGINT NOT NULL,
+    bounce_rate   DOUBLE PRECISION NOT NULL,
+    avg_load_time DOUBLE PRECISION,
+    p75_lcp       DOUBLE PRECISION,
+    PRIMARY KEY(domain, day)
 );
 
 DROP TABLE IF EXISTS metrics_edge_requests; 
 CREATE TABLE metrics_edge_requests (
-  id SERIAL PRIMARY KEY,
-  domain VARCHAR(255) NOT NULL,
-  visitor_id VARCHAR(36) NOT NULL,
-  page_url TEXT NOT NULL,
-  request_url TEXT NOT NULL,
-  method VARCHAR(10),
-  status INTEGER,
-  duration INTEGER,
-  type VARCHAR(50),
-  timing_dns INTEGER,
-  timing_connect INTEGER,
-  timing_response INTEGER,
-  event_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    username TEXT, 
+    orgid TEXT,
+    id SERIAL PRIMARY KEY,
+    domain VARCHAR(255) NOT NULL,
+    visitor_id VARCHAR(36) NOT NULL,
+    page_url TEXT NOT NULL,
+    request_url TEXT NOT NULL,
+    method VARCHAR(10),
+    status INTEGER,
+    duration INTEGER,
+    type VARCHAR(50),
+    timing_dns INTEGER,
+    timing_connect INTEGER,
+    timing_response INTEGER,
+    event_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

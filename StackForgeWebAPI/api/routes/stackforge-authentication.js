@@ -404,6 +404,7 @@ router.post("/validate-new-user-info", rateLimiter(10, 15, authRateLimitExceeded
 
 router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { firstName, lastName, username, email, password, phone, image } = req.body;
+    console.log(firstName, lastName, username, email, password, phone); 
 
     if (!firstName || !lastName || !username || !email || !password || !phone || !image) {
         return res.status(401).json({ message: "Unable to verify registration info. Please try again later." });
@@ -433,7 +434,7 @@ router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), a
         const imageName = `${crypto.randomBytes(16).toString("hex")}.${extension}`;
 
         const uploadParams = {
-            Bucket: process.env.S3_BUCKET_NAME,
+            Bucket: process.env.S3_IMAGE_BUCKET_NAME,
             Key: `uploads/${imageName}`,
             Body: imageBuffer,
             ContentType: mimeType,
@@ -464,42 +465,6 @@ router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), a
         } else {
             return res.status(200).json({ message: "User created successfully. Verification email sent." });
         }
-    } catch (error) {
-        if (!res.headersSent) {
-            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
-        }
-        next(error);
-    }
-});
-
-router.get("/verify-email", rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
-    const { token } = req.query;
-
-    if (!token) {
-        return res.status(400).json({ message: "Verification token is missing." });
-    }
-
-    req.on("close", () => {
-        return;
-    });
-
-    try {
-        const verificationQuery = "SELECT email FROM users WHERE verification_token = $1";
-        const verificationInfo = await pool.query(verificationQuery, [token]);
-
-        if (verificationInfo.rows.length === 0) {
-            return res.status(400).json({ message: "Invalid verification token." });
-        }
-
-        const updateEmailQuery = `
-            UPDATE users 
-            SET verified = true, verification_token = null 
-            WHERE verification_token = $1
-            ;
-        `;
-        await pool.query(updateEmailQuery, [token]);
-
-        return res.status(200).json({ message: "Email verified successfully." });
     } catch (error) {
         if (!res.headersSent) {
             return res.status(500).json({ message: "Error connecting to the database. Please try again later." });

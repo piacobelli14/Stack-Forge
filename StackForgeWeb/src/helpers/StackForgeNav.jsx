@@ -126,6 +126,23 @@ const StackForgeNav = ({ activePage }) => {
               )}
 
               {token && (
+                 <button className="navigationButtonWrapper" onClick={() => navigate("/stackforge")}>
+                  <div className="navigationButton" style={{ color: "#ced6dd" }}>
+                    <FontAwesomeIcon
+                      icon={faDiagramProject}
+                      className="navigationButtonIcon"
+                    />
+                    My Projects
+                  </div>
+
+                  <FontAwesomeIcon
+                      icon={faArrowUpRightFromSquare}
+                      className="navigationButtonIconTrailer"
+                  />
+                </button>
+              )}
+
+              {token && (
                  <button className="navigationButtonWrapper" onClick={() => navigate("/profile")}>
                   <div className="navigationButton" style={{ color: "#ced6dd" }}>
                     <FontAwesomeIcon

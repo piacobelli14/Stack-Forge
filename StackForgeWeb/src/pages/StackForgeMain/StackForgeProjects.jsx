@@ -36,6 +36,7 @@ const StackForgeProjects = () => {
   const [screenSize, setScreenSize] = useState(window.innerWidth);
   const [resizeTrigger, setResizeTrigger] = useState(false);
   const [projects, setProjects] = useState([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [projectsPage, setProjectsPage] = useState("projects");
   const [displayMode, setDisplayMode] = useState("grid");
   const [searchText, setSearchText] = useState("");
@@ -181,6 +182,7 @@ const StackForgeProjects = () => {
   useEffect(() => {
     const fetchActivityLogs = async () => {
       if (projectsPage !== "activity" || !token) return;
+      setIsLoadingActivities(true);
       try {
         const response = await fetch("http://localhost:3000/get-activity-data", {
           method: "POST",
@@ -189,31 +191,28 @@ const StackForgeProjects = () => {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            userID,
+            userID, 
             organizationID,
-            limit: activityLimit,
-            offset: activityPage * activityLimit,
             search: activitySearchText,
           }),
         });
+        if (response.status === 204) {
+          setActivities([]);
+          return;
+        }
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        const data = await response.json();
-        setActivities(data.data || []);
+        const result = await response.json();
+        setActivities(result.data || []);
       } catch (error) {
         setActivities([]);
-        await showDialog({
-          title: "Error",
-          message: "Failed to load activity logs. Please try again.",
-          showCancel: false,
-        });
       } finally {
         setIsLoadingActivities(false);
       }
     };
     fetchActivityLogs();
-  }, [projectsPage, token, userID, organizationID, activityPage, activityLimit, activitySearchText]);
+  }, [projectsPage, token, userID, organizationID, activitySearchText]);
 
   useEffect(() => {
     const fetchMonitoringData = async () => {
@@ -229,6 +228,7 @@ const StackForgeProjects = () => {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            userID, 
             organizationID,
             domain: selectedDomain || "all_domains",
             startDate: currentWeekStart.toISOString().split("T")[0],
@@ -330,6 +330,7 @@ const StackForgeProjects = () => {
 
   const getProjects = async () => {
     const token = localStorage.getItem("token");
+    setIsLoadingProjects(true)
     try {
       const response = await fetch("http://localhost:3000/list-projects", {
         method: "POST",
@@ -340,10 +341,12 @@ const StackForgeProjects = () => {
         body: JSON.stringify({ organizationID }),
       });
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        setIsLoadingProjects(false);
+        throw new Error(`HTTP error! status: ${response.status}.`);
       }
       const data = await response.json();
       setProjects(Array.isArray(data) ? data : []);
+      setIsLoadingProjects(false);
     } catch (error) {
       setProjects([]);
     }
@@ -377,25 +380,22 @@ const StackForgeProjects = () => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          userID,
+          userID, 
           organizationID,
-          limit: activityLimit,
-          offset: activityPage * activityLimit,
           search: activitySearchText,
         }),
       });
+      if (response.status === 204) {
+        setActivities([]);
+        return;
+      }
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const data = await response.json();
-      setActivities(data.data || []);
+      const result = await response.json();
+      setActivities(result.data || []);
     } catch (error) {
       setActivities([]);
-      await showDialog({
-        title: "Error",
-        message: "Failed to refresh activity logs. Please try again.",
-        showCancel: false,
-      });
     } finally {
       setIsLoadingActivities(false);
     }
@@ -684,111 +684,141 @@ const StackForgeProjects = () => {
                   </div>
                 </div>
               </div>
-
-              <div
-                className={`deploymentsContainer ${displayMode}`}
-                style={{ opacity: addNewOpen ? "0.6" : "1.0" }}
-              >
-                {filteredProjects.map((project) => (
-                  <div
-                    key={project.project_id}
-                    className="deploymentCell"
-                    onClick={() => {
-                      navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository } });
-                    }}
-                  >
-                    <div className="deploymentCellHeaderTop">
-                      <div className="deploymentCellHeaderLeft">
-                        <div className="deploymentCellHeaderLeftTop">
-                          <img
-                            src={project.image || "StackForgeLogo.png"}
-                            className="deploymentCellProjectImage"
-                          />
-                          <div className="deploymentCellHeaderInfo">
-                            <div className="deploymentCellHeaderProjectName">
-                              {project.name || 'Unnamed Project'}
-                            </div>
-                            <div className="deploymentCellHeaderLink">
-                              <a
-                                href={project.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {project.url}
-                              </a>
-                            </div>
-                          </div>
-                        </div>
-                        {project.repository ? (
-                          <a className="deploymentCellHeaderGithub" href={project.repository}>
-                            <FontAwesomeIcon icon={faGithub} />
-                            <p>{project.repository}</p>
-                          </a>
-                        ) : (
-                          <a className="deploymentCellHeaderGithub" href={project.repository}>
-                            <FontAwesomeIcon icon={faGithub} />
-                            <p>No repository connected.</p>
-                          </a>
-                        )}
-                      </div>
-                      <div className="deploymentCellHeaderRight">
-                        <div className="threeDotMenuContainer">
-                          <button
-                            className="threeDotMenuButton"
-                            onClick={(e) => handleThreeDotClick(e, project.project_id)}
-                          >
-                            <FontAwesomeIcon icon={faEllipsisH} />
-                          </button>
-                          {openMenuId === project.project_id && (
-                            <div className="threeDotDropdownMenu">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  window.open(project.url, "_blank");
-                                }}
-                              >
-                                Visit Website
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository } });
-                                }}
-                              >
-                                View Project Details
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate("/project-settings", { state: { project } });
-                                }}
-                              >
-                                Settings
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                      
+             
+              {isLoadingProjects ? (
+                  <div className="loading-wrapper" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                    <div className="loading-circle" />
+                  </div>
+              ) : filteredProjects.length === 0 ? (
+                <div className="activityLogsNoResults">
+                  <div className="activityLogsNoResultCell">
+                    <FontAwesomeIcon
+                      icon={faListUl}
+                      size="3x"
+                      className="activityLogsNoResultsIcon"
+                    />
+                    <div className="activityLogsNoResultsText">
+                      No projects found for the selected filters. 
                     </div>
-                    <div className="deploymentCellHeaderBottom">
-                      <div className="deploymentCellHeaderLeftBottom">
-                        <p>
-                          <span>Project ID:</span>
-                          <br />
-                          {project.project_id}
-                        </p>
-                      </div>
-                      <div className="deploymentCellHeaderUpdate">
-                        <strong>Last updated:</strong>
-                        <span>{new Date(project.updated_at).toLocaleDateString()}</span>
-                        <a>
-                          <FontAwesomeIcon icon={faCodeBranch} /> main
-                        </a>
-                      </div>
+                    <div className="activityLogsNoResultsButtons">
+                      <button
+                        className="activityLogsNoResultsRefresh"
+                        onClick={getProjects}
+                        disabled={isLoadingProjects}
+                      >
+                        Refresh Projects
+                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div
+                  className={`deploymentsContainer ${displayMode}`}
+                  style={{ opacity: addNewOpen ? "0.6" : "1.0" }}
+                >
+                  {filteredProjects.map((project) => (
+                    <div
+                      key={project.project_id}
+                      className="deploymentCell"
+                      onClick={() => {
+                        navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository } });
+                      }}
+                    >
+                      <div className="deploymentCellHeaderTop">
+                        <div className="deploymentCellHeaderLeft">
+                          <div className="deploymentCellHeaderLeftTop">
+                            <img
+                              src={project.image || "StackForgeLogo.png"}
+                              className="deploymentCellProjectImage"
+                            />
+                            <div className="deploymentCellHeaderInfo">
+                              <div className="deploymentCellHeaderProjectName">
+                                {project.name || 'Unnamed Project'}
+                              </div>
+                              <div className="deploymentCellHeaderLink">
+                                <a
+                                  href={project.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  {project.url}
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                          {project.repository ? (
+                            <a className="deploymentCellHeaderGithub" href={project.repository}>
+                              <FontAwesomeIcon icon={faGithub} />
+                              <p>{project.repository}</p>
+                            </a>
+                          ) : (
+                            <a className="deploymentCellHeaderGithub" href={project.repository}>
+                              <FontAwesomeIcon icon={faGithub} />
+                              <p>No repository connected.</p>
+                            </a>
+                          )}
+                        </div>
+                        <div className="deploymentCellHeaderRight">
+                          <div className="threeDotMenuContainer">
+                            <button
+                              className="threeDotMenuButton"
+                              onClick={(e) => handleThreeDotClick(e, project.project_id)}
+                            >
+                              <FontAwesomeIcon icon={faEllipsisH} />
+                            </button>
+                            {openMenuId === project.project_id && (
+                              <div className="threeDotDropdownMenu">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    window.open(project.url, "_blank");
+                                  }}
+                                >
+                                  Visit Website
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate("/project-details", { state: { projectID: project.project_id, repository: project.repository } });
+                                  }}
+                                >
+                                  View Project Details
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate("/project-settings", { state: { project } });
+                                  }}
+                                >
+                                  Settings
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="deploymentCellHeaderBottom">
+                        <div className="deploymentCellHeaderLeftBottom">
+                          <p>
+                            <span>Project ID:</span>
+                            <br />
+                            {project.project_id}
+                          </p>
+                        </div>
+                        <div className="deploymentCellHeaderUpdate">
+                          <strong>Last updated:</strong>
+                          <span>{new Date(project.updated_at).toLocaleDateString()}</span>
+                          <a>
+                            <FontAwesomeIcon icon={faCodeBranch} /> main
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+                
             </>
           )}
 
