@@ -5,7 +5,7 @@ const crypto = require("crypto");
 const { v4: uuidv4 } = require("uuid");   
 const path = require("path");
 const { pool } = require("../config/db");
-const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require("../config/smtp");
+const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter, fromEmail } = require("../config/smtp");
 const { s3Client, storage, upload, PutObjectCommand } = require("../config/s3");
 const { authenticateToken } = require("../middleware/auth");
 const { rateLimiter, authRateLimitExceededHandler } = require("../middleware/rateLimiter");
@@ -284,7 +284,6 @@ router.post("/reset-password", rateLimiter(10, 3, authRateLimitExceededHandler),
     req.on("close", () => {
         return;
     });
-
     try {
         const resetVerificationQuery = `
             SELECT email, username 
@@ -297,26 +296,24 @@ router.post("/reset-password", rateLimiter(10, 3, authRateLimitExceededHandler),
         if (resetVerificationInfo.rows.length === 0) {
             return res.status(401).json({ message: "Email not found." });
         }
-
         const { username } = resetVerificationInfo.rows[0];
         const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
         const expirationTimestamp = new Date(Date.now() + 3 * 60 * 1000).toISOString();
 
         const mailOptions = {
-            from: smtpUser,
+            from: fromEmail,
             to: email,
             subject: "Password Reset Code",
             text: `Your password reset code is: ${resetCode}. \n\nPlease enter this code when prompted so that you can reset your password.\n\n -The Stack Forge Team`
         };
 
         await emailTransporter.sendMail(mailOptions);
-
         return res.status(200).json({
             message: "Password reset code sent.",
             data: {
                 resetCode,
-                resetExpiration: expirationTimestamp,
-            },
+                resetExpiration: expirationTimestamp
+            }
         });
     } catch (error) {
         if (!res.headersSent) {
@@ -403,7 +400,6 @@ router.post("/validate-new-user-info", rateLimiter(10, 15, authRateLimitExceeded
 
 router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { firstName, lastName, username, email, password, phone, image } = req.body;
-    console.log(firstName, lastName, username, email, password, phone); 
 
     if (!firstName || !lastName || !username || !email || !password || !phone || !image) {
         return res.status(401).json({ message: "Unable to verify registration info. Please try again later." });
@@ -421,7 +417,6 @@ router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), a
         const verificationToken = crypto.randomBytes(32).toString("hex");
 
         const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
-
         if (!matches) {
             return res.status(400).json({ message: "Invalid image format. Please upload a valid image." });
         }
@@ -429,46 +424,94 @@ router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), a
         const mimeType = matches[1];
         const imageBuffer = Buffer.from(matches[2], "base64");
         const extension = mimeType.split("/")[1];
-
         const imageName = `${crypto.randomBytes(16).toString("hex")}.${extension}`;
 
         const uploadParams = {
             Bucket: process.env.S3_IMAGE_BUCKET_NAME,
             Key: `uploads/${imageName}`,
             Body: imageBuffer,
-            ContentType: mimeType,
+            ContentType: mimeType
         };
-
         const data = await s3Client.send(new PutObjectCommand(uploadParams));
         const imageUrl = `https://${uploadParams.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${uploadParams.Key}`;
 
         const userCreationQuery = `
             INSERT INTO users (
-                first_name, last_name, username, email, phone, hashed_password, salt, image, verification_token, verified, created_at, twofaenabled, multifaenabled, loginnotisenabled, exportnotisenabled, datashareenabled, 
+                first_name, last_name, username, email, phone, hashed_password, salt, image, verification_token, verified, created_at,
+                twofaenabled, multifaenabled, loginnotisenabled, exportnotisenabled, datashareenabled,
                 showpersonalemail, showpersonalphone, showteamid, showteamemail, showteamphone, showteamadminstatus, showteamrole
-            ) 
-            VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE
-            )
-            ; 
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(),
+                FALSE, FALSE, FALSE, FALSE, FALSE,
+                TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE
+            );
         `;
-
         const userCreationValues = [
-            capitalizedFirstName, capitalizedLastName, username.toString(), email.toString(), phone.toString(), hashedPassword.toString(), salt.toString(), imageUrl, verificationToken, false
+            capitalizedFirstName,
+            capitalizedLastName,
+            username.toString(),
+            email.toString(),
+            phone.toString(),
+            hashedPassword.toString(),
+            salt.toString(),
+            imageUrl,
+            verificationToken,
+            false
         ];
-
         const userCreationInfo = await pool.query(userCreationQuery, userCreationValues);
 
         if (userCreationInfo.error) {
             return res.status(500).json({ message: "Unable to create new user. Please try again later." });
-        } else {
-            return res.status(200).json({ message: "User created successfully. Verification email sent." });
         }
+
+        const verificationLink = `${process.env.VERIFICATION_URL}/verify-email?token=${verificationToken}`;
+        const mailOptions = {
+            from:    fromEmail,
+            to:      email,
+            subject: "Please verify your email",
+            text:    `Hi ${capitalizedFirstName},\n\nThank you for registering. Please verify your email by clicking the link below:\n\n${verificationLink}\n\nIf you did not request this, you can ignore this email.\n\n– The Stack Forge Team`
+        };
+        await emailTransporter.sendMail(mailOptions);
+
+        return res.status(200).json({ message: "User created successfully. Verification email sent." });
     } catch (error) {
         if (!res.headersSent) {
             return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
         }
         next(error);
+    }
+});
+
+router.get("/verify-email", async (req, res, next) => {
+    const { token } = req.query;
+
+    if (!token) {
+        return res.status(400).json({ message: "Verification token missing." });
+    }
+
+    try {
+        const findQuery = `
+            SELECT username
+              FROM users
+             WHERE verification_token = $1
+        `;
+        const findResult = await pool.query(findQuery, [token]);
+
+        if (findResult.rows.length === 0) {
+            return res.status(400).json({ message: "Invalid or expired verification token." });
+        }
+
+        const { username } = findResult.rows[0];
+        const updateQuery = `
+            UPDATE users
+            SET verified = TRUE, verification_token = NULL
+            WHERE username = $1
+        `;
+        await pool.query(updateQuery, [username]);
+
+        return res.status(200).json({ message: "Email verified successfully." });
+    } catch (error) {
+        return res.status(500).json({ message: "Internal server error." });
     }
 });
 

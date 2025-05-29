@@ -13,6 +13,7 @@ import {
 import "../styles/helperStyles/NavBar.css";
 import useAuth from "../UseAuth.jsx";
 import useIsTouchDevice from "../TouchDevice.jsx";
+import { faUsersGear } from "@fortawesome/free-solid-svg-icons/faUsersGear";
 
 const StackForgeNav = ({ activePage }) => {
   const navigate = useNavigate();
@@ -159,6 +160,23 @@ const StackForgeNav = ({ activePage }) => {
                 </button>
               )}
 
+              {token && (
+                 <button className="navigationButtonWrapper" onClick={() => navigate("/team-control")}>
+                  <div className="navigationButton" style={{ color: "#ced6dd" }}>
+                    <FontAwesomeIcon
+                      icon={faUsersGear}
+                      className="navigationButtonIcon"
+                    />
+                    Team
+                  </div>
+  
+                  <FontAwesomeIcon
+                        icon={faArrowUpRightFromSquare}
+                        className="navigationButtonIconTrailer"
+                    />
+                </button>
+              )}
+
               {!token ? (
                 <button
                   className="navigationButtonWrapper"
@@ -223,6 +241,21 @@ const StackForgeNav = ({ activePage }) => {
                     className="navigationButtonIcon"
                   />
                   Account
+                </div>
+
+                <FontAwesomeIcon
+                      icon={faArrowUpRightFromSquare}
+                      className="navigationButtonIconTrailer"
+                  />
+              </button>
+
+              <button className="navigationButtonWrapper" onClick={() => navigate("/team-control")}>
+                <div className="navigationButton" style={{ color: "#ced6dd" }}>
+                  <FontAwesomeIcon
+                    icon={faUsersGear}
+                    className="navigationButtonIcon"
+                  />
+                  Team
                 </div>
 
                 <FontAwesomeIcon

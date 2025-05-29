@@ -16,9 +16,7 @@ const Reset = () => {
     const [confirmPassword, setConfirmPassword] = useState(""); 
     const [newPasswordVisible, setNewPasswordVisible] = useState(false); 
     const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false); 
-
     const [resetError, setResetError] = useState(""); 
-
     const [resetEmail, setResetEmail] = useState(""); 
     const [resetCode, setResetCode] = useState(""); 
     const [checkedResetCode, setCheckedResetCode] = useState(""); 
@@ -35,7 +33,7 @@ const Reset = () => {
         try {
             setResetCode("xxx");
     
-            const response = await fetch("http://172.20.10.2:3000/reset-password", {
+            const response = await fetch("http://localhost:3000/reset-password", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -83,7 +81,7 @@ const Reset = () => {
             setResetError("Passwords do not match.");
         } else {
             try {
-                const response = await fetch("http://172.20.10.2:3000/change-password", {
+                const response = await fetch("http://localhost:3000/change-password", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",

@@ -24,36 +24,32 @@ function App() {
   useEffect(() => {
     const detectOS = () => {
       const userAgent = navigator.userAgent;
-      if (userAgent.indexOf("Win") !== -1) {
-        return "windows";
-      } else if (userAgent.indexOf("Mac") !== -1) {
-        return "mac";
-      }
+      if (userAgent.indexOf("Win") !== -1) return "windows";
+      if (userAgent.indexOf("Mac") !== -1) return "mac";
       return "";
     };
-
-    const os = detectOS();
-    setOsClass(os);
+    setOsClass(detectOS());
   }, []);
 
   return (
     <Router>
       <div className={`App ${osClass}`}>
         <Routes>
-          <Route path="/login" element={<Login/>}/>
-          <Route path="/register" element={<Register/>}/>
-          <Route path="/reset" element={<Reset/>}/>
-          <Route path="/verify" element={<Verification/>}/>
-          <Route path="/stackforge" element={<StackForgeProjects/>}/>
-          <Route path="/project-details" element={<StackForgeProjectDetails/>}/>
-          <Route path="/project-settings" element={<StackForgeProjectSettings/>}/>
-          <Route path="/update-details" element={<StackForgeUpdateDetails/>}/>
-          <Route path="/add-new-project" element={<StackForgeAddProject/>}/>
+          <Route path="/login"        element={<Login/>}/>
+          <Route path="/register"     element={<Register/>}/>
+          <Route path="/reset"        element={<Reset/>}/>
+          <Route path="/verify-email" element={<Verification/>}/>
+          <Route path="/verify"       element={<Verification/>}/>
+          <Route path="/stackforge"   element={<StackForgeProjects/>}/>
+          <Route path="/project-details"   element={<StackForgeProjectDetails/>}/>
+          <Route path="/project-settings"  element={<StackForgeProjectSettings/>}/>
+          <Route path="/update-details"     element={<StackForgeUpdateDetails/>}/>
+          <Route path="/add-new-project"    element={<StackForgeAddProject/>}/>
           <Route path="/import-new-project" element={<StackForgeBuildProject/>}/>
-          <Route path="/build-logs" element={<StackForgeBuildLogs/>}/>
-          <Route path="/runtime-logs" element={<StackForgeRuntimeLogs/>}/>
-          <Route path="/team-control" element={<StackForgeTeamControl/>}/>
-          <Route path="/profile" element={<StackForgeProfile/>}/>
+          <Route path="/build-logs"         element={<StackForgeBuildLogs/>}/>
+          <Route path="/runtime-logs"       element={<StackForgeRuntimeLogs/>}/>
+          <Route path="/team-control"       element={<StackForgeTeamControl/>}/>
+          <Route path="/profile"            element={<StackForgeProfile/>}/>
           <Route index element={<Navigate to="/login" replace />} />
         </Routes>
       </div>

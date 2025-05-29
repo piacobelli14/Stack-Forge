@@ -157,7 +157,7 @@ const StackForgeTeamControl = () =>  {
         setIsLoadingAccessRequests(true);
         try {
             const token = localStorage.getItem("token");
-            const response = await fetch("http://localhost:3000//team-members-access-response", {
+            const response = await fetch("http://localhost:3000/team-members-access-requests", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID })
@@ -172,7 +172,7 @@ const StackForgeTeamControl = () =>  {
     const handleRequestResponse = async (requestUsername, action) => {
         try {
             const token = localStorage.getItem("token");
-            const response = await fetch("http://localhost:3000/access-request-response", {
+            const response = await fetch("http://localhost:3000/team-members-access-response", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID, requestUsername, action })
@@ -352,6 +352,9 @@ const StackForgeTeamControl = () =>  {
                                                     </div>
                                                     <div className="teamContentMemberRowTrailing">
                                                         <button> 
+                                                            <p>
+                                                                Role: 
+                                                            </p>
                                                             {member.role}
                                                         </button>
                                                         <button 
@@ -372,7 +375,7 @@ const StackForgeTeamControl = () =>  {
                                 </div>
 
                                 <div className="teamContentFlexCellBottom">
-                                    <p>A profile picture for your account is required.</p>
+                                    <p>Changes you make here will save automatically.</p>
                                 </div>
                             </div>
 
@@ -449,7 +452,7 @@ const StackForgeTeamControl = () =>  {
                                     )}
                                 </div>
                                 <div className="teamContentFlexCellBottom">
-                                    <p>A profile picture for your account is required.</p>
+                                    <p>Changes you make here will save automatically.</p>
                                 </div>
                             </div>
                         </div>
