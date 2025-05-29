@@ -633,9 +633,9 @@ router.post("/delete-domain", authenticateToken, async (req, res, next) => {
               HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
               ChangeBatch: { Changes: deleteChanges }
           }));
-      } catch (err) {
-          if (!err.message.includes("but it was not found")) {
-              throw err;
+      } catch (error) {
+          if (!error.message.includes("but it was not found")) {
+              throw error;
           }
       }
 
@@ -683,12 +683,12 @@ router.post("/delete-domain", authenticateToken, async (req, res, next) => {
           success: true,
           message: `Subdomain "${domain_name}" and its resources have been deleted.`
       });
-  } catch (err) {
+  } catch (error) {
       if (client) await client.query("ROLLBACK");
       if (!res.headersSent) {
-          res.status(500).json({ message: `Failed to delete subdomain: ${err.message}.` });
+          res.status(500).json({ message: `Failed to delete subdomain: ${error.message}.` });
       }
-      next(err);
+      next(error);
   } finally {
       if (client) client.release();
   }
@@ -996,11 +996,11 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
 
     return res.json({ success: true, message: "Redirect updated." });
 
-  } catch (err) {
+  } catch (error) {
     if (!res.headersSent) {
-      res.status(500).json({ message: `Failed to update redirect rules: ${err.message}.` });
+      res.status(500).json({ message: `Failed to update redirect rules: ${error.message}.` });
     }
-    next(err);
+    next(error);
   }
 });
 

@@ -259,7 +259,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                         deploymentStatus
                     };
                 }
-            } catch (err) {
+            } catch (error) {
                 websiteAnalytics = {
                     status: 500,
                     responseTime: 0,
@@ -275,7 +275,7 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                         images: 0,
                         links: 0
                     },
-                    error: `Website analytics failed: ${err.message}`,
+                    error: `Website analytics failed: ${error.message}`,
                     deploymentStatus
                 };
             }
@@ -351,8 +351,8 @@ router.post("/git-analytics", authenticateToken, async (req, res, next) => {
                         openPulls
                     }
                 };
-            } catch (err) {
-                repositoryAnalytics = { error: `Repository analytics failed: ${err.message}` };
+            } catch (error) {
+                repositoryAnalytics = { error: `Repository analytics failed: ${error.message}` };
             }
         }
 
@@ -835,13 +835,13 @@ router.post("/get-deployment-protections", authenticateToken, async (req, res, n
         }));
 
         res.status(200).json({ deploymentProtection });
-    } catch (err) {
+    } catch (error) {
         if (!res.headersSent) {
             res.status(500).json({
-                message: `Failed to fetch deployment protection states: ${err.message}`
+                message: `Failed to fetch deployment protection states: ${error.message}`
             });
         }
-        next(err);
+        next(error);
     }
 });
 
@@ -872,13 +872,13 @@ router.post("/get-deployment-authentications", authenticateToken, async (req, re
         }));
 
         res.status(200).json({ deploymentAuthentication });
-    } catch (err) {
+    } catch (error) {
         if (!res.headersSent) {
             res.status(500).json({
-                message: `Failed to fetch deployment authentication states: ${err.message}`
+                message: `Failed to fetch deployment authentication states: ${error.message}.`
             });
         }
-        next(err);
+        next(error);
     }
 });
 
@@ -911,11 +911,11 @@ router.post("/edit-deployment-protections", authenticateToken, async (req, res, 
             domainIDs,
             protectionEnabled
         });
-    } catch (err) {
+    } catch (error) {
         if (!res.headersSent) {
-            res.status(500).json({ message: `Failed to toggle deployment protection: ${err.message}` });
+            res.status(500).json({ message: `Failed to toggle deployment protection: ${error.message}.` });
         }
-        next(err);
+        next(error);
     }
 });
 
@@ -948,13 +948,13 @@ router.post("/edit-deployment-authentications", authenticateToken, async (req, r
             domainIDs,
             authenticationEnabled
         });
-    } catch (err) {
+    } catch (error) {
         if (!res.headersSent) {
             res.status(500).json({
-                message: `Failed to toggle deployment authentication: ${err.message}`
+                message: `Failed to toggle deployment authentication: ${error.message}.`
             });
         }
-        next(err);
+        next(error);
     }
 });
 

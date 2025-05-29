@@ -101,7 +101,6 @@ router.post("/user-authentication", rateLimiter(10, 20, authRateLimitExceededHan
     }
 });
 
-
 router.post("/projects-user-authentication", rateLimiter(10, 20, authRateLimitExceededHandler), async (req, res, next) => {
     const { username, password, returnUrl, projectUrl } = req.body;
 
@@ -476,15 +475,15 @@ router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), a
 router.get("/connect-github", async (req, res, next) => {
     const { token, userID } = req.query;
     if (!token || !userID) {
-        return res.status(400).send("Missing token or userID");
+        return res.status(400).send("Missing token or userID.");
     }
     try {
         const payload = jwt.verify(token, secretKey);
         if (payload.userid !== userID) {
-            return res.status(401).send("Invalid token for this user");
+            return res.status(401).send("Invalid token for this user.");
         }
-    } catch (err) {
-        return res.status(401).send("Invalid token");
+    } catch (error) {
+        return res.status(401).send("Invalid token.");
     }
     const clientID = process.env.GITHUB_CLIENT_ID;
     const redirectUri = process.env.GITHUB_REDIRECT_URI;

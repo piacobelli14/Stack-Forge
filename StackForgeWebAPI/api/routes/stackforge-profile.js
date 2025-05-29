@@ -600,7 +600,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
                     }
 
                     const adminEmails = adminEmailInfo.rows.map((row) => row.email);
-
                     const checkActiveRequestQuery = `
                         SELECT * 
                         FROM access_requests 
@@ -621,7 +620,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
                                 SET request_timestamp = NOW()
                                 WHERE request_username = $1 AND request_orgid = $2 AND request_status = 'Current'
                             `;
-
                             pool.query(updateActiveRequestQuery, [userID, teamCode], (error, info) => {
                                 if (error) {
                                     if (!res.headersSent) {
@@ -629,7 +627,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
                                     }
                                     return;
                                 }
-
                                 if (!res.headersSent) {
                                     return res.status(200).json({ message: 'Access request sent successfully.' });
                                 }
@@ -640,7 +637,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
                                 (request_username, request_orgid, request_timestamp, request_status)
                                 VALUES ($1, $2, NOW(), 'Current')
                             `;
-
                             pool.query(requestLogQuery, [userID, teamCode], (error, requestLogInfo) => {
                                 if (error) {
                                     if (!res.headersSent) {
@@ -663,7 +659,6 @@ router.post('/join-team', authenticateToken, (req, res) => {
             }
         });
     };
-
     requestAccess();
 });
 
@@ -838,5 +833,247 @@ router.post('/delete-github', authenticateToken, async (req, res, next) => {
         next(error);
     }
 });
+
+router.post('/team-members', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID } = req.body;
+
+    if (!userID || !organizationID) {
+        return res.status(400).json({ message: 'userID and organizationID are required.' });
+    }
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const teamMemberQuery = `
+            SELECT first_name, last_name, role, email, username, orgid, image
+            FROM users 
+            WHERE orgid = $1; 
+        `;
+        const teamMemberInfo = await pool.query(teamMemberQuery, [organizationID]);
+
+        return res.status(200).json({ teamMemberInfo: teamMemberInfo.rows });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Unable to fetch team members at this time. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+
+router.post('/team-members-access-requests', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID } = req.body;
+    if (!userID || !organizationID) {
+        return res.status(400).json({ message: 'userID and organizationID are required.' });
+    }
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const accessRequestsQuery = `
+            SELECT
+                ar.request_username,
+                ar.request_orgid,
+                ar.request_timestamp,
+                ar.request_status, 
+                u.image, 
+                u.first_name, 
+                u.last_name, 
+                u.email
+            FROM access_requests AS ar
+            LEFT JOIN users AS u
+              ON ar.request_username = u.username
+            WHERE ar.request_status = 'Current' and ar.request_orgid = $1
+            ORDER BY ar.request_timestamp DESC
+        `;
+        const accessRequestsInfo = await pool.query(accessRequestsQuery, [organizationID]);
+
+        return res.status(200).json({ accessRequestsInfo: accessRequestsInfo.rows });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Unable to fetch team members at this time. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/team-members-access-response', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, requestUsername, action } = req.body;
+
+    if (!userID || !organizationID || !requestUsername || !action) {
+        return res.status(400).json({ message: 'userID, organizationID, requestUsername and action are required.' });
+    }
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const adminCheck = await pool.query(`
+            SELECT is_admin
+              FROM users
+             WHERE username = $1
+               AND orgid    = $2
+        `, [userID, organizationID]);
+
+        if (adminCheck.rows.length === 0 || adminCheck.rows[0].is_admin !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden: only team admins can respond to access requests.' });
+        }
+
+        const reqCheck = await pool.query(`
+            SELECT 1
+              FROM access_requests
+             WHERE request_username = $1
+               AND request_orgid    = $2
+               AND request_status   = 'Current'
+        `, [requestUsername, organizationID]);
+
+        if (reqCheck.rows.length === 0) {
+            return res.status(404).json({ message: 'No current access request found for that user.' });
+        }
+
+        let newStatus;
+        if (action === 'approve') {
+            newStatus = 'Approved';
+        } else if (action === 'deny') {
+            newStatus = 'Denied';
+        } else {
+            return res.status(400).json({ message: "Action must be either 'approve' or 'deny'." });
+        }
+
+        await pool.query(`
+            UPDATE access_requests
+               SET request_status    = $3,
+                   request_timestamp = NOW()
+             WHERE request_username = $1
+               AND request_orgid    = $2
+               AND request_status   = 'Current'
+        `, [requestUsername, organizationID, newStatus]);
+
+        if (newStatus === 'Approved') {
+            await pool.query(`
+                UPDATE users
+                   SET orgid    = $2,
+                       is_admin = 'member'
+                 WHERE username = $1
+            `, [requestUsername, organizationID]);
+        }
+
+        return res.status(200).json({ message: `Access request ${newStatus.toLowerCase()} successfully.` });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Unable to process access request at this time. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/remove-team-member', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, memberUsername } = req.body;
+
+    if (!userID || !organizationID || !memberUsername) {
+        return res.status(400).json({ message: 'userID, organizationID, and memberUsername are required.' });
+    }
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const removeMemberQuery = `
+            UPDATE users
+            SET orgid = NULL
+            WHERE username = $1 AND orgid = $2
+        `;
+        const result = await pool.query(removeMemberQuery, [memberUsername, organizationID]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'User not found or not a member of this team.' });
+        }
+
+        return res.status(200).json({ message: 'Team member removed successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/personal-access-requests', authenticateToken, async (req, res, next) => {
+    const { userID } = req.body;
+
+    if (!userID) {
+        return res.status(400).json({ message: 'userID is required.' });
+    }
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const accessRequestsQuery = `
+            SELECT
+                ar.request_username,
+                ar.request_orgid,
+                o.orgname    AS team_name,
+                ar.request_timestamp,
+                ar.request_status
+            FROM access_requests AS ar
+            LEFT JOIN organizations AS o
+              ON ar.request_orgid = o.orgid
+            WHERE ar.request_username = $1
+              AND ar.request_status   = 'Current'
+            ORDER BY ar.request_timestamp DESC
+        `;
+        const accessRequestsInfo = await pool.query(accessRequestsQuery, [userID]);
+
+        return res.status(200).json({ accessRequests: accessRequestsInfo.rows });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Unable to fetch access requests at this time. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/revoke-access-request', authenticateToken, async (req, res, next) => {
+    const { userID } = req.body;
+
+    if (!userID) {
+        return res.status(400).json({ message: 'userID is required.' });
+    }
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const revokeQuery = `
+            UPDATE access_requests
+               SET request_status = 'Revoked',
+                   request_timestamp = NOW()
+             WHERE request_username = $1
+               AND request_status = 'Current'
+        `;
+        const result = await pool.query(revokeQuery, [userID]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'No current access request found to revoke.' });
+        }
+
+        return res.status(200).json({ message: 'Access request revoked successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Unable to revoke access request at this time. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
 
 module.exports = router;

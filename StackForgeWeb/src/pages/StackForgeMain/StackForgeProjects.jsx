@@ -404,11 +404,7 @@ const StackForgeProjects = () => {
   const toggleAddNewDropdown = () => {
     setAddNewOpen((prev) => !prev);
   };
-
-  const handleAddNewItem = (type) => {
-    setAddNewOpen(false);
-  };
-
+  
   const handleThreeDotClick = (e, projectId) => {
     e.stopPropagation();
     setOpenMenuId((prev) => (prev === projectId ? null : projectId));
@@ -566,13 +562,7 @@ const StackForgeProjects = () => {
 
 
   return (
-    <div
-      className="projectsPageWrapper"
-      style={{
-        background: "linear-gradient(to bottom, #322A54, #29282D)",
-        display: screenSize >= 5300 ? "none" : ""
-      }}
-    >
+    <div className="projectsPageWrapper" style={{ background: "linear-gradient(to bottom, #322A54, #29282D)", display: screenSize >= 5300 ? "none" : "" }}>
       <StackForgeNav activePage="main" />
       {isLoaded && (
         <div className="projectsCellHeaderContainer">
@@ -1212,7 +1202,7 @@ const StackForgeProjects = () => {
             <i>Domain</i>
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>
-          <button onClick={() => handleAddNewItem("Team Member")}>
+          <button onClick={() => navigate("/team-control")}>
             <i>Team Member</i>
             <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
           </button>

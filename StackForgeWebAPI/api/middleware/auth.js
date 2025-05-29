@@ -9,9 +9,9 @@ function authenticateToken(req, res, next) {
     return res.status(401).json({ error: 'Access denied. No token provided.' });
   }
 
-  jwt.verify(token, secretKey, (err, decoded) => {
-    if (err) {
-      console.error('Token verification failed:', err);
+  jwt.verify(token, secretKey, (error, decoded) => {
+    if (error) {
+      console.error('Token verification failed:', error);
       return res.status(401).json({ error: 'Access denied. Invalid token.' });
     } else {
       req.user = decoded;

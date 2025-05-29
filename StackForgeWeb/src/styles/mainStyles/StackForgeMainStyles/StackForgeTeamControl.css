@@ -1,0 +1,595 @@
+@keyframes teamCellFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.teamCellFadeIn {
+    animation: teamCellFadeIn 2s ease-out;
+}
+
+
+.teamPageWrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(to bottom, #0E0B1B, #29282D);
+}
+
+.teamCellHeaderContainer {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100vw;
+    min-height: calc(100vh - 60px) !important;
+    position: relative;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.teamCellContentContainer {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    box-sizing: border-box;
+    padding: 1rem 0;
+}
+
+.teamContentFlexCell {
+    flex: 0 0 auto;
+    margin: 1vw auto 2vw;
+}
+
+.teamContentFlexCell {
+    display: flex;
+    flex-direction: column;
+    width: 90%;
+    max-width: 1200px;
+    min-height: 200px;
+    background-color: rgba(255,255,255,0.1);
+    border-radius: 6px;
+    margin: 1vw 0 2vw;
+    box-shadow: 0 0 20px #191919;
+    box-sizing: border-box;
+}
+
+@media (min-width: 1000px) {
+    .teamContentFlexCell {
+        min-height: 250px;
+    }
+}
+
+.teamContentFlexCellTop {
+    flex: 0 0 70px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-bottom: 2px solid rgba(54, 54, 54, 0.8);
+    justify-content: space-between;
+    padding: 0 4%;
+    box-sizing: border-box;
+}
+
+.teamContentFlexCellTop p {
+    padding: 0;
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #c6c6c6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 0.6rem;
+}
+
+.teamContentFlexCellTop button {
+    padding: 0.4rem 16px;
+    border-radius: 4px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    box-sizing: border-box;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #f1f1f1;
+    box-shadow: 0 0 10px solid black;
+    border: 1px solid #c1c1c1;
+    outline: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.6rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    width: 150px;
+}
+
+.teamContentFlexCellTop button:hover {
+    opacity: 0.6;
+    border: 1px solid #c1c1c1;
+    outline: none;
+}
+
+.teamContentFlexCellTop button:focus {
+    opacity: 0.6;
+    border: 1px solid #c1c1c1;
+    outline: none;
+}
+
+.teamContentFlexCellMedium {
+    flex: 1 1 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    overflow: auto;
+    padding: 2rem;
+    box-sizing: border-box;
+    background-color: rgba(0,0,0,0.4);
+}
+
+.teamContentFlexCellBottom {
+    flex: 0 0 70px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-top: 2px solid rgba(54, 54, 54, 0.8);
+    justify-content: space-between;
+    padding: 0 4%;
+    box-sizing: border-box;
+}
+
+.teamContentFlexCellBottom p {
+    padding: 0;
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #c6c6c6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@media (min-width: 1000px) {
+    .teamContentFlexCellBottom p {
+        font-size: 0.7rem;
+    }
+}
+
+.teamContentFlexCellBottom button {
+    padding: 0.4rem 16px;
+    border-radius: 4px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    box-sizing: border-box;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #f1f1f1;
+    box-shadow: 0 0 10px solid black;
+    border: 1px solid #c1c1c1;
+    outline: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.6rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    width: 150px;
+}
+
+.teamContentFlexCellBottom button:hover {
+    opacity: 0.6;
+    border: 1px solid #c1c1c1;
+    outline: none;
+}
+
+.teamContentFlexCellBottom button:focus {
+    opacity: 0.6;
+    border: 1px solid #c1c1c1;
+    outline: none;
+}
+
+.teamEmailInviteRow {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    width: 80%;
+    padding: 0 2%;
+    box-sizing: border-box;
+    gap: 0.6rem;
+    margin-bottom: 1rem;;
+}
+
+.teamEmailInviteRowWrapperShort {
+    width: 35%;
+    box-sizing: border-box;
+    overflow: hidden;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #A3A3A3;
+    margin-left: 2px;
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.teamEmailInviteField {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.4);
+    border: 1px solid #A3A3A3;
+    border-radius: 6px;
+    padding: 0rem 0.8rem;
+    width: 100%;
+    height: 40px;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    position: relative;
+}
+
+.teamEmailInviteField input {
+    text-align: left;
+}
+
+.teamEmailInviteField span {
+    display: flex;
+    align-items: center;
+}
+
+.teamEmailInviteField p {
+    font-size: 0.7rem;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 0.6rem;
+    color: #c1c1c1;
+}
+
+.teamEmailInviteField:hover {
+    opacity: 0.6;
+    border: 1px solid #A3A3A3;
+    outline: none;
+}
+
+.teamEmailInviteField:focus {
+    border: 1px solid #A3A3A3;
+    outline: none;
+}
+
+.teamControlInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #A3A3A3;
+}
+
+.rootInput::placeholder {
+    color: #8b8b8b;
+    font-weight: 600;
+}
+
+.teamControlRemoveBtn {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid #A3A3A3;
+    outline: none; 
+    color: #c1c1c1;
+    border-radius: 6px;
+    width: 40px;
+    height: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.teamControlRemoveBtn:hover {
+    opacity: 0.6;
+    outline: none;
+    border: 1px solid #A3A3A3;
+}
+
+.teamControlRemoveBtn:focus {
+    opacity: 1.0;
+    outline: none; 
+    border: 1px solid #A3A3A3;
+}
+
+.teamControlAddBtn {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid #A3A3A3;
+    color: #c1c1c1;
+    border-radius: 6px !important;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-style: italic;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    width: fit-content;
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.teamControlAddBtn:hover {
+    opacity: 0.6;
+    outline: none;
+    border: 1px solid #A3A3A3;
+}
+
+.teamControlAddBtn:focus {
+    opacity: 1.0;
+    outline: none;
+    border: 1px solid #A3A3A3;
+}
+
+.teamContentTopMenuWrapper {
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+}
+
+.teamContentMemberRow {
+    width: 100%; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    border-top: 0.5px solid rgba(255, 255, 255, 0.2); 
+    border-bottom: 0.5px solid rgba(255, 255, 255, 0.2); 
+    box-sizing: border-box;
+    padding: 2rem 2rem; 
+}
+
+.teamContentMemberRowLeading, 
+.teamContentMemberRowTrailing {
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    gap: 1rem; 
+    box-sizing: border-box;
+}
+
+.teamContentMemberRowLeading img {
+    width: 50px; 
+    height: 50px; 
+    object-fit: cover;
+    border-radius: 8px; 
+    margin-right: 0.4rem;
+}
+
+.teamContentMemberRowLeading span {
+    padding: 0; 
+    margin: 0; 
+    display: flex; 
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.teamContentMemberRowLeading span strong {
+    font-size: 1.1rem; 
+    font-weight: 800; 
+    color: #c1c1c1; 
+    padding: 0; 
+    margin: 0; 
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    text-align: left;
+    width: 100%; 
+}
+
+.teamContentMemberRowLeading span p, 
+.teamContentMemberRowTrailing p {
+    font-size: 0.8rem; 
+    font-weight: 500; 
+    color: #c1c1c1; 
+    padding: 0; 
+    margin: 0; 
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    opacity: 0.9;
+    width: 100%; 
+}
+
+.teamContentMemberRowTrailing p {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-right: 1rem;
+}
+
+.teamContentMemberRowTrailing button {
+    padding: 0.4rem 16px;
+    border-radius: 4px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    box-sizing: border-box;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #f1f1f1;
+    box-shadow: 0 0 10px solid black;
+    border: 1px solid #c1c1c1;
+    outline: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.6rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    white-space: nowrap; 
+}
+
+.teamContentMemberRowTrailing button:hover {
+    opacity: 0.6;
+    border: 1px solid #c1c1c1;
+    outline: none;
+}
+
+.teamContentMemberRowTrailing button:focus {
+    opacity: 0.6;
+    border: 1px solid #c1c1c1;
+    outline: none;
+}
+
+.teamDropdownWrapper {
+    position: relative; 
+}
+
+
+.teamDropdownMenu {
+    position: fixed;
+    background: #222222;
+    border: 2px solid #414141;
+    border-radius: 0.3rem;
+    display: flex;
+    flex-direction: column;
+    z-index: 999;
+    min-width: 200px;
+    padding: 0.4rem 0;
+    box-shadow: 0 0 20px black;
+}
+
+.teamDropdownMenu button {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0.4rem 1rem;
+    color: #A3A3A3;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-style: italic;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.teamDropdownMenu button button i {
+    padding: 0 0.4rem; 
+    text-overflow: ellipsis; 
+    overflow: hidden; 
+    white-space: nowrap;
+}
+
+.teamDropdownMenu button svg {
+    font-size: 0.7rem;
+}
+
+.teamDropdownMenu button:hover {
+    background: #2a2a2a;
+    border: none;
+    outline: none;
+}
+
+.teamDropdownMenu button:focus {
+    background: #2a2a2a;
+    border: none;
+    outline: none;
+}
+
+.teamNoResults {
+    width: 100%; 
+    height: calc(250px); 
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.teamNoResultsIcon {
+    font-size: 1.6rem; 
+    color: #c1c1c1; 
+    margin-bottom: 1rem; 
+}
+
+.teamNoResultsText {
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    font-style: italic; 
+    margin-bottom: 1rem;;
+    width: 80%; 
+    text-align: center;
+}
+
+.teamNoResultsButtons {
+    display: flex; 
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+}
+
+@media (max-width: 700px) {
+    .teamNoResultsButtons {
+        flex-direction: column;
+    }
+}
+
+.teamNoResultsReset, 
+.teamNoResultsRefresh {
+    background-color: #c1c1c1; 
+    padding: 0.4rem 0.8rem; 
+    border: 1px solid #A3A3A3; 
+    border-radius: 6px; 
+    box-shadow: 0 0 10px black; 
+    font-size: 0.8rem; 
+    font-weight: 700;
+    color: #222222;
+    width: 150px;
+    outline: none; 
+}
+
+.teamNoResultsReset:hover, 
+.teamNoResultsRefresh:hover {
+    opacity: 0.6;
+    border: 1px solid #A3A3A3; 
+    outline: none;
+}
+
+.teamNoResultsReset:focus, 
+.teamNoResultsRefreshfocus {
+    border: 1px solid #A3A3A3; 
+    outline: none;
+}
+
+.teamNoResultCell {
+    background-color: rgba(0,0,0,0.4); 
+    padding: 40px 40px; 
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+    border-radius: 6px; 
+    display: flex; 
+    flex-direction: column;
+    align-items: center;
+}
+
+@media (max-width: 700px) {
+    .teamNoResultCell {
+        padding: 20px 5px; 
+    }
+}

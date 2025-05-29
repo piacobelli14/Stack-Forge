@@ -968,8 +968,8 @@ class DeployManager {
     
         try {
             await codeBuildClient.send(new CreateProjectCommand(params));
-        } catch (e) {
-            if (e.name === "ResourceAlreadyExistsException")
+        } catch (error) {
+            if (error.name === "ResourceAlreadyExistsException")
                 await codeBuildClient.send(new UpdateProjectCommand(params));
             else
                 throw new Error(`Failed to create CodeBuild project: ${e.message}.`);

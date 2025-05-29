@@ -277,6 +277,7 @@ const StackForgeProjectSettings = () => {
       if (!response.ok) {
         throw new Error(`Failed to validate domain: ${response.status}`);
       }
+
       await fetchDomains();
     } catch (error) {
       await showDialog({

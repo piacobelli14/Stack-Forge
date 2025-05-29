@@ -40,6 +40,8 @@ const StackForgeProfile = () => {
         orgImage: "",
         orgCreated: ""
     });
+    const [activeAccessRequest, setActiveAccessRequest] = useState(false);
+    const [activeAccessRequestMessage, setActiveAccessRequestMessage] = useState(""); 
     const [settingsState, setSettingsState] = useState("general");
     const settingsButtons = [
         { state: "general", label: "general", icon: faGear },
@@ -85,6 +87,7 @@ const StackForgeProfile = () => {
         const fetchData = async () => {
             try {
                 await fetchUserInfo(userID);
+                await fetchAccessRequests(userID); 
                 setIsLoaded(true);
             } catch (error) { }
         };
@@ -151,13 +154,13 @@ const StackForgeProfile = () => {
         navigator.clipboard.writeText(text);
     };
 
-    const fetchUserInfo = async id => {
+    const fetchUserInfo = async (userID) => {
         try {
             const token = localStorage.getItem("token");
             const res = await fetch("http://localhost:3000/user-info", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ userID: id, organizationID })
+                body: JSON.stringify({ userID, organizationID })
             });
             if (res.status !== 200) throw new Error("Internal Server Error");
             const data = await res.json();
@@ -427,7 +430,7 @@ const StackForgeProfile = () => {
             if (!token) {
                 return;
             }
-            window.open(`http://localhost:3000/connect-github?token=${token}&userID=${userID}`, "_self");
+            window.open(`http://localhost:3000/connect-github?token=${t}&userID=${userID}`, "_self");
         } catch (error) {
             await showDialog({ title: "Alert", message: "Error connecting GitHub: " + error.message });
         }
@@ -450,6 +453,51 @@ const StackForgeProfile = () => {
         } catch (error) {
             await showDialog({ title: "Alert", message: "Error disconnecting GitHub: " + error.message });
         }
+    };
+
+    const fetchAccessRequests = async (userID) => {
+        const token = localStorage.getItem("token");
+        const res = await fetch("http://localhost:3000/personal-access-requests", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ userID })
+        });
+        if (res.status !== 200) {
+            throw new Error(`Server responded with ${res.status}`);
+        }
+        const data = await res.json();
+        const requests = data.accessRequests;
+        if (requests.length > 0 &&
+            requests[0].request_username === userID &&
+            requests[0].request_status === "Current"
+        ) {
+            setActiveAccessRequest(true);
+            setActiveAccessRequestMessage(`You have an active access request to join the team ${requests[0].team_name}. We are still waiting on the team's admins to approve your request.`)
+        } else {
+            setActiveAccessRequest(false);
+            setActiveAccessRequestMessage(""); 
+        }
+    };
+    
+    const handleRevokeAccessRequest = async () => {
+        const token = localStorage.getItem("token");
+        const res = await fetch("http://localhost:3000/revoke-access-request", {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/json", 
+                Authorization: `Bearer ${token}` 
+            },
+            body: JSON.stringify({ userID })
+        });
+        if (res.status !== 200) { 
+            throw new Error("Internal Server Error") 
+        } else {  
+            window.location.reload(); 
+        };
+        
     };
 
     const handleUsernameCopy = () => {
@@ -656,86 +704,108 @@ const StackForgeProfile = () => {
                                 {settingsState === "team" && (
                                     !userDetails.orgID ? (
                                         <>
-                                            <div className="profileContentFlexCell" style={{ border: createTeamError !== "" ? "1px solid #E54B4B" : "" }}>
-                                                <div className="profileContentFlexCellTop">
-                                                    <div className="profileLeadingCellStack">
-                                                        <h3>Create a Team</h3>
-                                                        <p>If you are not a aprt of a team or orgnaization, you can create one here. Just enter a team name and you will be given administrative access as the founder.</p>
+                                            {!activeAccessRequest && (
+                                                <div className="profileContentFlexCell" style={{ border: createTeamError !== "" ? "1px solid #E54B4B" : "" }}>
+                                                    <div className="profileContentFlexCellTop">
+                                                        <div className="profileLeadingCellStack">
+                                                            <h3>Create a Team</h3>
+                                                            <p>If you are not a aprt of a team or orgnaization, you can create one here. Just enter a team name and you will be given administrative access as the founder.</p>
+                                                        </div>
+                                                        <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                            {isTeamCreateLoad ? (
+                                                                <div className="loading-circle" />
+                                                            ) : (
+                                                                <>
+                                                                    <div className="profileFieldInput">
+                                                                        <strong>Enter a Team Name</strong>
+                                                                        <span>
+                                                                            <input placeholder={"New team name..."} onChange={e => setTeamName(e.target.value)} />
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="profileFieldInput">
+                                                                        <span>
+                                                                            <button className="profileActionButton" onClick={handleTeamCreation}>
+                                                                                Create New Team
+                                                                            </button>
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                        {isTeamCreateLoad ? (
-                                                            <div className="loading-circle" />
-                                                        ) : (
-                                                            <>
-                                                                <div className="profileFieldInput">
-                                                                    <strong>Enter a Team Name</strong>
-                                                                    <span>
-                                                                        <input placeholder={"New team name..."} onChange={e => setTeamName(e.target.value)} />
-                                                                    </span>
-                                                                </div>
-                                                                <div className="profileFieldInput">
-                                                                    <span>
-                                                                        <button className="profileActionButton" onClick={handleTeamCreation}>
-                                                                            Create New Team
-                                                                        </button>
-                                                                    </span>
-                                                                </div>
-                                                            </>
+                                                    <div className="profileContentFlexCellBottom" style={{ borderTop: createTeamError !== "" ? "1px solid #E54B4B" : "", backgroundColor: createTeamError !== "" ? "rgba(229, 75, 75, 0.2)" : "" }}>
+                                                        {(createTeamMessage === "" && createTeamError === "") && (
+                                                            <p>Once you successfully create your team, you will be logged out. Once you sign back in you should see your team info.</p>
+                                                        )}
+                                                        {(createTeamError !== "") && (
+                                                            <p>{createTeamError}</p>
+                                                        )}
+                                                        {(createTeamError === "" && createTeamMessage !== "") && (
+                                                            <p>{createTeamError}</p>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="profileContentFlexCellBottom" style={{ borderTop: createTeamError !== "" ? "1px solid #E54B4B" : "", backgroundColor: createTeamError !== "" ? "rgba(229, 75, 75, 0.2)" : "" }}>
-                                                    {(createTeamMessage === "" && createTeamError === "") && (
-                                                        <p>Once you successfully create your team, you will be logged out. Once you sign back in you should see your team info.</p>
-                                                    )}
-                                                    {(createTeamError !== "") && (
-                                                        <p>{createTeamError}</p>
-                                                    )}
-                                                    {(createTeamError === "" && createTeamMessage !== "") && (
-                                                        <p>{createTeamError}</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="profileContentFlexCell" style={{ border: joinTeamError !== "" ? "1px solid #E54B4B" : "" }}>
-                                                <div className="profileContentFlexCellTop">
-                                                    <div className="profileLeadingCellStack">
-                                                        <h3>Join a Team</h3>
-                                                        <p>If you need to join a team, your team administrator should have given you an access code. Once you have it you can enter it here to request access to the team.</p>
+                                            )}
+                                            
+                                            {!activeAccessRequest ? (
+                                                <div className="profileContentFlexCell" style={{ border: joinTeamError !== "" ? "1px solid #E54B4B" : "" }}>
+                                                    <div className="profileContentFlexCellTop">
+                                                        <div className="profileLeadingCellStack">
+                                                            <h3>Join a Team</h3>
+                                                            <p>If you need to join a team, your team administrator should have given you an access code. Once you have it you can enter it here to request access to the team.</p>
+                                                        </div>
+                                                        <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
+                                                            {isTeamJoinLoad ? (
+                                                                <div className="loading-circle" />
+                                                            ) : (
+                                                                <>
+                                                                    <div className="profileFieldInput">
+                                                                        <strong>Enter Your Access Code</strong>
+                                                                        <span>
+                                                                            <input placeholder={"Access code..."} onChange={e => setTeamCode(e.target.value)} />
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="profileFieldInput">
+                                                                        <span>
+                                                                            <button className="profileActionButton" onClick={handleTeamJoin}>
+                                                                                Join Team
+                                                                            </button>
+                                                                        </span>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <div className="profileTrailingCellStack" style={{ justifyContent: "center", alignItems: "center" }}>
-                                                        {isTeamJoinLoad ? (
-                                                            <div className="loading-circle" />
-                                                        ) : (
-                                                            <>
-                                                                <div className="profileFieldInput">
-                                                                    <strong>Enter Your Access Code</strong>
-                                                                    <span>
-                                                                        <input placeholder={"Access code..."} onChange={e => setTeamCode(e.target.value)} />
-                                                                    </span>
-                                                                </div>
-                                                                <div className="profileFieldInput">
-                                                                    <span>
-                                                                        <button className="profileActionButton" onClick={handleTeamJoin}>
-                                                                            Join Team
-                                                                        </button>
-                                                                    </span>
-                                                                </div>
-                                                            </>
+                                                    <div className="profileContentFlexCellBottom" style={{ borderTop: joinTeamError !== "" ? "1px solid #E54B4B" : "", backgroundColor: joinTeamError !== "" ? "rgba(229, 75, 75, 0.2)" : "" }}>
+                                                        {(joinTeamMessage === "" && joinTeamError === "") && (
+                                                            <p>Once you enter your access code, and access request will be sent to the team admins who can approve or deny your request.</p>
+                                                        )}
+                                                        {(joinTeamError !== "") && (
+                                                            <p>{joinTeamError}</p>
+                                                        )}
+                                                        {(joinTeamError === "" && joinTeamMessage !== "") && (
+                                                            <p>{joinTeamError}</p>
                                                         )}
                                                     </div>
                                                 </div>
-                                                <div className="profileContentFlexCellBottom" style={{ borderTop: joinTeamError !== "" ? "1px solid #E54B4B" : "", backgroundColor: joinTeamError !== "" ? "rgba(229, 75, 75, 0.2)" : "" }}>
-                                                    {(joinTeamMessage === "" && joinTeamError === "") && (
-                                                        <p>Once you enter your access code, and access request will be sent to the team admins who can approve or deny your request.</p>
-                                                    )}
-                                                    {(joinTeamError !== "") && (
-                                                        <p>{joinTeamError}</p>
-                                                    )}
-                                                    {(joinTeamError === "" && joinTeamMessage !== "") && (
-                                                        <p>{joinTeamError}</p>
-                                                    )}
+                                            ) : (
+                                                <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
+                                                    <div className="profileContentFlexCellTop">
+                                                        <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                            <h3>Revoke Access Request</h3>
+                                                            <p style={{ width: "100%" }}>
+                                                                {activeAccessRequestMessage}
+                                                            </p>
+                                                            <button className="profileDeleteButton" onClick={handleRevokeAccessRequest}>
+                                                                Revoke Access Request
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
+                                                        <p>You may revoke your access request at any time.</p>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
                                         </>
                                     ) : (
                                         <>
@@ -944,7 +1014,7 @@ const StackForgeProfile = () => {
                                                     </div>
                                                 </div>
                                                 <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
-                                                    <p>Doingg this may cause interruptions to your live projects. Please proceed with caution.</p>
+                                                    <p>Doing this may cause interruptions to your live projects. Please proceed with caution.</p>
                                                 </div>
                                             </div>
                                         </>

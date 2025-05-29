@@ -1336,7 +1336,6 @@
     margin: 0; 
 }
 
-
 .activityLogsNoResults {
     width: 100%; 
     height: calc(100vh - 180px); 
@@ -1803,3 +1802,4 @@
     flex: 1; 
     overflow: hidden !important;
 }
+
