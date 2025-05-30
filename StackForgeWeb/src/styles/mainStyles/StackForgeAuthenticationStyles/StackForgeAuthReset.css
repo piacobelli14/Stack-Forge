@@ -54,18 +54,31 @@
 
 .resetLogo, 
 .resetLogoSub {
-    height: 8vw;
-    margin-right: 1vw;
-    margin-top: 6vw; 
-    margin-bottom: 3vw; 
+    height: 120px;
+    margin-right: 0;
+    margin-top: 4rem;
+    margin-bottom: 2rem; 
 }
 
 @media (min-width: 1200px) {
-    .resetLogoSub {
-        margin-top: 2vw; 
-        margin-bottom: 2vw; 
+    .resetLogo, 
+    .resetLogoSub  {
+        height: 160px;
+        margin-right: 0;
+        margin-top: 4rem;
+        margin-bottom: 2rem; 
     }
-} 
+}
+
+.resetPrompt {
+    font-size: 0.9rem; 
+    font-weight: 800; 
+    opacity: 0.9;
+    color: #c1c1c1;
+    margin-bottom: 1rem; 
+    width: 80%; 
+    text-align: center;
+}
 
 @media (min-width: 700px) {
     .resetBlock {

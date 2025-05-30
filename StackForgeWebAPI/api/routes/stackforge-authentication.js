@@ -2,7 +2,7 @@ const express = require("express");
 const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const { v4: uuidv4 } = require("uuid");   
+const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const { pool } = require("../config/db");
 const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter, fromEmail } = require("../config/smtp");
@@ -17,7 +17,7 @@ const router = express.Router();
 
 router.post("/user-authentication", rateLimiter(10, 20, authRateLimitExceededHandler), async (req, res, next) => {
     const { username, password } = req.body;
-    
+
     req.on("close", () => {
         return;
     });
@@ -105,11 +105,11 @@ router.post("/projects-user-authentication", rateLimiter(10, 20, authRateLimitEx
     const { username, password, returnUrl, projectUrl } = req.body;
 
     req.on("close", () => {
-    return;
+        return;
     });
 
     try {
-    const loginQuery = `
+        const loginQuery = `
         SELECT u.username, u.salt, u.hashed_password, u.orgid, u.verified,
                 u.twofaenabled, u.multifaenabled,
                 CASE WHEN EXISTS (
@@ -118,86 +118,86 @@ router.post("/projects-user-authentication", rateLimiter(10, 20, authRateLimitEx
         FROM users u
         WHERE u.username = $1 OR u.email = $1
     `;
-    const info = await pool.query(loginQuery, [username]);
+        const info = await pool.query(loginQuery, [username]);
 
-    if (info.rows.length === 0) {
-        return res.status(401).json({ message: "Invalid login credentials." });
-    }
+        if (info.rows.length === 0) {
+            return res.status(401).json({ message: "Invalid login credentials." });
+        }
 
-    const userData = info.rows[0];
-    if (!userData.verified) {
-        return res.status(401).json({ message: "Email not verified. Please verify your account." });
-    }
+        const userData = info.rows[0];
+        if (!userData.verified) {
+            return res.status(401).json({ message: "Email not verified. Please verify your account." });
+        }
 
-    const { salt, hashed_password, username: userID, orgid: orgID, twofaenabled, multifaenabled, isadmin } = userData;
-    if (hashPassword(password, salt) !== hashed_password) {
-        return res.status(401).json({ message: "Invalid login credentials." });
-    }
+        const { salt, hashed_password, username: userID, orgid: orgID, twofaenabled, multifaenabled, isadmin } = userData;
+        if (hashPassword(password, salt) !== hashed_password) {
+            return res.status(401).json({ message: "Invalid login credentials." });
+        }
 
-    const token = jwt.sign(
-        {
-        userid: userID,
-        orgid: orgID,
-        isadmin,
-        permissions: { twofaenabled, multifaenabled },
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
-        },
-        secretKey,
-        { algorithm: "HS256" }
-    );
-
-    const visitorId = uuidv4();
-    res.cookie("sf_visitor_id", visitorId, {
-        domain: ".stackforgeengine.com",
-        path: "/",
-        httpOnly: false,
-        secure: true,
-        sameSite: "None",
-        maxAge: 365 * 24 * 60 * 60 * 1000
-    });
-
-    const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
-    const locationResponse = await axios.get(`http://ip-api.com/json/${ip}`);
-    const loc = locationResponse.data;
-    const signinTimestamp = new Date().toISOString();
-
-    if (projectUrl) {
-        await pool.query(
-        `INSERT INTO project_signin_logs
-            (orgid, username, project_url, signin_timestamp, ip_address,
-            city, region, country, zip, lat, lon, timezone)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [orgID, userID, projectUrl, signinTimestamp, ip, loc.city, loc.region,
-            loc.country, loc.zip, loc.lat, loc.lon, loc.timezone]
+        const token = jwt.sign(
+            {
+                userid: userID,
+                orgid: orgID,
+                isadmin,
+                permissions: { twofaenabled, multifaenabled },
+                exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
+            },
+            secretKey,
+            { algorithm: "HS256" }
         );
 
-        res.cookie("sf_signed_into_project", projectUrl, {
+        const visitorId = uuidv4();
+        res.cookie("sf_visitor_id", visitorId, {
             domain: ".stackforgeengine.com",
             path: "/",
             httpOnly: false,
             secure: true,
             sameSite: "None",
-            maxAge: 60 * 60 * 1000  
+            maxAge: 365 * 24 * 60 * 60 * 1000
         });
-    }
 
-    return res.status(200).json({
-        token,
-        userid: userID,
-        orgid: orgID,
-        isadmin,
-        twofaenabled,
-        multifaenabled,
-        returnUrl
-    });
+        const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+        const locationResponse = await axios.get(`http://ip-api.com/json/${ip}`);
+        const loc = locationResponse.data;
+        const signinTimestamp = new Date().toISOString();
+
+        if (projectUrl) {
+            await pool.query(
+                `INSERT INTO project_signin_logs
+            (orgid, username, project_url, signin_timestamp, ip_address,
+            city, region, country, zip, lat, lon, timezone)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+                [orgID, userID, projectUrl, signinTimestamp, ip, loc.city, loc.region,
+                    loc.country, loc.zip, loc.lat, loc.lon, loc.timezone]
+            );
+
+            res.cookie("sf_signed_into_project", projectUrl, {
+                domain: ".stackforgeengine.com",
+                path: "/",
+                httpOnly: false,
+                secure: true,
+                sameSite: "None",
+                maxAge: 60 * 60 * 1000
+            });
+        }
+
+        return res.status(200).json({
+            token,
+            userid: userID,
+            orgid: orgID,
+            isadmin,
+            twofaenabled,
+            multifaenabled,
+            returnUrl
+        });
     } catch (error) {
-    if (!res.headersSent) {
-        res.status(500).json({ message: "Error connecting to the database. Please try again later." });
-    }
-    next(error);
+        if (!res.headersSent) {
+            res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+        }
+        next(error);
     }
 });
-  
+
 router.post("/send-admin-auth-code", rateLimiter(10, 15, authRateLimitExceededHandler), async (req, res, next) => {
     const { email } = req.body;
 
@@ -249,7 +249,7 @@ router.post("/verify-admin-auth-code", rateLimiter(10, 15, authRateLimitExceeded
     });
 
     try {
-        const verifyAuthenticationCodeQuery =  `
+        const verifyAuthenticationCodeQuery = `
             SELECT email, username 
             FROM admin_tokens WHERE email = $1 AND token = $2 AND expiration > NOW()
             ;
@@ -414,7 +414,7 @@ router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), a
         const capitalizedLastName = capitalizeFirstLetter(lastName);
         const { salt, hashedPassword } = generateSaltedPassword(password);
 
-        const verificationToken = crypto.randomBytes(32).toString("hex");
+        const verificationToken = crypto.randomBytes(16).toString("hex");
 
         const matches = image.match(/^data:(image\/\w+);base64,(.+)$/);
         if (!matches) {
@@ -432,7 +432,7 @@ router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), a
             Body: imageBuffer,
             ContentType: mimeType
         };
-        const data = await s3Client.send(new PutObjectCommand(uploadParams));
+        await s3Client.send(new PutObjectCommand(uploadParams));
         const imageUrl = `https://${uploadParams.Bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${uploadParams.Key}`;
 
         const userCreationQuery = `
@@ -449,27 +449,23 @@ router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), a
         const userCreationValues = [
             capitalizedFirstName,
             capitalizedLastName,
-            username.toString(),
-            email.toString(),
-            phone.toString(),
-            hashedPassword.toString(),
-            salt.toString(),
+            username,
+            email,
+            phone,
+            hashedPassword,
+            salt,
             imageUrl,
             verificationToken,
             false
         ];
-        const userCreationInfo = await pool.query(userCreationQuery, userCreationValues);
-
-        if (userCreationInfo.error) {
-            return res.status(500).json({ message: "Unable to create new user. Please try again later." });
-        }
+        await pool.query(userCreationQuery, userCreationValues);
 
         const verificationLink = `${process.env.VERIFICATION_URL}/verify-email?token=${verificationToken}`;
         const mailOptions = {
-            from:    fromEmail,
-            to:      email,
+            from: fromEmail,
+            to: email,
             subject: "Please verify your email",
-            text:    `Hi ${capitalizedFirstName},\n\nThank you for registering. Please verify your email by clicking the link below:\n\n${verificationLink}\n\nIf you did not request this, you can ignore this email.\n\n– The Stack Forge Team`
+            text: `Hi ${capitalizedFirstName},\n\nThank you for registering. Please verify your email by clicking the link below:\n\n${verificationLink}\n\nIf you did not request this, you can ignore this email.\n\n– The Stack Forge Team`
         };
         await emailTransporter.sendMail(mailOptions);
 
@@ -483,35 +479,72 @@ router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), a
 });
 
 router.get("/verify-email", async (req, res, next) => {
-    const { token } = req.query;
-
-    if (!token) {
+    const rawToken = req.query.token;
+    if (!rawToken) {
         return res.status(400).json({ message: "Verification token missing." });
     }
+    const token = rawToken.trim();
 
     try {
-        const findQuery = `
-            SELECT username
-              FROM users
-             WHERE verification_token = $1
-        `;
-        const findResult = await pool.query(findQuery, [token]);
+        const updateResult = await pool.query(
+            `
+                UPDATE users
+                SET verified = TRUE,
+                   verification_token = NULL
+                WHERE verification_token = $1
+                RETURNING username
+            `,
+            [token]
+        );
 
-        if (findResult.rows.length === 0) {
+        if (updateResult.rowCount === 0) {
             return res.status(400).json({ message: "Invalid or expired verification token." });
         }
 
-        const { username } = findResult.rows[0];
-        const updateQuery = `
-            UPDATE users
-            SET verified = TRUE, verification_token = NULL
-            WHERE username = $1
-        `;
-        await pool.query(updateQuery, [username]);
-
         return res.status(200).json({ message: "Email verified successfully." });
     } catch (error) {
-        return res.status(500).json({ message: "Internal server error." });
+        if (!res.headersSent) {
+            return res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+        }
+        next(error);
+    }
+});
+
+
+router.post("/resend-verification-email", async (req, res) => {
+    const { email } = req.body;
+    if (!email) {
+        return res.status(400).json({ message: "Email is required to resend verification." });
+    }
+
+    try {
+        const findUser = await pool.query(
+            `
+                SELECT first_name, verification_token, verified 
+                FROM users 
+                WHERE email = $1
+            `,
+            [email]
+        );
+        if (!findUser.rows.length) {
+            return res.status(404).json({ message: "No user found with that email." });
+        }
+        const { first_name, verification_token, verified } = findUser.rows[0];
+        if (verified) {
+            return res.status(400).json({ message: "Email is already verified; no need to resend." });
+        }
+
+        const verificationLink = `${process.env.VERIFICATION_URL}/verify-email?token=${verification_token}`;
+        await emailTransporter.sendMail({
+            from:    fromEmail,
+            to:      email,
+            subject: "Your verification email",
+            text:    `Hi ${first_name},\n\nHere is your verification link again:\n\n${verificationLink}\n\n– The Stack Forge Team`
+        });
+
+        return res.status(200).json({ message: "Verification email resent successfully." });
+    } catch (error) {
+        return res.status(500).json({ message: "Unable to resend verification email." });
     }
 });
 

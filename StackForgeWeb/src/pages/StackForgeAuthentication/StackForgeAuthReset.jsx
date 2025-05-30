@@ -20,19 +20,29 @@ const Reset = () => {
     const [resetEmail, setResetEmail] = useState(""); 
     const [resetCode, setResetCode] = useState(""); 
     const [checkedResetCode, setCheckedResetCode] = useState(""); 
+    const [resendTimer, setResendTimer] = useState(0);
 
     useEffect(() => {
         if (resetCode === checkedResetCode && resetCode !== "") {
-          setIsCode(false);
-          setIsReset(true);
+            setIsCode(false);
+            setIsReset(true);
         }
-      }, [resetCode, checkedResetCode]);
-    
+    }, [resetCode, checkedResetCode]);
 
-      const handleEmail = async () => {
+    useEffect(() => {
+        let timerId;
+        if (resendTimer > 0) {
+            timerId = setTimeout(() => {
+                setResendTimer(resendTimer - 1);
+            }, 1000);
+        }
+        return () => clearTimeout(timerId);
+    }, [resendTimer]);
+
+    const handleEmail = async () => {
         try {
             setResetCode("xxx");
-    
+
             const response = await fetch("http://localhost:3000/reset-password", {
                 method: "POST",
                 headers: {
@@ -40,7 +50,7 @@ const Reset = () => {
                 },
                 body: JSON.stringify({ email: resetEmail }),
             });
-    
+
             if (response.status === 200) {
                 const jsonResponse = await response.json();
                 const code = jsonResponse.data.resetCode;
@@ -48,6 +58,7 @@ const Reset = () => {
                 setIsEmail(false); 
                 setIsCode(true); 
                 setResetError(""); 
+                setResendTimer(30);
             } else if (response.status === 401) {
                 setResetError("That email is not in our system.");
             } else {
@@ -60,13 +71,13 @@ const Reset = () => {
     
     const handlePassword = async () => {
         setResetError("");
-    
+
         const hasUpperCase = /[A-Z]/.test(newPassword);
         const hasLowerCase = /[a-z]/.test(newPassword);
         const hasNumber = /\d/.test(newPassword);
         const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>\-]/.test(newPassword);
         const isLengthValid = newPassword.length >= 8;
-    
+
         if (!isLengthValid) {
             setResetError("Password must be at least 8 characters long.");
         } else if (!hasUpperCase) {
@@ -88,7 +99,7 @@ const Reset = () => {
                     },
                     body: JSON.stringify({ newPassword, email: resetEmail }),
                 });
-    
+
                 if (response.status === 200) {
                     navigate("/login");
                 }
@@ -136,7 +147,6 @@ const Reset = () => {
                     
 
                     {isEmail && (
-                        
                         <button className="loginInputButton" onClick={handleEmail} style={{"margin": 0}}>
                             <label className="loginInputText">Continue</label>
                         </button>
@@ -144,9 +154,17 @@ const Reset = () => {
 
                     {isCode && (
                         <>
-                        <div className="loginInputWrapper">
-                            <input className="loginInput" placeholder={"Enter the code sent to your email address..."} onChange={(e) => setResetCode(e.target.value)}/>
-                        </div>
+                            <label className="resetPrompt"> 
+                                Enter the code that was sent to your email.
+                            </label>
+                            
+                            <div className="loginInputWrapper">
+                                <input className="loginInput" placeholder={"Enter your reset code..."} onChange={(e) => setResetCode(e.target.value)}/>
+                            </div>
+
+                            <button className="loginSupplementalButton" onClick={handleEmail} disabled={resendTimer > 0}>
+                                {resendTimer > 0 ? `Resend code in ${resendTimer}s` : <>Didn't get a code? <span style={{"color": "#D8C1F5", "font-weight": "800", "opacity": "1"}}>Click here to try again.</span></>}
+                            </button>
                         </>
                     )}
 
@@ -182,4 +200,4 @@ const Reset = () => {
     );
 }; 
 
-export default Reset; 
+export default Reset;

@@ -45,6 +45,22 @@
     }
 }
 
+.registerLogo {
+    height: 60px;
+    margin-right: 0;
+    margin-top: 2rem;
+    margin-bottom: 2rem; 
+}
+
+@media (min-width: 1200px) {
+    .registerLogo {
+        height: 80px;
+        margin-right: 0;
+        margin-top: 2rem;
+        margin-bottom: 2rem; 
+    }
+}
+
 .registerInputFlex, 
 .passwordInputFlex, 
 .passwordInputFlexLeading {
@@ -52,33 +68,35 @@
     justify-content: center;
     align-items: center;
     position: relative; 
-    min-width: 28vw; 
-    max-width: 28vw;
-    margin-bottom: 1.5vw;  
+    min-width: 70%; 
+    max-width: 70%;
+    margin-bottom: 1rem;  
+    box-sizing: border-box;
 }
 
 .registerInput, 
 .registerNameInput, 
 .passwordInput {
     width: 100%; 
-    font-size: 1vw; 
+    font-size: 0.8rem; 
     font-weight: 700; 
     color: black; 
     box-shadow: 0 0 3px grey;
     background: #f5f5f8; 
     border: 0.2vh solid grey; 
-    border-radius: 0.4vw;
+    border-radius: 6px;
     outline: black; 
-    text-indent: 0.8vw;
+    text-indent: 1rem;
     padding: 0; 
-    min-width: 28vw; 
-    max-width: 28vw; 
-    padding: 1.2vw 0; 
+    min-width: 100%; 
+    max-width: 100%; 
+    box-sizing: border-box;
+    padding: 1rem 1rem; 
 }
 
 .registerNameInput {
-    min-width: calc((28vw / 2) - 0.8vw) !important; 
-    max-width: calc((28vw / 2) - 0.8vw) !important; 
+    min-width: calc((100% / 2) - 0.4rem) !important; 
+    max-width: calc((100% / 2) - 0.4rem) !important; 
 }
 
 .registerInput:hover,
@@ -89,23 +107,44 @@
 }
 
 .registerContinueButton, 
-.passwordContinueButton, 
+.passwordContinueButton {
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    background-color: #2D3436;
+    border: 0.2vh solid #2D3436; 
+    border-radius: 6px; 
+    cursor: pointer; 
+    font-size: 0.8rem;  
+    font-weight: 600; 
+    color: lightgrey; 
+    box-shadow: 0 0 3px grey;
+    width: 100%; 
+    min-width: 100%; 
+    max-width: 100%; 
+    padding: 1rem 1rem;
+    margin-bottom: 1rem; 
+    box-sizing: border-box;
+}
+
 .profilePictureUpload {
     display: flex; 
     justify-content: center;
     align-items: center;
     background-color: #2D3436;
     border: 0.2vh solid #2D3436; 
-    border-radius: 0.4vw; 
+    border-radius: 6px; 
     cursor: pointer; 
-    font-size: 1vw;  
+    font-size: 0.8rem;  
     font-weight: 600; 
     color: lightgrey; 
     box-shadow: 0 0 3px grey;
-    min-width: 28vw;
-    max-width: 28vw;
-    padding: 1.2vw 0; 
-    margin-bottom: 1.5vw; 
+    width: 70%; 
+    min-width: 70%; 
+    max-width: 70%; 
+    padding: 0.8rem 1rem;
+    margin-bottom: 1rem; 
+    box-sizing: border-box;
 }
 
 @media (max-width: 900px) {
@@ -115,7 +154,7 @@
     .registerContinueButton, 
     .passwordContinueButton, 
     .profilePictureUpload   {
-        margin-bottom: 1vw; 
+        margin-bottom: 1rem; 
     }
 }
 
@@ -144,7 +183,7 @@
 .registerToggleIcon {
     display: flex; 
     color: black; 
-    font-size: 1.2vw; 
+    font-size: 0.8rem; 
     position: absolute; 
     top: 50%;  
     right: 5%; 
@@ -154,7 +193,41 @@
     padding: 0; 
 }
 
+.verificationPrompt {
+    display: flex; 
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255,255,255,0.1);
+    width: 80%;
+}
 
+.verificationPrompt label {
+    font-size: 1rem; 
+    font-weight: 800; 
+    color: #f1f1f1;
+    text-align: center; 
+    margin-bottom: 0.6rem;
+}
+
+.verificationPrompt p {
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #f1f1f1;
+    opacity: 0.8;
+    text-align: center; 
+    width: 90%; 
+    padding: 0; 
+    margin: 0; 
+}
+
+.verificationPrompt p span {
+    text-decoration: underline;
+    font-style: italic; 
+    cursor: pointer; 
+    font-weight: 900;
+    color: #D8C1F5; 
+}
 
 
 

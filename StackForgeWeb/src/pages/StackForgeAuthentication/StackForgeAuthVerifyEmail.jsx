@@ -1,47 +1,81 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "../../styles/mainStyles/StackForgeAuthenticationStyles/StackForgeAuthVerifyEmail.css";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faMailBulk } from "@fortawesome/free-solid-svg-icons";
 
 const VerifyEmail = () => {
-  const [message, setMessage] = useState("Verifying...");
   const navigate = useNavigate();
   const location = useLocation();
-
-  console.log("[VerifyEmail] render: ", { message, search: location.search });
+  const ranRef = useRef(false);
+  const [message, setMessage] = useState("Verifying...");
+  const [showRetry, setShowRetry] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendStatus, setResendStatus] = useState(false);
+  const [resendEmail, setResendEmail] = useState("");
+  const [resendMessage, setResendMessage] = useState("");
 
   useEffect(() => {
-    console.log("[VerifyEmail] useEffect firing");
-    const verifyEmail = async () => {
-      const params = new URLSearchParams(location.search);
-      const token = params.get("token");
+    if (resendStatus) {
+      const timer = setTimeout(() => {
+        setResendStatus(false);
+        setResendMessage("");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendStatus]);
 
-      if (!token) {
-        setMessage("Invalid verification link.");
-        setTimeout(() => navigate("/login"), 3000);
-        return;
-      }
+  useEffect(() => {
+    if (ranRef.current) return;
+    ranRef.current = true;
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token");
 
+    if (!token) {
+      setShowRetry(true);
+      return;
+    }
+
+    (async () => {
       try {
-        const res = await fetch(`http://localhost:3000/verify-email?token=${token}`);
-        console.log("[VerifyEmail] fetch status:", res.status);
-        const data = await res.json();
+        const response = await fetch(
+          `http://localhost:3000/verify-email?token=${token}`
+        );
+        const data = await response.json();
 
-        if (res.ok) {
-          setMessage("Email verified successfully. Redirecting to login...");
-          setTimeout(() => navigate("/login"), 2000);
+        if (response.status === 200) {
+          navigate("/login");
         } else {
-          setMessage(data.message || "Email verification failed. Redirecting to login...");
-          setTimeout(() => navigate("/login"), 2000);
+          setShowRetry(true);
         }
-      } catch (err) {
-        console.error("[VerifyEmail] fetch error:", err);
-        setMessage("An error occurred. Please try again later.");
-        setTimeout(() => navigate("/login"), 2000);
+      } catch (error) {
+        setShowRetry(true);
       }
-    };
+    })();
+  }, [location.search]);
 
-    verifyEmail();
-  }, [location.search, navigate]);
+  const handleResend = async () => {
+    setResendMessage("");
+    setResendLoading(true);
+    try {
+      const response = await fetch(
+        "http://localhost:3000/resend-verification-email",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: resendEmail }),
+        }
+      );
+      const data = await response.json();
+      setResendMessage(data.message || "Unable to resend. Please try again.");
+      setResendStatus(true);
+    } catch {
+      setResendMessage("An error occurred. Please try again later.");
+      setResendStatus(true);
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   return (
     <div
@@ -50,26 +84,68 @@ const VerifyEmail = () => {
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center"
+        justifyContent: "center",
       }}
     >
       <div
         className="verificationHeaderContainer"
         style={{ background: "linear-gradient(to bottom, #322A54, #29282D)" }}
       >
-        <p
-          style={{
-            color: "#f5f5f5",
-            fontWeight: 500,
-            textAlign: "center",
-            padding: "1rem",
-          }}
-        >
+        {!showRetry ? (
           <div className="loading-wrapper">
             <div className="loading-circle" />
-            <label className="loading-title-supplement">Verifying...</label>
           </div>
-        </p>
+        ) : (
+          <div className="unverifiedEmailCell" style={{ position: "relative" }}>
+            <FontAwesomeIcon
+              icon={faMailBulk}
+              size="3x"
+              className="unverifiedEmailIcon"
+            />
+            <div className="unverifiedEmailText">
+              <strong>This token is either expired or invalid.</strong><br/>
+              If you have successfully created account, you can request another verification email below.
+            </div>
+            <input
+              className="unverifiedInputWrapper"
+              type="email"
+              placeholder="Enter your email to resend"
+              value={resendEmail}
+              onChange={(e) => setResendEmail(e.target.value)}
+            />
+            <div className="unverifiedEmailButtons">
+              {!resendStatus ? (
+                <button
+                  className="unverifiedEmailRefresh"
+                  onClick={handleResend}
+                >
+                  Resend Verification Email
+                </button>
+              ) : (
+                <div className="unverifiedEmailText" style={{ opacity: 0.8 }}>
+                  {resendMessage}
+                </div>
+              )}
+            </div>
+            {resendLoading && (
+              <div
+                className="loading-wrapper"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: "100%",
+                  height: "100%",
+                  backgroundColor: "rgba(0,0,0,0.6)",
+                }}
+              >
+                <div className="loading-circle" />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

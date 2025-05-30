@@ -12,7 +12,6 @@
     animation: teamCellFadeIn 2s ease-out;
 }
 
-
 .teamPageWrapper {
     display: flex;
     flex-direction: column;

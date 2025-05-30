@@ -13,3 +13,124 @@
     width: 100vw;
     height: 100vh;
 }
+
+.unverifiedEmail {
+    width: 100%; 
+    height: calc(100vh - 180px); 
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.unverifiedEmailIcon {
+    font-size: 1.6rem; 
+    color: #c1c1c1; 
+    margin-bottom: 1rem; 
+}
+
+.unverifiedEmailText {
+    font-size: 0.8rem; 
+    font-weight: 600; 
+    color: #c1c1c1; 
+    font-style: italic; 
+    margin-bottom: 1rem;;
+    width: 80%; 
+    text-align: center;
+}
+
+.unverifiedEmailText span {
+    font-weight: 900; 
+    font-style: italic;
+    text-decoration: underline;
+    color: #D8C1F5; 
+    cursor: pointer; 
+}
+
+.unverifiedEmailText span:hover {
+    opacity: 0.6; 
+}
+
+.unverifiedEmailText strong {
+    font-size: 0.9rem; 
+    font-weight: 900;
+}
+
+.unverifiedEmailButtons {
+    display: flex; 
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+}
+
+@media (max-width: 700px) {
+    .unverifiedEmailButtons {
+        flex-direction: column;
+    }
+}
+
+.unverifiedEmailReset, 
+.unverifiedEmailRefresh {
+    background-color: #c1c1c1; 
+    padding: 0.4rem 0.8rem; 
+    border: 1px solid #A3A3A3; 
+    border-radius: 6px; 
+    box-shadow: 0 0 10px black; 
+    font-size: 0.8rem; 
+    font-weight: 700;
+    color: #222222;
+    outline: none; 
+}
+
+.unverifiedEmailReset:hover, 
+.unverifiedEmailRefresh:hover {
+    opacity: 0.6;
+    border: 1px solid #A3A3A3; 
+    outline: none;
+}
+
+.unverifiedEmailReset:focus, 
+.unverifiedEmailRefreshfocus {
+    border: 1px solid #A3A3A3; 
+    outline: none;
+}
+
+.unverifiedEmailCell {
+    background-color: rgba(0,0,0,0.1); 
+    padding: 30px 5px; 
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+    border-radius: 6px; 
+    display: flex; 
+    flex-direction: column;
+    align-items: center;
+    max-width: 80%; 
+    overflow: hidden;
+}
+
+@media (max-width: 700px) {
+    .unverifiedEmailCell {
+        padding: 30px 5px; 
+    }
+}
+
+.unverifiedEmailCell {
+    margin-bottom: 2rem;
+}
+
+.unverifiedInputWrapper {
+    width: 80%; 
+    padding: 0.8rem 1rem; 
+    font-size: 0.7rem ; 
+    font-weight: 700; 
+    color: #c1c1c1; 
+    background-color: rgba(255,255,255,0.05);  
+    border: 1px solid #c1c1c1; 
+    border-radius: 6px; 
+    outline: none; 
+    margin-bottom: 1.5rem; 
+}
+
+.unverifiedInputWrapper:focus {
+    border: 1px solid #c1c1c1;
+    outline: none;  
+}
