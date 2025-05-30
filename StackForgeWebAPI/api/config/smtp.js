@@ -1,4 +1,3 @@
-
 const nodemailer = require('nodemailer');
 const smtpHost     = process.env.SMTP_HOST     || 'host';
 const smtpPort     = Number(process.env.SMTP_PORT) || 800;

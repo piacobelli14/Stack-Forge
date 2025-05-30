@@ -847,7 +847,7 @@ router.post('/team-members', authenticateToken, async (req, res, next) => {
 
     try {
         const teamMemberQuery = `
-            SELECT first_name, last_name, role, email, username, orgid, image
+            SELECT first_name, last_name, role, email, username, orgid, image, is_admin
             FROM users 
             WHERE orgid = $1; 
         `;
@@ -862,6 +862,39 @@ router.post('/team-members', authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post('/team-members-permissions', authenticateToken, async (req, res, next) => {
+    const { userID, organizationID, username, is_admin } = req.body;
+
+    if (!userID || !organizationID || !username || typeof is_admin !== 'boolean') {
+        return res.status(400).json({ message: 'userID, organizationID, username and is_admin are required.' });
+    }
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updatePermissionQuery = `
+            UPDATE users
+               SET is_admin = $1
+             WHERE username = $2
+               AND orgid    = $3
+        `;
+        const roleValue = is_admin ? 'admin' : 'member';
+        const result = await pool.query(updatePermissionQuery, [roleValue, username, organizationID]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'User not found or not a member of this organization.' });
+        }
+
+        return res.status(200).json({ message: 'Permissions updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error updating permissions. Please try again later.' });
+        }
+        next(error);
+    }
+});
 
 router.post('/team-members-access-requests', authenticateToken, async (req, res, next) => {
     const { userID, organizationID } = req.body;

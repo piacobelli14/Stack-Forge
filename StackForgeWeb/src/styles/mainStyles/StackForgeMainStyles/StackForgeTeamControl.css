@@ -366,10 +366,20 @@
 .teamContentMemberRowLeading, 
 .teamContentMemberRowTrailing {
     display: flex; 
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     gap: 1rem; 
     box-sizing: border-box;
+    overflow: hidden;
+    overflow: scroll; 
+}
+
+.teamContentMemberRowLeading {
+    padding-right: 1rem;
+}
+
+.teamContentMemberRowTrailing {
+    padding-left: 1rem;
 }
 
 .teamContentMemberRowLeading img {
@@ -387,6 +397,7 @@
     flex-direction: column;
     justify-content: flex-start;
     align-items: center;
+    overflow: hidden;
 }
 
 .teamContentMemberRowLeading span strong {
@@ -468,7 +479,6 @@
 .teamDropdownWrapper {
     position: relative; 
 }
-
 
 .teamDropdownMenu {
     position: fixed;
