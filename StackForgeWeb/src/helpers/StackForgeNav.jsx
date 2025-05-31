@@ -18,9 +18,10 @@ import { faUsersGear } from "@fortawesome/free-solid-svg-icons/faUsersGear";
 const StackForgeNav = ({ activePage }) => {
   const navigate = useNavigate();
   const isTouchDevice = useIsTouchDevice();
-  const { token, isAdmin, loading } = useAuth();
+  const { token, loading, userID, organizationID } = useAuth();
   const [isHamburger, setIsHamburger] = useState(false);
   const [isTokenExpired, setIsTokenExpired] = useState(false);
+  const [isAdminBackend, setIsAdminBackend] = useState(false);
 
   useEffect(() => {
     const checkTokenExpiration = () => {
@@ -36,6 +37,30 @@ const StackForgeNav = ({ activePage }) => {
 
     checkTokenExpiration();
   }, [token]);
+
+  useEffect(() => {
+    if (!loading && token) {
+      fetch("http://localhost:3000/user-info", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ userID, organizationID })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data) && data.length > 0 && (data[0].isadmin === true || data[0].isadmin === "admin")) {
+            setIsAdminBackend(true);
+          } else {
+            setIsAdminBackend(false);
+          }
+        })
+        .catch(() => {
+          setIsAdminBackend(false);
+        });
+    }
+  }, [token, loading, userID, organizationID]);
 
   useEffect(() => {
     if (isHamburger) {
@@ -104,121 +129,25 @@ const StackForgeNav = ({ activePage }) => {
       </div>
 
       {isHamburger && !isTouchDevice && (
-        !isAdmin ? (
-          <div
-            className="homeHamburgerPopout"
-          >
-            <div className="homeHamburgerContent">      
-              {!token && (
-                <button
-                  className="navigationButtonWrapper"
-                  onClick={() => navigate("/register")}
-                >
-                  <div className="navigationButton" style={{ color: "white" }}>
-                    <FontAwesomeIcon icon={faIdCard} className="navigationButtonIcon" />
-                    Sign Up
-                  </div>
+        <div className="homeHamburgerPopout">
+          <div className="homeHamburgerContent">
+            {!token && (
+              <button
+                className="navigationButtonWrapper"
+                onClick={() => navigate("/register")}
+              >
+                <div className="navigationButton" style={{ color: "white" }}>
+                  <FontAwesomeIcon icon={faIdCard} className="navigationButtonIcon" />
+                  Sign Up
+                </div>
+                <FontAwesomeIcon
+                  icon={faArrowUpRightFromSquare}
+                  className="navigationButtonIconTrailer"
+                />
+              </button>
+            )}
 
-                  <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="navigationButtonIconTrailer"
-                  />
-                </button>
-              )}
-
-              {token && (
-                 <button className="navigationButtonWrapper" onClick={() => navigate("/stackforge")}>
-                  <div className="navigationButton" style={{ color: "#ced6dd" }}>
-                    <FontAwesomeIcon
-                      icon={faDiagramProject}
-                      className="navigationButtonIcon"
-                    />
-                    My Projects
-                  </div>
-
-                  <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="navigationButtonIconTrailer"
-                  />
-                </button>
-              )}
-
-              {token && (
-                 <button className="navigationButtonWrapper" onClick={() => navigate("/profile")}>
-                  <div className="navigationButton" style={{ color: "#ced6dd" }}>
-                    <FontAwesomeIcon
-                      icon={faIdCard}
-                      className="navigationButtonIcon"
-                    />
-                    Account
-                  </div>
-  
-                  <FontAwesomeIcon
-                        icon={faArrowUpRightFromSquare}
-                        className="navigationButtonIconTrailer"
-                    />
-                </button>
-              )}
-
-              {token && (
-                 <button className="navigationButtonWrapper" onClick={() => navigate("/team-control")}>
-                  <div className="navigationButton" style={{ color: "#ced6dd" }}>
-                    <FontAwesomeIcon
-                      icon={faUsersGear}
-                      className="navigationButtonIcon"
-                    />
-                    Team
-                  </div>
-  
-                  <FontAwesomeIcon
-                        icon={faArrowUpRightFromSquare}
-                        className="navigationButtonIconTrailer"
-                    />
-                </button>
-              )}
-
-              {!token ? (
-                <button
-                  className="navigationButtonWrapper"
-                  onClick={() => navigate("/login")}
-                >
-                  <div className="navigationButton" style={{ color: "white" }}>
-                    <FontAwesomeIcon
-                      icon={faRightToBracket}
-                      className="navigationButtonIcon"
-                    />
-                    Login
-                  </div>
-
-                  <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="navigationButtonIconTrailer"
-                  />
-                </button>
-              ) : (
-                <button className="navigationButtonWrapper" onClick={handleLogout}>
-                  <div className="navigationButton" style={{ color: "#ced6dd" }}>
-                    <FontAwesomeIcon
-                      icon={faRightFromBracket}
-                      className="navigationButtonIcon"
-                    />
-                    Sign Out
-                  </div>
-
-                  <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="navigationButtonIconTrailer"
-                  />
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div
-            className="homeHamburgerPopout"
-          >
-            <div className="homeHamburgerContent">
-              
+            {token && (
               <button className="navigationButtonWrapper" onClick={() => navigate("/stackforge")}>
                 <div className="navigationButton" style={{ color: "#ced6dd" }}>
                   <FontAwesomeIcon
@@ -227,13 +156,14 @@ const StackForgeNav = ({ activePage }) => {
                   />
                   My Projects
                 </div>
-
                 <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="navigationButtonIconTrailer"
-                  />
+                  icon={faArrowUpRightFromSquare}
+                  className="navigationButtonIconTrailer"
+                />
               </button>
-              
+            )}
+
+            {token && (
               <button className="navigationButtonWrapper" onClick={() => navigate("/profile")}>
                 <div className="navigationButton" style={{ color: "#ced6dd" }}>
                   <FontAwesomeIcon
@@ -242,13 +172,14 @@ const StackForgeNav = ({ activePage }) => {
                   />
                   Account
                 </div>
-
                 <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="navigationButtonIconTrailer"
-                  />
+                  icon={faArrowUpRightFromSquare}
+                  className="navigationButtonIconTrailer"
+                />
               </button>
+            )}
 
+            {token && isAdminBackend && (
               <button className="navigationButtonWrapper" onClick={() => navigate("/team-control")}>
                 <div className="navigationButton" style={{ color: "#ced6dd" }}>
                   <FontAwesomeIcon
@@ -257,13 +188,31 @@ const StackForgeNav = ({ activePage }) => {
                   />
                   Team
                 </div>
-
                 <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="navigationButtonIconTrailer"
-                  />
+                  icon={faArrowUpRightFromSquare}
+                  className="navigationButtonIconTrailer"
+                />
               </button>
-              
+            )}
+
+            {!token ? (
+              <button
+                className="navigationButtonWrapper"
+                onClick={() => navigate("/login")}
+              >
+                <div className="navigationButton" style={{ color: "white" }}>
+                  <FontAwesomeIcon
+                    icon={faRightToBracket}
+                    className="navigationButtonIcon"
+                  />
+                  Login
+                </div>
+                <FontAwesomeIcon
+                  icon={faArrowUpRightFromSquare}
+                  className="navigationButtonIconTrailer"
+                />
+              </button>
+            ) : (
               <button className="navigationButtonWrapper" onClick={handleLogout}>
                 <div className="navigationButton" style={{ color: "#ced6dd" }}>
                   <FontAwesomeIcon
@@ -272,15 +221,14 @@ const StackForgeNav = ({ activePage }) => {
                   />
                   Sign Out
                 </div>
-
                 <FontAwesomeIcon
-                      icon={faArrowUpRightFromSquare}
-                      className="navigationButtonIconTrailer"
-                  />
+                  icon={faArrowUpRightFromSquare}
+                  className="navigationButtonIconTrailer"
+                />
               </button>
-            </div>
+            )}
           </div>
-        )
+        </div>
       )}
     </div>
   );

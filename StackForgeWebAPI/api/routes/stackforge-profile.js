@@ -489,6 +489,118 @@ router.post('/edit-user-role', authenticateToken, async (req, res, next) => {
     }
 });
 
+router.post('/edit-user-twofa', authenticateToken, async (req, res, next) => {
+    const { userID, twoFA } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateTwofaQuery = `
+            UPDATE users
+            SET twofaenabled = $1
+            WHERE username = $2
+        `;
+
+        const updateTwofaInfo = await pool.query(updateTwofaQuery, [twoFA, userID]);
+        if (updateTwofaInfo.error) {
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Two FA updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/edit-user-loginnotifs', authenticateToken, async (req, res, next) => {
+    const { userID, loginNotif } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateLoginNotifQuery = `
+            UPDATE users
+            SET loginnotisenabled = $1
+            WHERE username = $2
+        `;
+
+        const updateLoginNotifInfo = await pool.query(updateLoginNotifQuery, [loginNotif, userID]);
+        if (updateLoginNotifInfo.error) {
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Login Notifs updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/edit-user-exportnotifs', authenticateToken, async (req, res, next) => {
+    const { userID, exportNotif } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateExportNotifQuery = `
+            UPDATE users
+            SET exportnotisenabled = $1
+            WHERE username = $2
+        `;
+
+        const updateExportNotifInfo = await pool.query(updateExportNotifQuery, [exportNotif, userID]);
+        if (updateExportNotifInfo.error) {
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Export Notifs updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
+router.post('/edit-user-datashare', authenticateToken, async (req, res, next) => {
+    const { userID, dataShare } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const updateDataShareQuery = `
+            UPDATE users
+            SET datashareenabled = $1
+            WHERE username = $2
+        `;
+
+        const updateDataShareInfo = await pool.query(updateDataShareQuery, [dataShare, userID]);
+        if (updateDataShareInfo.error) {
+            return res.status(500).json({ message: 'Unable to update user info at this time. Please try again.' });
+        }
+
+        return res.status(200).json({ message: 'Data Share updated successfully.' });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: 'Error connecting to the database. Please try again later.' });
+        }
+        next(error);
+    }
+});
+
 router.post('/delete-account', authenticateToken, async (req, res, next) => {
     const { userID } = req.body;
 

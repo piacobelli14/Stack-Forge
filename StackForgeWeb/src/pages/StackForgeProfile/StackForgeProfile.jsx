@@ -25,7 +25,6 @@ const StackForgeProfile = () => {
         role: "",
         isAdmin: "",
         twofaEnabled: false,
-        multifaEnabled: false,
         loginNotis: false,
         exportNotis: false,
         dataSharing: false,
@@ -47,7 +46,6 @@ const StackForgeProfile = () => {
         { state: "general", label: "general", icon: faGear },
         { state: "personal", label: "my account", icon: faUserGear },
         { state: "team", label: "my team", icon: faUsersGear },
-        { state: "permissions", label: "permissions", icon: faPersonChalkboard },
         { state: "security", label: "security", icon: faLock },
         { state: "data", label: "data sharing", icon: faChartColumn },
         { state: "github", label: "github account", icon: faGithub },
@@ -174,7 +172,6 @@ const StackForgeProfile = () => {
                 role: d.role,
                 isAdmin: d.isadmin,
                 twofaEnabled: d.twofa,
-                multifaEnabled: d.multifa,
                 loginNotis: d.loginnotis,
                 exportNotis: d.exportnotis,
                 dataSharing: d.datashare,
@@ -529,6 +526,98 @@ const StackForgeProfile = () => {
         setGitIDCopied(true);
         setTimeout(() => setGitIDCopied(false), 2000);
     };
+    
+    const handleToggleTwoFA = async () => {
+        const token = localStorage.getItem("token");
+        const newValue = !userDetails.twofaEnabled;
+        try {
+            const res = await fetch("http://localhost:3000/edit-user-twofa", {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json", 
+                    Authorization: `Bearer ${token}` 
+                },
+                body: JSON.stringify({ userID, twoFA: newValue })
+            });
+            if (res.ok) {
+                setUserDetails(prev => ({ ...prev, twofaEnabled: newValue }));
+            } else {
+                const msg = await res.text();
+                await showDialog({ title: "Alert", message: `Error toggling 2FA: ${res.status} - ${msg}` });
+            }
+        } catch (error) {
+            await showDialog({ title: "Alert", message: `Error toggling 2FA: ${error.message}` });
+        }
+    };
+
+    const handleToggleLoginNotifs = async () => {
+        const token = localStorage.getItem("token");
+        const newValue = !userDetails.loginNotis;
+        try {
+            const res = await fetch("http://localhost:3000/edit-user-loginnotifs", {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json", 
+                    Authorization: `Bearer ${token}` 
+                },
+                body: JSON.stringify({ userID, loginNotif: newValue })
+            });
+            if (res.ok) {
+                setUserDetails(prev => ({ ...prev, loginNotis: newValue }));
+            } else {
+                const msg = await res.text();
+                await showDialog({ title: "Alert", message: `Error toggling login notifications: ${res.status} - ${msg}` });
+            }
+        } catch (error) {
+            await showDialog({ title: "Alert", message: `Error toggling login notifications: ${error.message}` });
+        }
+    };
+
+    const handleToggleExportNotifs = async () => {
+        const token = localStorage.getItem("token");
+        const newValue = !userDetails.exportNotis;
+        try {
+            const res = await fetch("http://localhost:3000/edit-user-exportnotifs", {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json", 
+                    Authorization: `Bearer ${token}` 
+                },
+                body: JSON.stringify({ userID, exportNotif: newValue })
+            });
+            if (res.ok) {
+                setUserDetails(prev => ({ ...prev, exportNotis: newValue }));
+            } else {
+                const msg = await res.text();
+                await showDialog({ title: "Alert", message: `Error toggling export notifications: ${res.status} - ${msg}` });
+            }
+        } catch (error) {
+            await showDialog({ title: "Alert", message: `Error toggling export notifications: ${error.message}` });
+        }
+    };
+
+    const handleToggleDataShare = async () => {
+        const token = localStorage.getItem("token");
+        const newValue = !userDetails.dataSharing;
+        try {
+            const res = await fetch("http://localhost:3000/edit-user-datashare", {
+                method: "POST",
+                headers: { 
+                    "Content-Type": "application/json", 
+                    Authorization: `Bearer ${token}` 
+                },
+                body: JSON.stringify({ userID, dataShare: newValue })
+            });
+            if (res.ok) {
+                setUserDetails(prev => ({ ...prev, dataSharing: newValue }));
+            } else {
+                const msg = await res.text();
+                await showDialog({ title: "Alert", message: `Error toggling Data Sharing: ${res.status} - ${msg}` });
+            }
+        } catch (error) {
+            await showDialog({ title: "Alert", message: `Error toggling Data Sharing: ${error.message}` });
+        }
+    };
 
     return (
         <div className="profilePageWrapper" style={{ display: screenSize >= 5300 && screenSize < 700 ? "none" : "" }}>
@@ -658,6 +747,7 @@ const StackForgeProfile = () => {
                                         </div>
                                     </>
                                 )}
+
                                 {settingsState === "personal" && (
                                     <>
                                         <div className="profileContentFlexCell">
@@ -701,6 +791,7 @@ const StackForgeProfile = () => {
                                         </div>
                                     </>
                                 )}
+
                                 {settingsState === "team" && (
                                     !userDetails.orgID ? (
                                         <>
@@ -931,6 +1022,161 @@ const StackForgeProfile = () => {
                                         </>
                                     )
                                 )}
+                                
+                                {settingsState === "security" && (
+                                    <>
+                                        {userDetails.twofaEnabled !== true ? (
+                                            <div className="profileContentFlexCell">
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                        <h3>2-Factor Authentication</h3>
+                                                        <p style={{ width: "100%" }}>
+                                                            Set up two factor authentication when signing into your Stack Forge account. When enabled, Stack Forge will send a code to your phone that you can use to login. 
+                                                        </p>
+                                                        <button className="profileDeleteButton" style={{ "background-color": "rgba(255,255,255,0.1)", "border": "0.2vh solid #c1c1c1" }} onClick={handleToggleTwoFA}>
+                                                            Enable 2-Factor Authentication
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom">
+                                                    <p>Two factor authentication is not required, but it is highly reccomended.</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                        <h3>2-Factor Authentication</h3>
+                                                        <p style={{ width: "100%" }}>
+                                                            Two-factor authentication is already set up for this account. Click below if you ant to disable it.
+                                                        </p>
+                                                        <button className="profileDeleteButton" onClick={handleToggleTwoFA}>
+                                                            Disable 2-Factor Authentication
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
+                                                    <p>Two factor authentication is not required, but it is highly reccomended.</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {userDetails.loginNotis !== true ? (
+                                            <div className="profileContentFlexCell">
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                        <h3>Login Notifications</h3>
+                                                        <p style={{ width: "100%" }}>
+                                                            Set up login notifications when signing into your Stack forge account. When enabled, Stack forge will monitor the location of signins to your account and notify you of suspicious login attempts.
+                                                        </p>
+                                                        <button className="profileDeleteButton"  style={{ "background-color": "rgba(255,255,255,0.1)", "border": "0.2vh solid #c1c1c1" }} onClick={handleToggleLoginNotifs}>
+                                                            Enable Login Notifications
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom">
+                                                    <p>Login notifications are not required, but it is highly reccomended.</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                        <h3>Login Notifications</h3>
+                                                        <p style={{ width: "100%" }}>
+                                                            Login notifications are already set up for this account. Click below if you ant to disable it.
+                                                        </p>
+                                                        <button className="profileDeleteButton" onClick={handleToggleLoginNotifs}>
+                                                            Disable Login Notifications
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
+                                                    <p>Login notifications are not required, but it is highly reccomended.</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {userDetails.isAdmin === "admin" && (
+                                            userDetails.exportNotis !== true ? (
+                                                <div className="profileContentFlexCell">
+                                                    <div className="profileContentFlexCellTop">
+                                                        <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                            <h3>Export Notifications</h3>
+                                                            <p style={{ width: "100%" }}>
+                                                                Set up export notifications to be alerted whenver one of your team members exports any of your data from the Stack Forge platform.
+                                                            </p>
+                                                            <button className="profileDeleteButton"  style={{ "background-color": "rgba(255,255,255,0.1)", "border": "0.2vh solid #c1c1c1" }} onClick={handleToggleExportNotifs}>
+                                                                Enable Export Notifications
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="profileContentFlexCellBottom">
+                                                        <p>Export notifications are not required, but it is highly reccomended.</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
+                                                    <div className="profileContentFlexCellTop">
+                                                        <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                            <h3>Export Notifications</h3>
+                                                            <p style={{ width: "100%" }}>
+                                                                Export notifications are already set up for this account. Click below if you ant to disable it.
+                                                            </p>
+                                                            <button className="profileDeleteButton" onClick={handleToggleExportNotifs}>
+                                                                Disable Export Notifications
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
+                                                        <p>Export notifications are not required, but it is highly reccomended.</p>
+                                                    </div>
+                                                </div>
+                                            )
+                                        )}
+                                    </>
+                                )}
+
+                                {settingsState === "data" && (
+                                    <>
+                                        {userDetails.dataSharing !== true ? (
+                                            <div className="profileContentFlexCell">
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                        <h3>Data Sharing</h3>
+                                                        <p style={{ width: "100%" }}>
+                                                            Allow the Stack Forge team to use aggregated, anonymized data about your organization’s usage and projects to help us improve features, optimize performance, and deliver a better overall experience.
+                                                        </p>
+                                                        <button className="profileDeleteButton" style={{ backgroundColor: "rgba(255,255,255,0.1)", border: "0.2vh solid #c1c1c1" }} onClick={handleToggleDataShare}>
+                                                            Enable Data Sharing
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom">
+                                                    <p>Data sharing is not required.</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="profileContentFlexCell" style={{ border: "1px solid #E54B4B" }}>
+                                                <div className="profileContentFlexCellTop">
+                                                    <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                        <h3>Data Sharing</h3>
+                                                        <p style={{ width: "100%" }}>
+                                                            Data sharing is already set up for this account. Click below if you want to disable it.
+                                                        </p>
+                                                        <button className="profileDeleteButton" onClick={handleToggleDataShare}>
+                                                            Disable Data Sharing
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="profileContentFlexCellBottom" style={{ borderTop: "1px solid #E54B4B", backgroundColor: "rgba(229, 75, 75, 0.2)" }}>
+                                                    <p>Data sharing is not required.</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                                
                                 {settingsState === "github" && (
                                     userDetails.gitUsername === "" || !userDetails.gitUsername ? (
                                         <div className="profileContentFlexCell">

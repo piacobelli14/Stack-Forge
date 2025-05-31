@@ -43,6 +43,7 @@ const StackForgeTeamControl = () => {
     const rowPermSelectRef = useRef(null);
     const rowPermDropdownRef = useRef(null);
     const [rowPermDropdownPosition, setRowPermDropdownPosition] = useState({ top: 0, left: 0 });
+
     const filteredMembers = teamMembers.filter(m =>
         (selectedPermission === "All Permissions" ||
          (selectedPermission === "Admin" && m.is_admin === "admin") ||
@@ -390,6 +391,8 @@ const StackForgeTeamControl = () => {
                                                             <button
                                                                 ref={openPermissionDropdown === member.username ? rowPermSelectRef : null}
                                                                 className="permissionDropdownButton"
+                                                                disabled={member.username === userID}
+                                                                style={member.username === userID ? { opacity: 0.6 } : {}}
                                                                 onClick={() => setOpenPermissionDropdown(prev => prev === member.username ? null : member.username)}
                                                             >
                                                                 {member.is_admin === "admin" ? "Admin" : "Team Member"}
@@ -402,7 +405,7 @@ const StackForgeTeamControl = () => {
                                                                     }}
                                                                 />
                                                             </button>
-                                                            {openPermissionDropdown === member.username && (
+                                                            {openPermissionDropdown === member.username && member.username !== userID && (
                                                                 <div
                                                                     ref={rowPermDropdownRef}
                                                                     className="teamDropdownMenu"
