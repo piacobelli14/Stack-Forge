@@ -2,8 +2,9 @@ const express = require("express");
 const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const { v4: uuidv4 } = require("uuid");
+const twilio = require("twilio");
 const path = require("path");
+const { v4: uuidv4 } = require("uuid");
 const { pool } = require("../config/db");
 const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter, fromEmail } = require("../config/smtp");
 const { s3Client, storage, upload, PutObjectCommand } = require("../config/s3");
@@ -12,6 +13,9 @@ const { rateLimiter, authRateLimitExceededHandler } = require("../middleware/rat
 
 require("dotenv").config();
 secretKey = process.env.JWT_SECRET_KEY;
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
+
 
 const router = express.Router();
 
@@ -24,27 +28,35 @@ router.post("/user-authentication", rateLimiter(10, 20, authRateLimitExceededHan
 
     try {
         const loginQuery = `
-            SELECT u.username, u.salt, u.hashed_password, u.orgid, u.verified, u.twofaenabled, u.multifaenabled,
-                   CASE WHEN EXISTS (
-                       SELECT 1 FROM admins a WHERE a.username = u.username
-                   ) THEN true ELSE false END AS isadmin
+            SELECT 
+                u.username, 
+                u.salt, 
+                u.hashed_password, 
+                u.orgid, 
+                u.verified, 
+                u.twofaenabled, 
+                u.phone,
+                u.email,
+                u.loginnotisenabled,
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM admins a WHERE a.username = u.username
+                ) THEN true ELSE false END AS isadmin
             FROM users u
             WHERE u.username = $1 OR u.email = $1
             ;
         `;
         const info = await pool.query(loginQuery, [username]);
-
         if (info.rows.length === 0) {
             return res.status(401).json({ message: "Invalid login credentials." });
         }
 
         const userData = info.rows[0];
-        const { verified } = userData;
+        const { verified, twofaenabled, phone, email, loginnotisenabled, username: userID, orgid: orgID, isadmin } = userData;
         if (!verified) {
             return res.status(401).json({ message: "Email not verified. Please verify your account." });
         }
 
-        const { salt, hashed_password, username: userID, orgid: orgID, twofaenabled, multifaenabled, isadmin } = userData;
+        const { salt, hashed_password } = userData;
         const hashedPasswordToCheck = hashPassword(password, salt);
         if (hashedPasswordToCheck !== hashed_password) {
             const error = new Error("Invalid login credentials.");
@@ -52,17 +64,185 @@ router.post("/user-authentication", rateLimiter(10, 20, authRateLimitExceededHan
             return next(error);
         }
 
+        if (twofaenabled) {
+            const loginCode = Math.floor(100000 + Math.random() * 900000).toString();
+            const expirationTimestamp = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+            const insertUserCodeQuery = `
+                INSERT INTO users_tokens (username, token, expiration) 
+                VALUES ($1, $2, $3)
+                ON CONFLICT (username) DO UPDATE 
+                  SET token = EXCLUDED.token, expiration = EXCLUDED.expiration
+                ;
+            `;
+            await pool.query(insertUserCodeQuery, [userID, loginCode, new Date(expirationTimestamp)]);
+
+            // const rawDigits = phone.replace(/\D/g, "");
+            // const e164Phone = rawDigits.startsWith("1") ? `+${rawDigits}` : `+1${rawDigits}`;
+            // await twilioClient.messages.create({
+            //     body: `Your login verification code is: ${loginCode}`,
+            //     from: twilioPhoneNumber,
+            //     to: e164Phone
+            // });
+
+            return res.status(200).json({ requires2fa: true });
+        }
+
+        let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+        let locationData = { status: "fail" };
+        if (ip !== "::1" && !ip.startsWith("127.")) {
+            try {
+                const locationResponse = await axios.get(`http://ip-api.com/json/${ip}`);
+                locationData = locationResponse.data;
+            } catch {
+                locationData = { status: "fail" };
+            }
+        }
+
+        if (loginnotisenabled && locationData.status === "success") {
+            const previousLoginQuery = `
+                SELECT city, region, country
+                FROM signin_logs
+                WHERE username = $1
+                ORDER BY signin_timestamp DESC
+                LIMIT 1
+                ;
+            `;
+            const previousResult = await pool.query(previousLoginQuery, [userID]);
+            if (previousResult.rows.length > 0) {
+                const { city: prevCity, region: prevRegion, country: prevCountry } = previousResult.rows[0];
+                if (prevCountry && locationData.country && prevCountry !== locationData.country) {
+                    const mailOptions = {
+                        from: fromEmail,
+                        to: email,
+                        subject: "Unusual Login Detected",
+                        text: `We noticed a login to your account from a new location:\n\n` +
+                              `Current location: ${locationData.city}, ${locationData.region}, ${locationData.country}\n` +
+                              `Previous location: ${prevCity}, ${prevRegion}, ${prevCountry}\n\n` +
+                              `If this was not you, please secure your account immediately.\n\n– The Stack Forge Team`
+                    };
+                    await emailTransporter.sendMail(mailOptions);
+                }
+            }
+        }
+
         const token = jwt.sign(
             {
                 userid: userID,
                 orgid: orgID,
                 isadmin: isadmin,
-                permissions: { twofaenabled, multifaenabled },
+                permissions: { twofaenabled },
                 exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
             },
             secretKey,
             { algorithm: "HS256" }
         );
+
+        const visitorId = uuidv4();
+        res.cookie("sf_visitor_id", visitorId, {
+            domain: ".stackforgeengine.com",
+            path: "/",
+            httpOnly: false,
+            secure: true,
+            sameSite: "None",
+            maxAge: 365 * 24 * 60 * 60 * 1000
+        });
+
+        const signinTimestamp = new Date().toISOString();
+        const insertLoginTimestampQuery = `
+            INSERT INTO signin_logs (orgid, username, signin_timestamp, ip_address, city, region, country, zip, lat, lon, timezone) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ;
+        `;
+        await pool.query(insertLoginTimestampQuery, [
+            orgID,
+            userID,
+            signinTimestamp,
+            ip,
+            locationData.city || null,
+            locationData.region || null,
+            locationData.country || null,
+            locationData.zip || null,
+            locationData.lat || null,
+            locationData.lon || null,
+            locationData.timezone || null
+        ]);
+
+        return res.status(200).json({
+            token,
+            userid: userID,
+            orgid: orgID,
+            isadmin,
+            twofaenabled: false
+        });
+    } catch (error) {
+        if (!res.headersSent) {
+            res.status(500).json({ message: "Error connecting to the database. Please try again later." });
+        }
+        next(error);
+    }
+});
+
+router.post("/user-authentication-verify", rateLimiter(10, 20, authRateLimitExceededHandler), async (req, res, next) => {
+    const { username, code } = req.body;
+
+    req.on("close", () => {
+        return;
+    });
+
+    try {
+        const verifyTokenQuery = `
+            SELECT token, expiration 
+            FROM users_tokens 
+            WHERE username = $1
+            ;
+        `;
+        const tokenInfo = await pool.query(verifyTokenQuery, [username]);
+
+        if (tokenInfo.rows.length === 0) {
+            return res.status(400).json({ message: "No verification code found. Please login again." });
+        }
+
+        const { token: savedToken, expiration } = tokenInfo.rows[0];
+        const now = new Date();
+        if (savedToken !== code || now > new Date(expiration)) {
+            return res.status(400).json({ message: "Invalid or expired verification code." });
+        }
+
+        const userQuery = `
+            SELECT u.username, u.orgid,
+                   CASE WHEN EXISTS (
+                       SELECT 1 FROM admins a WHERE a.username = u.username
+                   ) THEN true ELSE false END AS isadmin,
+                   u.twofaenabled
+            FROM users u
+            WHERE u.username = $1
+            ;
+        `;
+        const userResult = await pool.query(userQuery, [username]);
+        if (userResult.rows.length === 0) {
+            return res.status(400).json({ message: "User not found." });
+        }
+
+        const { orgid: orgID, isadmin, twofaenabled } = userResult.rows[0];
+
+        const jwtToken = jwt.sign(
+            {
+                userid: username,
+                orgid: orgID,
+                isadmin: isadmin,
+                permissions: { twofaenabled },
+                exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
+            },
+            secretKey,
+            { algorithm: "HS256" }
+        );
+
+        const deleteTokenQuery = `
+            DELETE FROM users_tokens 
+            WHERE username = $1
+            ;
+        `;
+        await pool.query(deleteTokenQuery, [username]);
 
         const visitorId = uuidv4();
         res.cookie("sf_visitor_id", visitorId, {
@@ -85,13 +265,16 @@ router.post("/user-authentication", rateLimiter(10, 20, authRateLimitExceededHan
             ;
         `;
         await pool.query(insertLoginTimestampQuery, [
-            orgID, userID, signinTimestamp, ip, locationData.city, locationData.region,
+            orgID, username, signinTimestamp, ip, locationData.city, locationData.region,
             locationData.country, locationData.zip, locationData.lat, locationData.lon, locationData.timezone
         ]);
 
         return res.status(200).json({
-            token, userid: userID, orgid: orgID, isadmin,
-            twofaenabled, multifaenabled
+            token: jwtToken,
+            userid: username,
+            orgid: orgID,
+            isadmin,
+            twofaenabled
         });
     } catch (error) {
         if (!res.headersSent) {
@@ -111,7 +294,7 @@ router.post("/projects-user-authentication", rateLimiter(10, 20, authRateLimitEx
     try {
         const loginQuery = `
         SELECT u.username, u.salt, u.hashed_password, u.orgid, u.verified,
-                u.twofaenabled, u.multifaenabled,
+                u.twofaenabled,
                 CASE WHEN EXISTS (
                 SELECT 1 FROM admins a WHERE a.username = u.username
                 ) THEN true ELSE false END AS isadmin
@@ -129,7 +312,7 @@ router.post("/projects-user-authentication", rateLimiter(10, 20, authRateLimitEx
             return res.status(401).json({ message: "Email not verified. Please verify your account." });
         }
 
-        const { salt, hashed_password, username: userID, orgid: orgID, twofaenabled, multifaenabled, isadmin } = userData;
+        const { salt, hashed_password, username: userID, orgid: orgID, twofaenabled, isadmin } = userData;
         if (hashPassword(password, salt) !== hashed_password) {
             return res.status(401).json({ message: "Invalid login credentials." });
         }
@@ -139,7 +322,7 @@ router.post("/projects-user-authentication", rateLimiter(10, 20, authRateLimitEx
                 userid: userID,
                 orgid: orgID,
                 isadmin,
-                permissions: { twofaenabled, multifaenabled },
+                permissions: { twofaenabled },
                 exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24
             },
             secretKey,
@@ -187,7 +370,6 @@ router.post("/projects-user-authentication", rateLimiter(10, 20, authRateLimitEx
             orgid: orgID,
             isadmin,
             twofaenabled,
-            multifaenabled,
             returnUrl
         });
     } catch (error) {
@@ -438,12 +620,10 @@ router.post("/create-user", rateLimiter(10, 15, authRateLimitExceededHandler), a
         const userCreationQuery = `
             INSERT INTO users (
                 first_name, last_name, username, email, phone, hashed_password, salt, image, verification_token, verified, created_at,
-                twofaenabled, multifaenabled, loginnotisenabled, exportnotisenabled, datashareenabled,
-                showpersonalemail, showpersonalphone, showteamid, showteamemail, showteamphone, showteamadminstatus, showteamrole
+                twofaenabled, loginnotisenabled, exportnotisenabled, datashareenabled
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(),
-                FALSE, FALSE, FALSE, FALSE, FALSE,
-                TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE
+                FALSE, FALSE, FALSE, FALSE
             );
         `;
         const userCreationValues = [

@@ -1,16 +1,27 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEnvelope, faPerson, faEye, faEyeSlash, faUserCircle, faPersonCirclePlus, faEnvelopeCircleCheck } from "@fortawesome/free-solid-svg-icons";
+import {
+    faEnvelope,
+    faPerson,
+    faEye,
+    faEyeSlash,
+    faUserCircle,
+    faPersonCirclePlus,
+    faEnvelopeCircleCheck,
+    faKey
+} from "@fortawesome/free-solid-svg-icons";
 import "../../styles/mainStyles/StackForgeAuthenticationStyles/StackForgeAuthLogin.css";
 import StackForgeNav from "../../helpers/StackForgeNav";
-import useAuth from "../../UseAuth"; 
+import useAuth from "../../UseAuth";
 
 const Login = () => {
     const navigate = useNavigate();
     const { setToken } = useAuth();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [twofaCode, setTwofaCode] = useState("");
+    const [requires2fa, setRequires2fa] = useState(false);
     const [isEmail, setIsEmail] = useState(false);
     const [passwordVisible, setPasswordVisible] = useState(false);
     const [loginError, setLoginError] = useState("");
@@ -31,6 +42,42 @@ const Login = () => {
 
             const data = await response.json();
             if (response.status === 200) {
+                if (data.requires2fa) {
+                    setRequires2fa(true);
+                    setLoginError("");
+                } else {
+                    setToken(data.token);
+                    if (data.isadmin === true) {
+                        navigate("/stackforge");
+                    } else {
+                        navigate("/stackforge");
+                    }
+                }
+            } else if (response.status === 429) {
+                setLoginError("Too many login attempts. Please try again in 10 minutes.");
+            } else {
+                setLoginError(data.message);
+            }
+        } catch (error) {
+            setLoginError("An error occurred. Please try again.");
+        }
+    };
+
+    const handleVerifyCode = async () => {
+        try {
+            const response = await fetch("http://localhost:3000/user-authentication-verify", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    username: email,
+                    code: twofaCode,
+                }),
+            });
+
+            const data = await response.json();
+            if (response.status === 200) {
                 setToken(data.token);
                 if (data.isadmin === true) {
                     navigate("/stackforge");
@@ -38,7 +85,7 @@ const Login = () => {
                     navigate("/stackforge");
                 }
             } else if (response.status === 429) {
-                setLoginError("Too many login attempts. Please try again in 10 minutes.")
+                setLoginError("Too many attempts. Please try again later.");
             } else {
                 setLoginError(data.message);
             }
@@ -48,9 +95,18 @@ const Login = () => {
     };
 
     return (
-        <div className="loginPageWrapper" style={{"background": "linear-gradient(to left, #111111, #090011)", "display": screenSize >= 5300 ? "none" : ""}}>
+        <div
+            className="loginPageWrapper"
+            style={{
+                background: "linear-gradient(to left, #111111, #090011)",
+                display: screenSize >= 5300 ? "none" : ""
+            }}
+        >
             <StackForgeNav activePage="login" />
-            <div className="loginCellHeaderContainer" style={{"background": "linear-gradient(to left, #111111, #090011)"}}>
+            <div
+                className="loginCellHeaderContainer"
+                style={{ background: "linear-gradient(to left, #111111, #090011)" }}
+            >
                 <video
                     autoPlay
                     muted
@@ -74,16 +130,19 @@ const Login = () => {
                             className="loginInput"
                             type="text"
                             placeholder={"Email Address or Username"}
+                            value={email}
                             onChange={(e) => setEmail(e.target.value)}
+                            disabled={requires2fa}
+                            style={{ opacity: requires2fa ? 0.6 : 1 }}
                             onKeyDown={(e) => {
-                                if (e.key === "Enter") {
+                                if (e.key === "Enter" && !requires2fa) {
                                     setIsEmail(!isEmail);
                                 }
                             }}
                         />
                     </div>
 
-                    {!isEmail && (
+                    {!isEmail && !requires2fa && (
                         <button
                             className="loginInputButton"
                             style={{ backgroundColor: "#4E3270" }}
@@ -94,19 +153,30 @@ const Login = () => {
                         </button>
                     )}
 
-                    {!isEmail && (
-                        <button className="loginInputButton" style={{"backgroundColor": "#232729"}} onClick={() => navigate("/register")}>
+                    {!isEmail && !requires2fa && (
+                        <button
+                            className="loginInputButton"
+                            style={{ backgroundColor: "#232729" }}
+                            onClick={() => navigate("/register")}
+                        >
                             <FontAwesomeIcon icon={faPersonCirclePlus} className="envelopeIcon" />
                             <label className="loginInputText">Create an Account</label>
                         </button>
                     )}
 
-                    {!isEmail && (
-                        <button className="loginSupplementalButton" onClick={() => navigate("/reset")}>Forgot password? <span style={{"color": "#D8C1F5", "font-weight": "800", "opacity": "1"}}>Click here to reset.</span></button>
+                    {!isEmail && !requires2fa && (
+                        <button
+                            className="loginSupplementalButton"
+                            onClick={() => navigate("/reset")}
+                        >
+                            Forgot password?{" "}
+                            <span style={{ color: "#D8C1F5", fontWeight: "800", opacity: "1" }}>
+                                Click here to reset.
+                            </span>
+                        </button>
                     )}
 
-                    
-                    {isEmail && (
+                    {isEmail && !requires2fa && (
                         <div className="loginInputWrapper">
                             <input
                                 className="loginInput"
@@ -127,7 +197,7 @@ const Login = () => {
                         </div>
                     )}
 
-                    {isEmail && (
+                    {isEmail && !requires2fa && (
                         <button
                             className="loginInputButton"
                             style={{ backgroundColor: "#4E3270" }}
@@ -137,13 +207,60 @@ const Login = () => {
                         </button>
                     )}
 
+                    {requires2fa && (
+                        <div className="loginInputWrapper">
+                            <input
+                                className="loginInput"
+                                type="text"
+                                placeholder={"Enter 2FA Code"}
+                                onChange={(e) => setTwofaCode(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        handleVerifyCode();
+                                    }
+                                }}
+                            />
+                            <FontAwesomeIcon
+                                icon={faKey}
+                                className="passwordToggleIcon"
+                            />
+                        </div>
+                    )}
+
+                    {requires2fa && (
+                        <button
+                            className="loginInputButton"
+                            style={{ backgroundColor: "#4E3270" }}
+                            onClick={handleVerifyCode}
+                        >
+                            <label className="loginInputText">Verify Code</label>
+                        </button>
+                    )}
+
                     <div className="loginError">{loginError}</div>
 
-                    {isEmail && (
-                        <button className="loginSupplementalButton" style={{"text-decoration": "underline"}} onClick={() => {
-                            setIsEmail(!isEmail);
-                            setLoginError("");
-                        }}>
+                    {requires2fa && (
+                        <button
+                            className="loginSupplementalButton"
+                            style={{ textDecoration: "underline" }}
+                            onClick={() => {
+                                setRequires2fa(false);
+                                setLoginError("");
+                            }}
+                        >
+                            Return to Main
+                        </button>
+                    )}
+
+                    {isEmail && !requires2fa && (
+                        <button
+                            className="loginSupplementalButton"
+                            style={{ textDecoration: "underline" }}
+                            onClick={() => {
+                                setIsEmail(!isEmail);
+                                setLoginError("");
+                            }}
+                        >
                             Return to Main
                         </button>
                     )}

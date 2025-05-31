@@ -150,6 +150,16 @@ CREATE TABLE export_logs
 DROP INDEX IF EXISTS idx_export_logs; 
 CREATE INDEX idx_export_logs ON export_logs (orgid, username, dataset);
 
+DROP TABLE IF EXISTS users_tokens; 
+CREATE TABLE users_tokens 
+    (
+        username VARCHAR PRIMARY KEY,
+        token VARCHAR NOT NULL,
+        expiration TIMESTAMP NOT NULL
+    );
+DROP INDEX IF EXISTS idx_users_tokens; 
+CREATE INDEX idx_users_tokens ON users_tokens (username, token);
+
 DROP TABLE IF EXISTS users;
 CREATE TABLE users
 	(
