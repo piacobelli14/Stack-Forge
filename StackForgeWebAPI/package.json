@@ -44,6 +44,7 @@
     "nodemailer": "^6.10.0",
     "pg": "^8.14.1",
     "puppeteer": "^24.6.1",
+    "stripe": "^18.2.0",
     "twilio": "^5.7.0",
     "ua-parser-js": "^2.0.3",
     "yaml": "^2.8.0"

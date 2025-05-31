@@ -150,7 +150,8 @@
     max-width: 100%; 
 }
 
-.profileContentFlexCell {
+.profileContentFlexCell, 
+.profileContentFlexCellTall {
     display: flex;
     flex-direction: column; 
     justify-content: center;
@@ -165,6 +166,11 @@
     border: 0px solid #363636; 
     box-shadow: 0 0 20px #191919;
     box-sizing: border-box;
+}
+
+.profileContentFlexCellTall {
+    min-height: 600px; 
+    max-height: 600px; 
 }
 
 @media (min-width: 1000px) {
@@ -386,6 +392,14 @@
     opacity: 1.0; 
     border: none; 
     outline: none; 
+}
+
+.profileActionButtonFlex {
+    display: flex; 
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%; 
+    gap: 5%; 
 }
 
 .profileActionButton {

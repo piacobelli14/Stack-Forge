@@ -1,3 +1,4 @@
+
 const express = require('express');
 const axios = require('axios');
 const crypto = require('crypto');
@@ -5,9 +6,11 @@ const { pool } = require('../config/db');
 const { smtpHost, smtpPort, smtpUser, smtpPassword, emailTransporter } = require('../config/smtp');
 const { s3Client, storage, upload, PutObjectCommand } = require('../config/s3');
 const { authenticateToken } = require('../middleware/auth');
+//const Stripe = require('stripe');
 
 require('dotenv').config();
 secretKey = process.env.JWT_SECRET_KEY;
+//const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 const router = express.Router();
 
@@ -1220,5 +1223,87 @@ router.post('/revoke-access-request', authenticateToken, async (req, res, next) 
     }
 });
 
+/*
+router.post('/create-checkout-session', authenticateToken, async (req, res, next) => {
+    const { userID, priceId } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const userResult = await pool.query('SELECT stripe_customer_id, email FROM users WHERE username = $1', [userID]);
+        let customerId = null;
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found.' });
+        } else {
+            const stripeCustomerId = userResult.rows[0].stripe_customer_id;
+            const userEmail = userResult.rows[0].email;
+            if (stripeCustomerId) {
+                customerId = stripeCustomerId;
+            } else {
+                const customer = await stripe.customers.create({
+                    email: userEmail,
+                    metadata: { username: userID }
+                });
+                customerId = customer.id;
+                await pool.query('UPDATE users SET stripe_customer_id = $1 WHERE username = $2', [customerId, userID]);
+            }
+        }
+
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            mode: 'subscription',
+            line_items: [
+                {
+                    price: priceId,
+                    quantity: 1
+                }
+            ],
+            customer: customerId,
+            success_url: `${process.env.CLIENT_URL}/billing?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${process.env.CLIENT_URL}/billing`
+        });
+
+        return res.status(200).json({ sessionId: session.id });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: `Stripe checkout session creation failed: ${error.message}` });
+        }
+        next(error);
+    }
+});
+
+router.post('/billing-portal', authenticateToken, async (req, res, next) => {
+    const { userID } = req.body;
+
+    req.on('close', () => {
+        return;
+    });
+
+    try {
+        const userResult = await pool.query('SELECT stripe_customer_id FROM users WHERE username = $1', [userID]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+        const stripeCustomerId = userResult.rows[0].stripe_customer_id;
+        if (!stripeCustomerId) {
+            return res.status(400).json({ message: 'No Stripe customer associated with this user.' });
+        }
+
+        const portalSession = await stripe.billingPortal.sessions.create({
+            customer: stripeCustomerId,
+            return_url: `${process.env.CLIENT_URL}/billing`
+        });
+
+        return res.status(200).json({ url: portalSession.url });
+    } catch (error) {
+        if (!res.headersSent) {
+            return res.status(500).json({ message: `Stripe billing portal creation failed: ${error.message}` });
+        }
+        next(error);
+    }
+});
+*/
 
 module.exports = router;

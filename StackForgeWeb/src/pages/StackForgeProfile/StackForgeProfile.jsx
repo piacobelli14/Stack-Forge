@@ -619,6 +619,51 @@ const StackForgeProfile = () => {
         }
     };
 
+    const handleCreateCheckoutSession = async () => {
+        try {
+            const token = localStorage.getItem("token");
+            const priceId = "price_XXXXXXXXXXXXXX";
+            const res = await fetch("http://localhost:3000/create-checkout-session", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ userID, priceId })
+            });
+            const data = await res.json();
+            if (data.sessionId) {
+                window.location.href = `https://checkout.stripe.com/pay/${data.sessionId}`;
+            } else {
+                await showDialog({ title: "Alert", message: `Unable to create checkout session: ${data.message}` });
+            }
+        } catch (error) {
+            await showDialog({ title: "Alert", message: `Error creating checkout session: ${error.message}` });
+        }
+    };
+
+    const handleManageBilling = async () => {
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch("http://localhost:3000/billing-portal", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ userID })
+            });
+            const data = await res.json();
+            if (data.url) {
+                window.location.href = data.url;
+            } else {
+                await showDialog({ title: "Alert", message: `Unable to open billing portal: ${data.message}` });
+            }
+        } catch (error) {
+            await showDialog({ title: "Alert", message: `Error opening billing portal: ${error.message}` });
+        }
+    };
+
     return (
         <div className="profilePageWrapper" style={{ display: screenSize >= 5300 && screenSize < 700 ? "none" : "" }}>
             <StackForgeNav activePage="main" />
@@ -1266,6 +1311,31 @@ const StackForgeProfile = () => {
                                         </>
                                     )
                                 )}
+
+                                {settingsState === "billing" && (
+                                    <div className="profileContentFlexCell">
+                                        <div className="profileContentFlexCellTop">
+                                            <div className="profileLeadingCellStack" style={{ width: "100%" }}>
+                                                <h3>Billing</h3>
+                                                <p style={{ width: "100%" }}>
+                                                    Manage your subscription and payment methods using Stripe. Click below to subscribe or manage your billing details. You are allowed to change your subscription or billing management at any time.
+                                                </p>
+                                                <div className="profileActionButtonFlex">
+                                                    <button className="profileActionButton" onClick={handleCreateCheckoutSession} style={{"width": "40%"}}>
+                                                        Subscribe / Update Payment
+                                                    </button>
+                                                    <button className="profileActionButton" onClick={handleManageBilling} style={{"width": "40%"}}>
+                                                        Manage Billing Portal
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="profileContentFlexCellBottom">
+                                            <p>You will be redirected to Stripe to complete or manage your subscription.</p>
+                                        </div>
+                                    </div>
+                                )}
+
                             </div>
                         </div>
                     </div>
