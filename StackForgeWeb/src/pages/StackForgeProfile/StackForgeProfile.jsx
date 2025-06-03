@@ -37,10 +37,11 @@ const StackForgeProfile = () => {
         orgPhone: "",
         orgDesc: "",
         orgImage: "",
-        orgCreated: ""
+        orgCreated: "",
+        isSubscribed: false
     });
     const [activeAccessRequest, setActiveAccessRequest] = useState(false);
-    const [activeAccessRequestMessage, setActiveAccessRequestMessage] = useState(""); 
+    const [activeAccessRequestMessage, setActiveAccessRequestMessage] = useState("");
     const [settingsState, setSettingsState] = useState("general");
     const settingsButtons = [
         { state: "general", label: "general", icon: faGear },
@@ -85,7 +86,7 @@ const StackForgeProfile = () => {
         const fetchData = async () => {
             try {
                 await fetchUserInfo(userID);
-                await fetchAccessRequests(userID); 
+                await fetchAccessRequests(userID);
                 setIsLoaded(true);
             } catch (error) { }
         };
@@ -184,7 +185,8 @@ const StackForgeProfile = () => {
                 orgPhone: d.organizationphone,
                 orgDesc: d.organizationdescription,
                 orgImage: d.organizationimage,
-                orgCreated: d.organizationcreated
+                orgCreated: d.organizationcreated,
+                isSubscribed: d.issubscribed
             });
         } catch (error) { }
     };
@@ -431,7 +433,7 @@ const StackForgeProfile = () => {
         } catch (error) {
             await showDialog({ title: "Alert", message: "Error connecting GitHub: " + error.message });
         }
-    };    
+    };
 
     const handleGithubDisconnect = async () => {
         try {
@@ -443,7 +445,7 @@ const StackForgeProfile = () => {
             });
             if (res.ok) {
                 await fetchUserInfo(userID);
-                window.location.reload()
+                window.location.reload();
             } else {
                 const errorData = await res.json();
             }
@@ -472,29 +474,28 @@ const StackForgeProfile = () => {
             requests[0].request_status === "Current"
         ) {
             setActiveAccessRequest(true);
-            setActiveAccessRequestMessage(`You have an active access request to join the team ${requests[0].team_name}. We are still waiting on the team's admins to approve your request.`)
+            setActiveAccessRequestMessage(`You have an active access request to join the team ${requests[0].team_name}. We are still waiting on the team's admins to approve your request.`);
         } else {
             setActiveAccessRequest(false);
-            setActiveAccessRequestMessage(""); 
+            setActiveAccessRequestMessage("");
         }
     };
-    
+
     const handleRevokeAccessRequest = async () => {
         const token = localStorage.getItem("token");
         const res = await fetch("http://localhost:3000/revoke-access-request", {
             method: "POST",
-            headers: { 
-                "Content-Type": "application/json", 
-                Authorization: `Bearer ${token}` 
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`
             },
             body: JSON.stringify({ userID })
         });
-        if (res.status !== 200) { 
-            throw new Error("Internal Server Error") 
-        } else {  
-            window.location.reload(); 
-        };
-        
+        if (res.status !== 200) {
+            throw new Error("Internal Server Error");
+        } else {
+            window.location.reload();
+        }
     };
 
     const handleUsernameCopy = () => {
@@ -526,16 +527,16 @@ const StackForgeProfile = () => {
         setGitIDCopied(true);
         setTimeout(() => setGitIDCopied(false), 2000);
     };
-    
+
     const handleToggleTwoFA = async () => {
         const token = localStorage.getItem("token");
         const newValue = !userDetails.twofaEnabled;
         try {
             const res = await fetch("http://localhost:3000/edit-user-twofa", {
                 method: "POST",
-                headers: { 
-                    "Content-Type": "application/json", 
-                    Authorization: `Bearer ${token}` 
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
                 },
                 body: JSON.stringify({ userID, twoFA: newValue })
             });
@@ -556,9 +557,9 @@ const StackForgeProfile = () => {
         try {
             const res = await fetch("http://localhost:3000/edit-user-loginnotifs", {
                 method: "POST",
-                headers: { 
-                    "Content-Type": "application/json", 
-                    Authorization: `Bearer ${token}` 
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
                 },
                 body: JSON.stringify({ userID, loginNotif: newValue })
             });
@@ -579,9 +580,9 @@ const StackForgeProfile = () => {
         try {
             const res = await fetch("http://localhost:3000/edit-user-exportnotifs", {
                 method: "POST",
-                headers: { 
-                    "Content-Type": "application/json", 
-                    Authorization: `Bearer ${token}` 
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
                 },
                 body: JSON.stringify({ userID, exportNotif: newValue })
             });
@@ -602,9 +603,9 @@ const StackForgeProfile = () => {
         try {
             const res = await fetch("http://localhost:3000/edit-user-datashare", {
                 method: "POST",
-                headers: { 
-                    "Content-Type": "application/json", 
-                    Authorization: `Bearer ${token}` 
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
                 },
                 body: JSON.stringify({ userID, dataShare: newValue })
             });
@@ -661,6 +662,29 @@ const StackForgeProfile = () => {
             }
         } catch (error) {
             await showDialog({ title: "Alert", message: `Error opening billing portal: ${error.message}` });
+        }
+    };
+
+    const handleCancelSubscription = async () => {
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch("http://localhost:3000/cancel-subscription", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ userID })
+            });
+            if (res.ok) {
+                await fetchUserInfo(userID);
+                window.location.reload();
+            } else {
+                const msg = await res.text();
+                await showDialog({ title: "Alert", message: `Error canceling subscription: ${res.status} - ${msg}` });
+            }
+        } catch (error) {
+            await showDialog({ title: "Alert", message: `Error canceling subscription: ${error.message}` });
         }
     };
 
@@ -882,7 +906,7 @@ const StackForgeProfile = () => {
                                                     </div>
                                                 </div>
                                             )}
-                                            
+
                                             {!activeAccessRequest ? (
                                                 <div className="profileContentFlexCell" style={{ border: joinTeamError !== "" ? "1px solid #E54B4B" : "" }}>
                                                     <div className="profileContentFlexCellTop">
@@ -1067,7 +1091,7 @@ const StackForgeProfile = () => {
                                         </>
                                     )
                                 )}
-                                
+
                                 {settingsState === "security" && (
                                     <>
                                         {userDetails.twofaEnabled !== true ? (
@@ -1221,7 +1245,7 @@ const StackForgeProfile = () => {
                                         )}
                                     </>
                                 )}
-                                
+
                                 {settingsState === "github" && (
                                     userDetails.gitUsername === "" || !userDetails.gitUsername ? (
                                         <div className="profileContentFlexCell">
@@ -1254,7 +1278,7 @@ const StackForgeProfile = () => {
                                                         <label className="profileUserImageWrapper" htmlFor="teamImageUpload" style={{ background: userDetails.gitImage && userDetails.gitImage !== "" ? "none" : "", "box-shadow": userDetails.gitImage && userDetails.gitImage !== "" ? "none" : "" }}>
                                                             <img src={userDetails.gitImage} className="profileUserImage" alt="" />
                                                         </label>
-                                                        <input style={{ display: "none", padding: 0 }} disabled={true} type="file" id="teamImageUpload" accept="image/*"/>
+                                                        <input style={{ display: "none", padding: 0 }} disabled={true} type="file" id="teamImageUpload" accept="image/*" />
                                                     </div>
                                                 </div>
                                                 <div className="profileContentFlexCellBottom">
@@ -1320,14 +1344,20 @@ const StackForgeProfile = () => {
                                                 <p style={{ width: "100%" }}>
                                                     Manage your subscription and payment methods using Stripe. Click below to subscribe or manage your billing details. You are allowed to change your subscription or billing management at any time.
                                                 </p>
-                                                <div className="profileActionButtonFlex">
-                                                    <button className="profileActionButton" onClick={handleCreateCheckoutSession} style={{"width": "40%"}}>
-                                                        Subscribe / Update Payment
+                                                {userDetails.isSubscribed ? (
+                                                    <button className="profileActionButton" onClick={handleCancelSubscription} style={{ width: "40%" }}>
+                                                        Cancel Subscription
                                                     </button>
-                                                    <button className="profileActionButton" onClick={handleManageBilling} style={{"width": "40%"}}>
-                                                        Manage Billing Portal
-                                                    </button>
-                                                </div>
+                                                ) : (
+                                                    <div className="profileActionButtonFlex">
+                                                        <button className="profileActionButton" onClick={handleCreateCheckoutSession} style={{ width: "40%" }}>
+                                                            Subscribe / Update Payment
+                                                        </button>
+                                                        <button className="profileActionButton" onClick={handleManageBilling} style={{ width: "40%" }}>
+                                                            Manage Billing Portal
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="profileContentFlexCellBottom">

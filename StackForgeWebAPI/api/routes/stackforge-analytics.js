@@ -8,7 +8,7 @@ const { authenticateToken } = require('../middleware/auth');
 router.post('/auth/check', async (req, res) => {
   try {
     const { domain } = req.body;
-    const visitorId = req.cookies.sf_visitor_id || req.headers['x-visitor-id'];
+    const visitorID = req.cookies.sf_visitor_id || req.headers['x-visitor-id'];
 
     const domainResult = await pool.query(
       `
@@ -53,7 +53,7 @@ router.post('/auth/check', async (req, res) => {
           FROM users
           WHERE github_id = $1 OR github_username = $1
         `,
-        [visitorId]
+        [visitorID]
       );
 
       if (
@@ -85,7 +85,7 @@ router.post('/auth/check', async (req, res) => {
            AND project_url = $3
            AND signin_timestamp >= CURRENT_DATE - INTERVAL '1 day'
          LIMIT 1`,
-        [orgid, visitorId, domain]
+        [orgid, visitorID, domain]
       );
 
       if (projectSignin.rows.length === 0) {
@@ -118,9 +118,9 @@ router.post('/auth/check', async (req, res) => {
 
 router.post('/metrics', async (req, res) => {
   try {
-    const { domain, visitorId, url, metrics, userAgent } = req.body;
+    const { domain, visitorID, url, metrics, userAgent } = req.body;
 
-    const sessionId = typeof visitorId === 'string' && visitorId.trim() ? visitorId : 'unknown-session';
+    const sessionID = typeof visitorID === 'string' && visitorID.trim() ? visitorID : 'unknown-session';
 
     const pv = 1;
     const loadTimeMs = typeof metrics.loadTimeMs === 'number' ? metrics.loadTimeMs : 0;
@@ -174,7 +174,7 @@ router.post('/metrics', async (req, res) => {
 
     const insertValues = [
       domain,
-      sessionId,
+      sessionID,
       url,
       pv,
       loadTimeMs,
@@ -209,7 +209,7 @@ router.post('/metrics', async (req, res) => {
       for (const er of edgeRequests) {
         await pool.query(edgeInsertText, [
           domain,
-          sessionId,
+          sessionID,
           url,
           typeof er.url === 'string'   ? er.url   : '',
           typeof er.method === 'string'

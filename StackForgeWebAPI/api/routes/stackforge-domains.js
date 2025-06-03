@@ -43,15 +43,15 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   const acm = new ACMClient({ region: process.env.AWS_REGION });
   const L_HTTPS = process.env.ALB_LISTENER_ARN_HTTPS;
   const L_HTTP = process.env.ALB_LISTENER_ARN_HTTP;
-  const albDns = process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`;
+  const albDNS = process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`;
 
   const projResult = await pool.query(
     ` 
       SELECT name, current_deployment, created_at
       FROM projects
       WHERE project_id = $1
-        AND orgid      = $2
-        AND username   = $3
+        AND orgid = $2
+        AND username = $3
     `,
     [projectID, organizationID, userID]
   );
@@ -117,6 +117,11 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   );
 
   const existing = domResult.rows[0] || null;
+  const domainID = existing?.domain_id || uuidv4();
+  let certARN = existing?.certificate_arn || null;
+  let tgARN = existing?.target_group_arn || null;
+  const existingRedirect = existing?.redirect_target || null;
+  const existingDeploymentID = existing?.deployment_id || null;
 
   const projectAgeMs = Date.now() - new Date(projResult.rows[0].created_at + "Z").getTime();
   const delayMs = 300_000;
@@ -130,18 +135,110 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     });
   }
 
-  const domainId = existing?.domain_id || uuidv4();
-  let certArn = existing?.certificate_arn || null;
-  let tgArn = existing?.target_group_arn || null;
-  const existingRedirect = existing?.redirect_target || null;
-  const existingDeploymentId = existing?.deployment_id || null;
+  let deploymentID = isParent ? (existingDeploymentID || currentDeployment || uuidv4()) : (existingDeploymentID || uuidv4());
+  let parentTaskDefARN = parentCfg.task_def_arn || null;
+  if (!parentTaskDefARN && currentDeployment) {
+    try {
+      const tdRow = await pool.query(
+        "SELECT task_def_arn FROM deployments WHERE deployment_id = $1",
+        [currentDeployment]
+      );
+      parentTaskDefARN = tdRow.rows[0]?.task_def_arn || null;
+      parentCfg.task_def_arn = parentTaskDefARN;
+    } catch {}
+  }
+  const valsCommonDomain = [
+    organizationID,                   
+    userID,                           
+    domainID,                         
+    storedName,                       
+    projectID,                        
+    userID,                           
+    timestamp,                        
+    timestamp,                        
+    "production",                     
+    isParent,                         
+    deploymentID,                     
+    certARN,                          
+    parentCfg.repository || null,     
+    parentCfg.branch || null,         
+    parentCfg.root_directory || null, 
+    parentCfg.output_directory || null,
+    parentCfg.build_command || null,   
+    parentCfg.install_command || null, 
+    JSON.stringify(fallbackEnvVars),   
+    tgARN                              
+  ];
+
+  if (existing) {
+    await pool.query(
+      `
+        UPDATE domains
+        SET updated_at = $1,
+            deployment_id = $2,
+            certificate_arn = $3,
+            repository = $4,
+            branch = $5,
+            root_directory = $6,
+            output_directory = $7,
+            build_command = $8,
+            install_command = $9,
+            env_vars = $10,
+            target_group_arn = $11
+        WHERE domain_id = $12
+      `,
+      [
+        timestamp,                
+        deploymentID,             
+        certARN,                  
+        parentCfg.repository || null,  
+        parentCfg.branch || null,      
+        parentCfg.root_directory || null, 
+        parentCfg.output_directory || null, 
+        parentCfg.build_command || null,   
+        parentCfg.install_command || null, 
+        JSON.stringify(fallbackEnvVars),   
+        tgARN,                            
+        domainID                          
+      ]
+    );
+  } else {
+    await pool.query(
+      `
+        INSERT INTO domains (
+          orgid, username, domain_id, domain_name,
+          project_id, created_by, created_at, updated_at,
+          environment, is_primary,
+          deployment_id, certificate_arn,
+          repository, branch, root_directory, output_directory,
+          build_command, install_command, env_vars, target_group_arn
+        )
+        VALUES ($1,$2,$3,$4,
+                $5,$6,$7,$8,
+                $9,$10,
+                $11,$12,
+                $13,$14,$15,$16,
+                $17,$18,$19,$20)
+      `,
+      valsCommonDomain
+    );
+  }
+
+  if (isParent && currentDeployment !== deploymentID) {
+    await pool.query(
+      `
+        UPDATE projects
+        SET current_deployment = $1, updated_at = $2
+        WHERE project_id = $3 AND orgid = $4
+      `,
+      [deploymentID, timestamp, projectID, organizationID]
+    );
+  }
 
   const wildcard = `*.${projectName}.stackforgeengine.com`;
   const altNames = [wildcard, `${projectName}.stackforgeengine.com`];
 
-  let deploymentId = isParent ? (existingDeploymentId || currentDeployment || uuidv4()) : (existingDeploymentId || uuidv4());
-
-  if (!certArn) {
+  if (!certARN) {
     const reqCert = await acm.send(
       new RequestCertificateCommand({
         DomainName: wildcard,
@@ -149,16 +246,16 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         ValidationMethod: "DNS"
       })
     );
-    certArn = reqCert.CertificateArn;
+    certARN = reqCert.CertificateARN;
 
     const certInfo = await acm.send(
-      new DescribeCertificateCommand({ CertificateArn: certArn })
+      new DescribeCertificateCommand({ CertificateARN: certARN })
     );
     const rr = certInfo.Certificate.DomainValidationOptions?.[0]?.ResourceRecord;
     if (rr) {
       await r53.send(
         new ChangeResourceRecordSetsCommand({
-          HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+          HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
           ChangeBatch: {
             Changes: [
               {
@@ -175,12 +272,17 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         })
       );
     }
+
+    await pool.query(
+      `UPDATE domains SET certificate_arn = $1 WHERE domain_id = $2`,
+      [certARN, domainID]
+    );
   }
 
   let certReady = false;
   for (let i = 0; i < 12; i++) {
     const info = await acm.send(
-      new DescribeCertificateCommand({ CertificateArn: certArn })
+      new DescribeCertificateCommand({ CertificateARN: certARN })
     );
     if (info.Certificate.Status === "ISSUED") {
       certReady = true;
@@ -191,29 +293,29 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   if (!certReady) {
     return res.status(202).json({
       message: `Certificate request created for ${wildcard}. Re-run validation once DNS is ready.`,
-      certificateArn: certArn
+      certificateARN: certARN
     });
   }
 
   const { Certificates } = await elbv2.send(
-    new DescribeListenerCertificatesCommand({ ListenerArn: L_HTTPS })
+    new DescribeListenerCertificatesCommand({ ListenerARN: L_HTTPS })
   );
-  if (!Certificates.some(c => c.CertificateArn === certArn)) {
+  if (!Certificates.some(c => c.CertificateARN === certARN)) {
     if (Certificates.length >= 25) {
       const victim = Certificates.find(c => !c.IsDefault);
       if (victim) {
         await elbv2.send(
           new RemoveListenerCertificatesCommand({
-            ListenerArn: L_HTTPS,
-            Certificates: [{ CertificateArn: victim.CertificateArn }]
+            ListenerARN: L_HTTPS,
+            Certificates: [{ CertificateARN: victim.CertificateARN }]
           })
         );
       }
     }
     await elbv2.send(
       new AddListenerCertificatesCommand({
-        ListenerArn: L_HTTPS,
-        Certificates: [{ CertificateArn: certArn }]
+        ListenerARN: L_HTTPS,
+        Certificates: [{ CertificateARN: certARN }]
       })
     );
   }
@@ -237,6 +339,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     installCommand : installCommand || parentCfg.install_command || "npm install",
     envVars : finalEnvVars
   };
+
   if (!Array.isArray(cfg.envVars)) cfg.envVars = [];
 
   let commitSha = null;
@@ -253,7 +356,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     } catch {}
   }
 
-  async function upsertDns(host) {
+  async function upsertDNS(host) {
     const isApex = host.split(".").length === 3;
     if (isApex) {
       const lb = await elbv2.send(
@@ -261,7 +364,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       );
       await r53.send(
         new ChangeResourceRecordSetsCommand({
-          HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+          HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
           ChangeBatch: {
             Changes: [
               {
@@ -270,8 +373,8 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
                   Name: host,
                   Type: "A",
                   AliasTarget: {
-                    HostedZoneId       : lb.LoadBalancers[0].CanonicalHostedZoneId,
-                    DNSName            : albDns,
+                    HostedZoneID : lb.LoadBalancers[0].CanonicalHostedZoneID,
+                    DNSName : albDNS,
                     EvaluateTargetHealth: false
                   }
                 }
@@ -283,16 +386,16 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     } else {
       await r53.send(
         new ChangeResourceRecordSetsCommand({
-          HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+          HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
           ChangeBatch: {
             Changes: [
               {
                 Action: "UPSERT",
                 ResourceRecordSet: {
-                  Name            : host,
-                  Type            : "CNAME",
-                  TTL             : 60,
-                  ResourceRecords : [{ Value: albDns }]
+                  Name : host,
+                  Type : "CNAME",
+                  TTL : 60,
+                  ResourceRecords : [{ Value: albDNS }]
                 }
               }
             ]
@@ -302,14 +405,14 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     }
   }
 
-  await upsertDns(fqdn);
+  await upsertDNS(fqdn);
 
   if (!existingRedirect) {
-    tgArn = tgArn ||
+    tgARN = tgARN ||
       (await deployManager.ensureTargetGroup(projectName, isParent ? null : subLabel));
 
     for (const L of [L_HTTP, L_HTTPS]) {
-      const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: L }));
+      const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerARN: L }));
       const missing = !Rules.some(r =>
         r.Conditions.some(c =>
           c.Field === "host-header" &&
@@ -322,32 +425,22 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         while (used.has(pr)) pr++;
         await elbv2.send(
           new CreateRuleCommand({
-            ListenerArn: L,
-            Priority : pr,
-            Conditions : [{ Field: "host-header", Values: [fqdn] }],
-            Actions : [{ Type: "forward", TargetGroupArn: tgArn }]
+            ListenerARN: L,
+            Priority    : pr,
+            Conditions  : [{ Field: "host-header", Values: [fqdn] }],
+            Actions     : [{ Type: "forward", TargetGroupARN: tgARN }]
           })
         );
       }
     }
   }
 
-  if (!parentCfg.task_def_arn && currentDeployment) {
-    try {
-      const tdRow = await pool.query(
-        "SELECT task_def_arn FROM deployments WHERE deployment_id = $1",
-        [currentDeployment]
-      );
-      parentCfg.task_def_arn = tdRow.rows[0]?.task_def_arn || null;
-    } catch {}
-  }
-
-  if (!existingRedirect && parentCfg.task_def_arn) {
+  if (!existingRedirect && parentTaskDefARN) {
     await deployManager.createOrUpdateService({
       projectName,
-      subdomain : isParent ? null : subLabel,
-      taskDefArn : parentCfg.task_def_arn,
-      targetGroupArn: tgArn
+      subdomain      : isParent ? null : subLabel,
+      taskDefARN     : parentTaskDefARN,
+      targetGroupARN : tgARN
     });
   }
 
@@ -359,10 +452,10 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         AND domain_id != $2
         AND orgid = $3
     `,
-    [deploymentId, domainId, organizationID]
+    [deploymentID, domainID, organizationID]
   );
   if (deploymentCheck.rows.length > 0 && !isParent) {
-    deploymentId = uuidv4();
+    deploymentID = uuidv4();
   }
 
   const existingDeployment = await pool.query(
@@ -371,28 +464,30 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       FROM deployments
       WHERE deployment_id = $1 AND orgid = $2
     `,
-    [deploymentId, organizationID]
+    [deploymentID, organizationID]
   );
 
   if (existingDeployment.rows.length === 0) {
     await pool.query(
       `
-        INSERT INTO deployments (orgid, username, deployment_id, project_id, domain_id,
+        INSERT INTO deployments (
+          orgid, username, deployment_id, project_id, domain_id,
           status, url, template,
           created_at, updated_at, last_deployed_at,
           task_def_arn, commit_sha,
-          root_directory, output_directory, build_command, install_command, env_vars)
+          root_directory, output_directory, build_command, install_command, env_vars
+        )
         VALUES ($1,$2,$3,$4,$5,
-          $6,$7,$8,
-          $9,$10,$11,
-          $12,$13,
-          $14,$15,$16,$17,$18)
+                $6,$7,$8,
+                $9,$10,$11,
+                $12,$13,
+                $14,$15,$16,$17,$18)
       `,
       [
-        organizationID, userID, deploymentId, projectID, domainId,
+        organizationID, userID, deploymentID, projectID, domainID,
         "active", `https://${fqdn}`, "default",
         timestamp, timestamp, timestamp,
-        parentCfg.task_def_arn || null, commitSha,
+        parentTaskDefARN || null, commitSha,
         cfg.rootDirectory, cfg.outputDirectory,
         cfg.buildCommand, cfg.installCommand,
         JSON.stringify(cfg.envVars)
@@ -401,25 +496,27 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
     await pool.query(
       `
-        INSERT INTO deployment_logs (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address)
-        VALUES ($1,$2,$3,$4, $5,$6,$7,$8)
+        INSERT INTO deployment_logs (
+          orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       `,
       [
         organizationID, userID, projectID, projectName,
-        "validate-domain", deploymentId, timestamp, "127.0.0.1"
+        "validate-domain", deploymentID, timestamp, "127.0.0.1"
       ]
     );
   } else {
     await pool.query(
       `
         UPDATE deployments
-        SET updated_at = $1,
+        SET updated_at  = $1,
             last_deployed_at = $1,
             status = $2,
             url = $3,
             task_def_arn = $4,
             commit_sha = $5,
-            root_directory  = $6,
+            root_directory = $6,
             output_directory = $7,
             build_command = $8,
             install_command = $9,
@@ -429,103 +526,30 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       `,
       [
         timestamp, "active", `https://${fqdn}`,
-        parentCfg.task_def_arn || null, commitSha,
+        parentTaskDefARN || null, commitSha,
         cfg.rootDirectory, cfg.outputDirectory,
         cfg.buildCommand, cfg.installCommand,
         JSON.stringify(cfg.envVars),
-        domainId, deploymentId, organizationID
-      ]
-    );
-  }
-
-  if (isParent && currentDeployment !== deploymentId) {
-    await pool.query(
-      `
-        UPDATE projects
-        SET current_deployment = $1, updated_at = $2
-        WHERE project_id = $3 AND orgid = $4
-      `,
-      [deploymentId, timestamp, projectID, organizationID]
-    );
-  }
-
-  const valsCommon = [
-    timestamp,
-    deploymentId,
-    certArn,
-    cfg.repository,
-    cfg.branch,
-    cfg.rootDirectory,
-    cfg.outputDirectory,
-    cfg.buildCommand,
-    cfg.installCommand,
-    JSON.stringify(cfg.envVars),
-    tgArn
-  ];
-
-  if (existing) {
-    await pool.query(
-      `
-        UPDATE domains
-        SET updated_at = $1,
-          deployment_id = $2,
-          certificate_arn = $3,
-          repository = $4,
-          branch = $5,
-          root_directory = $6,
-          output_directory = $7,
-          build_command = $8,
-          install_command = $9,
-          env_vars = $10,
-          target_group_arn = $11
-        WHERE domain_id = $12
-      `,
-      [...valsCommon, domainId]
-    );
-  } else {
-    await pool.query(
-      `
-        INSERT INTO domains (orgid, username, domain_id, domain_name,
-          project_id, created_by, created_at, updated_at,
-          environment, is_primary,
-          deployment_id, certificate_arn,
-          repository, branch, root_directory, output_directory,
-          build_command, install_command, env_vars, target_group_arn)
-       VALUES ($1,$2,$3,$4,
-          $5,$6,$7,$8,
-          $9,$10,
-          $11,$12,
-          $13,$14,$15,$16,
-          $17,$18,$19,$20)
-      `,
-      [
-        organizationID, userID, domainId, storedName,
-        projectID, userID, timestamp, timestamp,
-        "production", isParent,
-        deploymentId, certArn,
-        cfg.repository, cfg.branch, cfg.rootDirectory, cfg.outputDirectory,
-        cfg.buildCommand, cfg.installCommand,
-        JSON.stringify(cfg.envVars),
-        tgArn
+        domainID, deploymentID, organizationID
       ]
     );
   }
 
   const recs = [];
-  try { const a = await dns.resolve4(fqdn);  if (a.length) recs.push({ type: "A",     name: "@", value: a[0] }); } catch {}
-  try { const a = await dns.resolve6(fqdn);  if (a.length) recs.push({ type: "AAAA",  name: "@", value: a[0] }); } catch {}
-  try { const c = await dns.resolveCname(fqdn); if (c.length) recs.push({ type: "CNAME", name: "@", value: c[0] }); } catch {}
-  try { const m = await dns.resolveMx(fqdn); if (m.length) recs.push({ type: "MX",    name: "@", value: m.map(r => `${r.priority} ${r.exchange}`).join(", ") }); } catch {}
+  try { const a = await dns.resolve4(fqdn);    if (a.length) recs.push({ type: "A",     name: "@", value: a[0] }); } catch {}
+  try { const aaaa = await dns.resolve6(fqdn);  if (aaaa.length) recs.push({ type: "AAAA",  name: "@", value: aaaa[0] }); } catch {}
+  try { const cname = await dns.resolveCname(fqdn); if (cname.length) recs.push({ type: "CNAME", name: "@", value: cname[0] }); } catch {}
+  try { const mx = await dns.resolveMx(fqdn);   if (mx.length)   recs.push({ type: "MX",    name: "@", value: mx.map(r => `${r.priority} ${r.exchange}`).join(", ") }); } catch {}
   await pool.query(
     "UPDATE domains SET dns_records = $1 WHERE domain_id = $2",
-    [JSON.stringify(recs), domainId]
+    [JSON.stringify(recs), domainID]
   );
 
   if (!existingRedirect) {
     await deployManager.recordRuntimeLogs(
       organizationID, 
       userID, 
-      deploymentId, 
+      deploymentID, 
       projectName,
       isParent ? null : subLabel
     );
@@ -533,12 +557,13 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   return res.status(200).json({
     message: existingRedirect ? `Subdomain ${subLabel} refreshed (redirect still → ${existingRedirect}).` : `Subdomain ${subLabel} validated${existing ? "" : " and deployment initiated"}.`,
-    url           : `https://${fqdn}`,
-    certificateArn: certArn,
-    dnsRecords    : recs,
-    deploymentId
+    url : `https://${fqdn}`,
+    certificateARN : certARN,
+    dnsRecords : recs,
+    deploymentID
   });
 });
+
 
 router.post("/delete-domain", authenticateToken, async (req, res, next) => {
   const { userID, organizationID, projectID, domainID } = req.body;
@@ -570,9 +595,9 @@ router.post("/delete-domain", authenticateToken, async (req, res, next) => {
       }
       const {
           domain_name,
-          certificate_arn: certArn,
-          target_group_arn: tgArn,
-          deployment_id: deploymentId
+          certificate_arn: certARN,
+          target_group_arn: tgARN,
+          deployment_id: deploymentID
       } = domainResult.rows[0];
       const fqdn = `${domain_name}.stackforgeengine.com`;
 
@@ -582,24 +607,24 @@ router.post("/delete-domain", authenticateToken, async (req, res, next) => {
       const L_HTTP = process.env.ALB_LISTENER_ARN_HTTP;
       const L_HTTPS = process.env.ALB_LISTENER_ARN_HTTPS;
 
-      if (certArn) {
+      if (certARN) {
           const listenersResp = await elbv2Client.send(new DescribeListenersCommand({
-              LoadBalancerArn: process.env.LOAD_BALANCER_ARN
+              LoadBalancerARN: process.env.LOAD_BALANCER_ARN
           }));
           for (const listener of listenersResp.Listeners || []) {
               const certsResp = await elbv2Client.send(new DescribeListenerCertificatesCommand({
-                  ListenerArn: listener.ListenerArn
+                  ListenerARN: listener.ListenerARN
               }));
-              if (certsResp.Certificates?.some(c => c.CertificateArn === certArn)) {
+              if (certsResp.Certificates?.some(c => c.CertificateARN === certARN)) {
                   await elbv2Client.send(new RemoveListenerCertificatesCommand({
-                      ListenerArn: listener.ListenerArn,
-                      Certificates: [{ CertificateArn: certArn }]
+                      ListenerARN: listener.ListenerARN,
+                      Certificates: [{ CertificateARN: certARN }]
                   }));
               }
           }
           try {
               await acmClient.send(new DeleteCertificateCommand({
-                  CertificateArn: certArn
+                  CertificateARN: certARN
               }));
           } catch {}
       }
@@ -611,9 +636,9 @@ router.post("/delete-domain", authenticateToken, async (req, res, next) => {
               Name: fqdn,
               Type: "A",
               AliasTarget: {
-                  HostedZoneId : (await elbv2Client.send(new DescribeLoadBalancersCommand({
+                  HostedZoneID : (await elbv2Client.send(new DescribeLoadBalancersCommand({
                     Names: [process.env.LOAD_BALANCER_NAME]
-                  }))).LoadBalancers[0].CanonicalHostedZoneId,
+                  }))).LoadBalancers[0].CanonicalHostedZoneID,
                   DNSName : process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`,
                   EvaluateTargetHealth: false
               }
@@ -630,7 +655,7 @@ router.post("/delete-domain", authenticateToken, async (req, res, next) => {
       });
       try {
           await route53Client.send(new ChangeResourceRecordSetsCommand({
-              HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+              HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
               ChangeBatch: { Changes: deleteChanges }
           }));
       } catch (error) {
@@ -646,34 +671,34 @@ router.post("/delete-domain", authenticateToken, async (req, res, next) => {
           });
       }
 
-      if (tgArn) {
-          for (const listenerArn of [L_HTTP, L_HTTPS]) {
+      if (tgARN) {
+          for (const listenerARN of [L_HTTP, L_HTTPS]) {
               try {
-                  const { Rules } = await elbv2Client.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+                  const { Rules } = await elbv2Client.send(new DescribeRulesCommand({ ListenerARN: listenerARN }));
                   for (const rule of Rules || []) {
                       if (!rule.IsDefault &&
-                          rule.Actions.some(a => a.Type === "forward" && a.TargetGroupArn === tgArn)) {
-                          await elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn }));
+                          rule.Actions.some(a => a.Type === "forward" && a.TargetGroupARN === tgARN)) {
+                          await elbv2Client.send(new DeleteRuleCommand({ RuleARN: rule.RuleARN }));
                       }
                   }
               } catch {}
           }
       }
 
-      if (tgArn) {
+      if (tgARN) {
           await elbv2Client.send(new DeleteTargetGroupCommand({
-              TargetGroupArn: tgArn
+              TargetGroupARN: tgARN
           }));
       }
 
       await client.query("DELETE FROM metrics_events WHERE domain = $1", [domain_name]);
       await client.query("DELETE FROM metrics_daily WHERE domain = $1", [domain_name]);
       await client.query("DELETE FROM metrics_edge_requests WHERE domain = $1", [domain_name]);
-      if (deploymentId) {
-          await client.query("DELETE FROM deployment_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentId, organizationID]);
-          await client.query("DELETE FROM build_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentId, organizationID]);
-          await client.query("DELETE FROM runtime_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentId, organizationID]);
-          await client.query("DELETE FROM deployments WHERE deployment_id = $1 AND orgid = $2", [deploymentId, organizationID]);
+      if (deploymentID) {
+          await client.query("DELETE FROM deployment_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
+          await client.query("DELETE FROM build_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
+          await client.query("DELETE FROM runtime_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
+          await client.query("DELETE FROM deployments WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
       }
       await client.query("DELETE FROM domains WHERE domain_id = $1", [domainID]);
 
@@ -706,14 +731,14 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
   const elbv2 = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
   const cloudfront = new CloudFrontClient({ region: process.env.AWS_REGION });
   const route53Client = new Route53Client({ region: process.env.AWS_REGION });
-  const lbDns = process.env.LOAD_BALANCER_DNS.endsWith(".")
+  const lbDNS = process.env.LOAD_BALANCER_DNS.endsWith(".")
     ? process.env.LOAD_BALANCER_DNS
     : `${process.env.LOAD_BALANCER_DNS}.`;
-  const httpsArn = process.env.ALB_LISTENER_ARN_HTTPS;
-  const httpArn = process.env.ALB_LISTENER_ARN_HTTP;
+  const httpsARN = process.env.ALB_LISTENER_ARN_HTTPS;
+  const httpARN = process.env.ALB_LISTENER_ARN_HTTP;
 
-  async function getFreePriority(listenerArn) {
-    const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
+  async function getFreePriority(listenerARN) {
+    const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerARN: listenerARN }));
     const used = Rules.filter(r => !r.IsDefault).map(r => parseInt(r.Priority));
     for (let p = 1; p <= 50000; p++) if (!used.includes(p)) return p;
     throw new Error("No free ALB rule priority available.");
@@ -723,7 +748,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     const isApex = fqdn.split(".").length === 3;
     if (!isApex) {
       await route53Client.send(new ChangeResourceRecordSetsCommand({
-        HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+        HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
         ChangeBatch: {
           Changes: [{
             Action: "UPSERT",
@@ -731,7 +756,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
               Name: fqdn,
               Type: "CNAME",
               TTL: 60,
-              ResourceRecords: [{ Value: lbDns }]
+              ResourceRecords: [{ Value: lbDNS }]
             }
           }]
         }
@@ -739,25 +764,25 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
       return;
     }
 
-    let hostedZoneId;
+    let hostedZoneID;
     if (process.env.LOAD_BALANCER_NAME) {
       const { LoadBalancers } = await elbv2.send(
         new DescribeLoadBalancersCommand({ Names: [process.env.LOAD_BALANCER_NAME] })
       );
-      hostedZoneId = LoadBalancers[0].CanonicalHostedZoneId;
+      hostedZoneID = LoadBalancers[0].CanonicalHostedZoneID;
     } else {
       const { Listeners } = await elbv2.send(
-        new DescribeListenersCommand({ ListenerArns: [httpsArn] })
+        new DescribeListenersCommand({ ListenerARNs: [httpsARN] })
       );
-      const lbArn = Listeners[0].LoadBalancerArn;
+      const lbARN = Listeners[0].LoadBalancerARN;
       const { LoadBalancers } = await elbv2.send(
-        new DescribeLoadBalancersCommand({ LoadBalancerArns: [lbArn] })
+        new DescribeLoadBalancersCommand({ LoadBalancerARNs: [lbARN] })
       );
-      hostedZoneId = LoadBalancers[0].CanonicalHostedZoneId;
+      hostedZoneID = LoadBalancers[0].CanonicalHostedZoneID;
     }
 
     await route53Client.send(new ChangeResourceRecordSetsCommand({
-      HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+      HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
       ChangeBatch: {
         Changes: [{
           Action: "UPSERT",
@@ -765,8 +790,8 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
             Name: fqdn,
             Type: "A",
             AliasTarget: {
-              HostedZoneId: hostedZoneId,
-              DNSName: lbDns,
+              HostedZoneID: hostedZoneID,
+              DNSName: lbDNS,
               EvaluateTargetHealth: false
             }
           }
@@ -775,10 +800,10 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     }));
   }
 
-  async function validateTargetGroupHealth(tgArn) {
+  async function validateTargetGroupHealth(tgARN) {
     try {
       const { TargetHealthDescriptions } = await elbv2.send(
-        new DescribeTargetHealthCommand({ TargetGroupArn: tgArn })
+        new DescribeTargetHealthCommand({ TargetGroupARN: tgARN })
       );
       return TargetHealthDescriptions.some(t => t.TargetHealth.State === "healthy");
     } catch (error) {
@@ -786,14 +811,14 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     }
   }
 
-  async function asyncCloudfrontInvalidation(distributionId, domainId, type) {
-    if (!distributionId) return;
+  async function asyncCloudfrontInvalidation(distributionID, domainID, type) {
+    if (!distributionID) return;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         await cloudfront.send(new CreateInvalidationCommand({
-          DistributionId: distributionId,
+          DistributionID: distributionID,
           InvalidationBatch: {
-            CallerReference: `${type}-${domainId}-${Date.now()}`,
+            CallerReference: `${type}-${domainID}-${Date.now()}`,
             Paths: { Quantity: 2, Items: ["/", "/*"] }
           }
         }));
@@ -829,7 +854,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     const projectName = projResult.rows[0].name.toLowerCase();
     const sourceSub = domRes.rows[0].domain_name.toLowerCase();
     const sourceFqdn = `${sourceSub}.stackforgeengine.com`;
-    let tgArn = domRes.rows[0].target_group_arn || null;
+    let tgARN = domRes.rows[0].target_group_arn || null;
     const parentTaskDef = parentRes.rows[0]?.task_def_arn || null;
     const isApex = sourceSub === projectName;
 
@@ -853,48 +878,48 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
       await upsertRecord(targetFqdn);
     }
 
-    const { Rules: httpRules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: httpArn }));
-    const { Rules: httpsRules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: httpsArn }));
+    const { Rules: httpRules } = await elbv2.send(new DescribeRulesCommand({ ListenerARN: httpARN }));
+    const { Rules: httpsRules } = await elbv2.send(new DescribeRulesCommand({ ListenerARN: httpsARN }));
     const deletePromises = [];
     for (const r of [...httpRules, ...httpsRules]) {
       if (!r.IsDefault &&
           r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(sourceFqdn))) {
-        deletePromises.push(elbv2.send(new DeleteRuleCommand({ RuleArn: r.RuleArn })));
+        deletePromises.push(elbv2.send(new DeleteRuleCommand({ RuleARN: r.RuleARN })));
       }
     }
     await Promise.all(deletePromises);
 
     if (redirectTarget === null) {
-      if (!tgArn) {
-        tgArn = await deployManager.ensureTargetGroup(
+      if (!tgARN) {
+        tgARN = await deployManager.ensureTargetGroup(
           projectName, isApex ? null : sourceSub.split(".")[0]
         );
         await pool.query(
           "UPDATE domains SET target_group_arn=$1 WHERE domain_id=$2",
-          [tgArn, domainID]
+          [tgARN, domainID]
         );
       }
 
-      let isTgHealthy = await validateTargetGroupHealth(tgArn);
+      let isTgHealthy = await validateTargetGroupHealth(tgARN);
 
       if (parentTaskDef && !isTgHealthy) {
         try {
           await deployManager.createOrUpdateService({
             projectName,
             subdomain: isApex ? null : sourceSub.split(".")[0],
-            taskDefArn: parentTaskDef,
-            targetGroupArn: tgArn
+            taskDefARN: parentTaskDef,
+            targetGroupARN: tgARN
           });
 
           let healthCheckRetries = 3;
           while (healthCheckRetries > 0) {
-            isTgHealthy = await validateTargetGroupHealth(tgArn);
+            isTgHealthy = await validateTargetGroupHealth(tgARN);
             if (isTgHealthy) break;
             await new Promise(resolve => setTimeout(resolve, 5000)); 
             healthCheckRetries--;
           }
           if (!isTgHealthy) {
-            throw new Error(`Target group ${tgArn} has no healthy targets after service deployment.`);
+            throw new Error(`Target group ${tgARN} has no healthy targets after service deployment.`);
           }
         } catch (error) {
           return res.status(500).json({
@@ -908,21 +933,21 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
       }
 
       const [httpPrio, httpsPrio] = await Promise.all([
-        getFreePriority(httpArn),
-        getFreePriority(httpsArn)
+        getFreePriority(httpARN),
+        getFreePriority(httpsARN)
       ]);
       await Promise.all([
         elbv2.send(new CreateRuleCommand({
-          ListenerArn: httpArn,
+          ListenerARN: httpARN,
           Priority: httpPrio,
           Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
-          Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
+          Actions: [{ Type: "forward", TargetGroupARN: tgARN }]
         })),
         elbv2.send(new CreateRuleCommand({
-          ListenerArn: httpsArn,
+          ListenerARN: httpsARN,
           Priority: httpsPrio,
           Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
-          Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
+          Actions: [{ Type: "forward", TargetGroupARN: tgARN }]
         }))
       ]);
 
@@ -943,12 +968,12 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     }
 
     const [httpPrio, httpsPrio] = await Promise.all([
-      getFreePriority(httpArn),
-      getFreePriority(httpsArn)
+      getFreePriority(httpARN),
+      getFreePriority(httpsARN)
     ]);
     await Promise.all([
       elbv2.send(new CreateRuleCommand({
-        ListenerArn: httpArn,
+        ListenerARN: httpARN,
         Priority: httpPrio,
         Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
         Actions: [{
@@ -964,7 +989,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
         }]
       })),
       elbv2.send(new CreateRuleCommand({
-        ListenerArn: httpsArn,
+        ListenerARN: httpsARN,
         Priority: httpsPrio,
         Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
         Actions: [{

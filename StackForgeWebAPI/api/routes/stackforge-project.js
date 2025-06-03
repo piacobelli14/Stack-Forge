@@ -391,7 +391,7 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
             if (domainLookup.rows.length === 0) {
                 return res.status(404).json({ message: "Domain not found for this project." });
             }
-            const domainId = domainLookup.rows[0].domain_id;
+            const domainID = domainLookup.rows[0].domain_id;
             deploymentResult = await pool.query(
                 `
                     SELECT commit_sha, last_deployed_at
@@ -400,7 +400,7 @@ router.post("/git-repo-updates", authenticateToken, async (req, res, next) => {
                     ORDER BY last_deployed_at DESC
                     LIMIT 1
                 `,
-                [projectID, organizationID, domainId]
+                [projectID, organizationID, domainID]
             );
         } else {
             deploymentResult = await pool.query(
@@ -616,14 +616,14 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
     });
 
     try {
-        let domainIdFilter = null;
+        let domainIDFilter = null;
         if (domainName) {
             const domainLookup = await pool.query(
                 "SELECT domain_id FROM domains WHERE domain_name = $1 AND project_id = $2 AND orgid = $3",
                 [domainName, projectID, organizationID]
             );
             if (domainLookup.rows.length > 0) {
-                domainIdFilter = domainLookup.rows[0].domain_id;
+                domainIDFilter = domainLookup.rows[0].domain_id;
             } else {
                 return res.status(404).json({ message: "Domain not found for this project." });
             }
@@ -641,7 +641,7 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
             WHERE orgid = $1
             AND username = $2
             AND project_id = $3
-            ${domainIdFilter ? `AND domain_id = "${domainIdFilter}"` : ""}
+            ${domainIDFilter ? `AND domain_id = "${domainIDFilter}"` : ""}
             ORDER BY last_deployed_at DESC
             LIMIT 1
         `;
@@ -733,8 +733,8 @@ router.post("/runtime-logs", authenticateToken, async (req, res, next) => {
 
         const result = await pool.query(queryText, queryParams);
         res.status(200).json({
-            projectId: projectID || null,
-            deploymentId: deploymentID || null,
+            projectID: projectID || null,
+            deploymentID: deploymentID || null,
             timePeriod,
             logs: result.rows
         });

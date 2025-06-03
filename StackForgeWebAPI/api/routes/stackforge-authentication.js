@@ -137,8 +137,8 @@ router.post("/user-authentication", rateLimiter(10, 20, authRateLimitExceededHan
             { algorithm: "HS256" }
         );
 
-        const visitorId = uuidv4();
-        res.cookie("sf_visitor_id", visitorId, {
+        const visitorID = uuidv4();
+        res.cookie("sf_visitor_id", visitorID, {
             domain: ".stackforgeengine.com",
             path: "/",
             httpOnly: false,
@@ -244,8 +244,8 @@ router.post("/user-authentication-verify", rateLimiter(10, 20, authRateLimitExce
         `;
         await pool.query(deleteTokenQuery, [username]);
 
-        const visitorId = uuidv4();
-        res.cookie("sf_visitor_id", visitorId, {
+        const visitorID = uuidv4();
+        res.cookie("sf_visitor_id", visitorID, {
             domain: ".stackforgeengine.com",
             path: "/",
             httpOnly: false,
@@ -329,8 +329,8 @@ router.post("/projects-user-authentication", rateLimiter(10, 20, authRateLimitEx
             { algorithm: "HS256" }
         );
 
-        const visitorId = uuidv4();
-        res.cookie("sf_visitor_id", visitorId, {
+        const visitorID = uuidv4();
+        res.cookie("sf_visitor_id", visitorID, {
             domain: ".stackforgeengine.com",
             path: "/",
             httpOnly: false,

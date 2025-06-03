@@ -786,12 +786,12 @@ router.post('/create-team', authenticateToken, async (req, res, next) => {
 
     try {
 
-        const generateRandomOrgId = () => {
-            const orgId = Math.floor(100000 + Math.random() * 900000);
-            return orgId;
+        const generateRandomOrgID = () => {
+            const orgID = Math.floor(100000 + Math.random() * 900000);
+            return orgID;
         };
 
-        const isOrgIdUnique = async (organizationID) => {
+        const isOrgIDUnique = async (organizationID) => {
             const organizationidVerificationQuery = `
                 SELECT COUNT(*) 
                 FROM organizations 
@@ -846,16 +846,16 @@ router.post('/create-team', authenticateToken, async (req, res, next) => {
             }
         };
 
-        let uniqueOrgId = generateRandomOrgId();
+        let uniqueOrgID = generateRandomOrgID();
 
         const checkAndInsert = async () => {
-            while (!(await isOrgIdUnique(uniqueOrgId))) {
-                uniqueOrgId = generateRandomOrgId();
+            while (!(await isOrgIDUnique(uniqueOrgID))) {
+                uniqueOrgID = generateRandomOrgID();
             }
 
             if (await isTeamNameUnique(teamName) && teamName !== '' && teamName !== null) {
                 const userEmail = await getUserEmail(userID);
-                await insertTeam(uniqueOrgId, userEmail);
+                await insertTeam(uniqueOrgID, userEmail);
             } else {
                 if (!res.headersSent) {
                     res.status(401).json({ message: 'Unable to create team at this time. Please try again.' });
@@ -1225,7 +1225,7 @@ router.post('/revoke-access-request', authenticateToken, async (req, res, next) 
 
 /*
 router.post('/create-checkout-session', authenticateToken, async (req, res, next) => {
-    const { userID, priceId } = req.body;
+    const { userID, priceID } = req.body;
 
     req.on('close', () => {
         return;
@@ -1233,21 +1233,21 @@ router.post('/create-checkout-session', authenticateToken, async (req, res, next
 
     try {
         const userResult = await pool.query('SELECT stripe_customer_id, email FROM users WHERE username = $1', [userID]);
-        let customerId = null;
+        let customerID = null;
         if (userResult.rows.length === 0) {
             return res.status(404).json({ message: 'User not found.' });
         } else {
-            const stripeCustomerId = userResult.rows[0].stripe_customer_id;
+            const stripeCustomerID = userResult.rows[0].stripe_customer_id;
             const userEmail = userResult.rows[0].email;
-            if (stripeCustomerId) {
-                customerId = stripeCustomerId;
+            if (stripeCustomerID) {
+                customerID = stripeCustomerID;
             } else {
                 const customer = await stripe.customers.create({
                     email: userEmail,
                     metadata: { username: userID }
                 });
-                customerId = customer.id;
-                await pool.query('UPDATE users SET stripe_customer_id = $1 WHERE username = $2', [customerId, userID]);
+                customerID = customer.id;
+                await pool.query('UPDATE users SET stripe_customer_id = $1 WHERE username = $2', [customerID, userID]);
             }
         }
 
@@ -1256,16 +1256,16 @@ router.post('/create-checkout-session', authenticateToken, async (req, res, next
             mode: 'subscription',
             line_items: [
                 {
-                    price: priceId,
+                    price: priceID,
                     quantity: 1
                 }
             ],
-            customer: customerId,
+            customer: customerID,
             success_url: `${process.env.CLIENT_URL}/billing?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${process.env.CLIENT_URL}/billing`
         });
 
-        return res.status(200).json({ sessionId: session.id });
+        return res.status(200).json({ sessionID: session.id });
     } catch (error) {
         if (!res.headersSent) {
             return res.status(500).json({ message: `Stripe checkout session creation failed: ${error.message}` });
@@ -1286,13 +1286,13 @@ router.post('/billing-portal', authenticateToken, async (req, res, next) => {
         if (userResult.rows.length === 0) {
             return res.status(404).json({ message: 'User not found.' });
         }
-        const stripeCustomerId = userResult.rows[0].stripe_customer_id;
-        if (!stripeCustomerId) {
+        const stripeCustomerID = userResult.rows[0].stripe_customer_id;
+        if (!stripeCustomerID) {
             return res.status(400).json({ message: 'No Stripe customer associated with this user.' });
         }
 
         const portalSession = await stripe.billingPortal.sessions.create({
-            customer: stripeCustomerId,
+            customer: stripeCustomerID,
             return_url: `${process.env.CLIENT_URL}/billing`
         });
 
