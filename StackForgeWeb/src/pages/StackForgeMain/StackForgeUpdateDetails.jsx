@@ -660,7 +660,7 @@ const StackForgeUpdateDetails = () => {
       };
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
+      const timeoutID = setTimeout(() => {
         controller.abort();
         setIsBuilding(false);
         setBuildLogs((p) => [...p, "ERROR: Request timed out after 30 minutes."]);
@@ -676,7 +676,7 @@ const StackForgeUpdateDetails = () => {
         signal: controller.signal
       });
 
-      clearTimeout(timeoutId);
+      clearTimeout(timeoutID);
       if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
 
       const reader = r.body.getReader();

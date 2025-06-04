@@ -889,7 +889,7 @@ const StackForgeProjectSettings = () => {
                                     backgroundColor: "rgba(229, 75, 75, 0.1)",
                                     border: "1px solid #E54B4B",
                                     color: "#c1c1c1", 
-                                    opacity: (domainLoadingStates[domain.domainID] || domain.domainName.toLowerCase() === projectName.toLowerCase()) ? "0.6" : "1.0"
+                                    opacity: (domainLoadingStates[domain.domainID] || domain.domainName.toLowerCase() === projectName.toLowerCase()) ? "0.6" : ""
                                   }}
                                   onClick={() =>
                                     deleteDomain(domain.domainID, domain.domainName)

@@ -30,13 +30,13 @@ const Reset = () => {
     }, [resetCode, checkedResetCode]);
 
     useEffect(() => {
-        let timerId;
+        let timerID;
         if (resendTimer > 0) {
-            timerId = setTimeout(() => {
+            timerID = setTimeout(() => {
                 setResendTimer(resendTimer - 1);
             }, 1000);
         }
-        return () => clearTimeout(timerId);
+        return () => clearTimeout(timerID);
     }, [resendTimer]);
 
     const handleEmail = async () => {

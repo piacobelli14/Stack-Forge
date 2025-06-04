@@ -22,7 +22,7 @@ app.use(compression());
 app.use(cors({
   optionsSuccessStatus: 200,
   methods: ['POST','GET'],
-  allowedHeaders: ['Content-Type','Authorization','X-Visitor-Id']
+  allowedHeaders: ['Content-Type','Authorization','X-Visitor-ID']
 }));
 
 app.use(express.json({ limit: '1gb' }));

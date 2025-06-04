@@ -44,7 +44,7 @@ const StackForgeProjects = () => {
   const [addNewOpen, setAddNewOpen] = useState(false);
   const dropdownRef = useRef(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-  const [openMenuId, setOpenMenuId] = useState(null);
+  const [openMenuID, setOpenMenuID] = useState(null);
   const [domainSearchModal, setDomainSearchModal] = useState(false);
   const [domainModalStep, setDomainModalStep] = useState(0);
   const [domainSearchTerm, setDomainSearchTerm] = useState("");
@@ -139,13 +139,13 @@ const StackForgeProjects = () => {
 
   useEffect(() => {
     const handleClickOutsideCellMenu = (event) => {
-      if (openMenuId !== null && !event.target.closest(".threeDotMenuContainer")) {
-        setOpenMenuId(null);
+      if (openMenuID !== null && !event.target.closest(".threeDotMenuContainer")) {
+        setOpenMenuID(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutsideCellMenu);
     return () => document.removeEventListener("mousedown", handleClickOutsideCellMenu);
-  }, [openMenuId]);
+  }, [openMenuID]);
 
   useEffect(() => {
     if (addNewOpen && addNewRef.current && dropdownRef.current) {
@@ -405,9 +405,9 @@ const StackForgeProjects = () => {
     setAddNewOpen((prev) => !prev);
   };
   
-  const handleThreeDotClick = (e, projectId) => {
+  const handleThreeDotClick = (e, projectID) => {
     e.stopPropagation();
-    setOpenMenuId((prev) => (prev === projectId ? null : projectId));
+    setOpenMenuID((prev) => (prev === projectID ? null : projectID));
   };
 
   const confirmDomainEntry = async () => {
@@ -757,7 +757,7 @@ const StackForgeProjects = () => {
                             >
                               <FontAwesomeIcon icon={faEllipsisH} />
                             </button>
-                            {openMenuId === project.project_id && (
+                            {openMenuID === project.project_id && (
                               <div className="threeDotDropdownMenu">
                                 <button
                                   onClick={(e) => {

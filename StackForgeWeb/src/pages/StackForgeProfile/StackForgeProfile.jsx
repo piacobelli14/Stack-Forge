@@ -623,18 +623,18 @@ const StackForgeProfile = () => {
     const handleCreateCheckoutSession = async () => {
         try {
             const token = localStorage.getItem("token");
-            const priceId = "price_XXXXXXXXXXXXXX";
+            const priceID = "price_XXXXXXXXXXXXXX";
             const res = await fetch("http://localhost:3000/create-checkout-session", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`
                 },
-                body: JSON.stringify({ userID, priceId })
+                body: JSON.stringify({ userID, priceID })
             });
             const data = await res.json();
-            if (data.sessionId) {
-                window.location.href = `https://checkout.stripe.com/pay/${data.sessionId}`;
+            if (data.sessionID) {
+                window.location.href = `https://checkout.stripe.com/pay/${data.sessionID}`;
             } else {
                 await showDialog({ title: "Alert", message: `Unable to create checkout session: ${data.message}` });
             }

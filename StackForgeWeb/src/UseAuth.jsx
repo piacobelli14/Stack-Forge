@@ -67,9 +67,9 @@ const useAuth = () => {
 
         checkTokenExpiration();
         
-        const intervalId = setInterval(checkTokenExpiration, 300000); 
+        const intervalID = setInterval(checkTokenExpiration, 300000); 
 
-        return () => clearInterval(intervalId);
+        return () => clearInterval(intervalID);
     }, [navigate]);
 
     const updateOrganizationID = (newOrgID) => {

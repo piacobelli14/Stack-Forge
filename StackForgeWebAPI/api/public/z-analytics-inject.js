@@ -1,5 +1,5 @@
 (function(){
-  function getVisitorId(){
+  function getVisitorID(){
     const m = document.cookie.match(/(?:^|; )sf_visitor_id=([^;]+)/);
     if(m) return m[1];
     const id = crypto.randomUUID();
@@ -8,7 +8,7 @@
       `path=/;domain=.stackforgeengine.com;SameSite=None;Secure`;
     return id;
   }
-  const visitorId = getVisitorId();
+  const visitorID = getVisitorID();
 
   function getCookie(name) {
     const value = `; ${document.cookie}`;
@@ -23,7 +23,7 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Visitor-Id': visitorId
+          'X-Visitor-ID': visitorID
         },
         keepalive: true,
         body: JSON.stringify({
@@ -207,7 +207,7 @@
         keepalive: true,
         body: JSON.stringify({
           domain: location.hostname,
-          visitorId,
+          visitorID,
           url: location.pathname + location.search,
           metrics: {
             loadTimeMs: Math.round(loadTimeMs),

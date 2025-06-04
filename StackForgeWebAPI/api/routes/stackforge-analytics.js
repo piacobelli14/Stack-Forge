@@ -8,7 +8,7 @@ const { authenticateToken } = require('../middleware/auth');
 router.post('/auth/check', async (req, res) => {
   try {
     const { domain } = req.body;
-    const visitorID = req.cookies.sf_visitor_id || req.headers['x-visitor-id'];
+    const visitorID = req.cookies.sf_visitor_id || req.headers['X-Visitor-ID'];
 
     const domainResult = await pool.query(
       `
@@ -710,7 +710,6 @@ router.post('/get-aggregate-metrics', authenticateToken, async (req, res, next) 
 });
 
 module.exports = router;
-
 
 
 

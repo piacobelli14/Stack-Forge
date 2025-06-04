@@ -8,21 +8,21 @@ const axios = require("axios");
 const { authenticateToken } = require("../middleware/auth");
 const { pool } = require("../config/db");
 const { v4: uuidv4 } = require("uuid");
-const { 
-  ElasticLoadBalancingV2Client, 
-  DescribeListenersCommand, 
+const {
+  ElasticLoadBalancingV2Client,
+  DescribeListenersCommand,
   DescribeRulesCommand,
-  CreateRuleCommand, 
-  DeleteRuleCommand, 
-  DescribeLoadBalancersCommand, 
-  AddListenerCertificatesCommand, 
-  RemoveListenerCertificatesCommand, 
+  CreateRuleCommand,
+  DeleteRuleCommand,
+  DescribeLoadBalancersCommand,
+  AddListenerCertificatesCommand,
+  RemoveListenerCertificatesCommand,
   DescribeListenerCertificatesCommand,
   DescribeTargetHealthCommand,
   DeleteTargetGroupCommand
 } = require("@aws-sdk/client-elastic-load-balancing-v2");
-const { Route53Client, ChangeResourceRecordSetsCommand } = require("@aws-sdk/client-route-53"); 
-const { ACMClient, RequestCertificateCommand, DescribeCertificateCommand } = require("@aws-sdk/client-acm");
+const { Route53Client, ChangeResourceRecordSetsCommand } = require("@aws-sdk/client-route-53");
+const { ACMClient, RequestCertificateCommand, DescribeCertificateCommand, DeleteCertificateCommand } = require("@aws-sdk/client-acm");
 const { CloudFrontClient, CreateInvalidationCommand } = require("@aws-sdk/client-cloudfront");
 
 const deployManager = require("./drivers/deployManager");
@@ -43,7 +43,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   const acm = new ACMClient({ region: process.env.AWS_REGION });
   const L_HTTPS = process.env.ALB_LISTENER_ARN_HTTPS;
   const L_HTTP = process.env.ALB_LISTENER_ARN_HTTP;
-  const albDNS = process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`;
+  const albDns = process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`;
 
   const projResult = await pool.query(
     ` 
@@ -92,20 +92,20 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   let fallbackEnvVars = [];
   if (typeof parentRawEnv === "string") {
-    try { 
-      fallbackEnvVars = JSON.parse(parentRawEnv); 
-    } catch { 
-      fallbackEnvVars = []; 
+    try {
+      fallbackEnvVars = JSON.parse(parentRawEnv);
+    } catch {
+      fallbackEnvVars = [];
     }
   } else if (Array.isArray(parentRawEnv)) {
     fallbackEnvVars = parentRawEnv;
   }
 
   let raw = domain.trim().toLowerCase().replace(/\.stackforgeengine\.com$/i, "").replace(new RegExp(`\\.${projectName}$`), "");
-  const isParent   = raw === projectName || raw === "";
-  const subLabel   = isParent ? projectName : raw.split(".")[0];
+  const isParent = raw === projectName || raw === "";
+  const subLabel = isParent ? projectName : raw.split(".")[0];
   const storedName = isParent ? projectName : `${subLabel}.${projectName}`;
-  const fqdn       = `${storedName}.stackforgeengine.com`;
+  const fqdn = `${storedName}.stackforgeengine.com`;
 
   const domResult = await pool.query(
     `
@@ -118,8 +118,8 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   const existing = domResult.rows[0] || null;
   const domainID = existing?.domain_id || uuidv4();
-  let certARN = existing?.certificate_arn || null;
-  let tgARN = existing?.target_group_arn || null;
+  let certArn = existing?.certificate_arn || null;
+  let tgArn = existing?.target_group_arn || null;
   const existingRedirect = existing?.redirect_target || null;
   const existingDeploymentID = existing?.deployment_id || null;
 
@@ -130,44 +130,44 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
     return res.status(429).json({
       code: "DOMAIN_THROTTLED",
       message: `New domains may be added starting five minutes after project creation. ` +
-               `Please wait approximately ${waitSec} more second${waitSec !== 1 ? "s" : ""} ` +
-               `and try again.`
+        `Please wait approximately ${waitSec} more second${waitSec !== 1 ? "s" : ""} ` +
+        `and try again.`
     });
   }
 
   let deploymentID = isParent ? (existingDeploymentID || currentDeployment || uuidv4()) : (existingDeploymentID || uuidv4());
-  let parentTaskDefARN = parentCfg.task_def_arn || null;
-  if (!parentTaskDefARN && currentDeployment) {
+  let parentTaskDefArn = parentCfg.task_def_arn || null;
+  if (!parentTaskDefArn && currentDeployment) {
     try {
       const tdRow = await pool.query(
         "SELECT task_def_arn FROM deployments WHERE deployment_id = $1",
-        [currentDeployment]
+        currentDeployment
       );
-      parentTaskDefARN = tdRow.rows[0]?.task_def_arn || null;
-      parentCfg.task_def_arn = parentTaskDefARN;
-    } catch {}
+      parentTaskDefArn = tdRow.rows[0]?.task_def_arn || null;
+      parentCfg.task_def_arn = parentTaskDefArn;
+    } catch { }
   }
   const valsCommonDomain = [
-    organizationID,                   
-    userID,                           
-    domainID,                         
-    storedName,                       
-    projectID,                        
-    userID,                           
-    timestamp,                        
-    timestamp,                        
-    "production",                     
-    isParent,                         
-    deploymentID,                     
-    certARN,                          
-    parentCfg.repository || null,     
-    parentCfg.branch || null,         
-    parentCfg.root_directory || null, 
+    organizationID,
+    userID,
+    domainID,
+    storedName,
+    projectID,
+    userID,
+    timestamp,
+    timestamp,
+    "production",
+    isParent,
+    deploymentID,
+    certArn,
+    parentCfg.repository || null,
+    parentCfg.branch || null,
+    parentCfg.root_directory || null,
     parentCfg.output_directory || null,
-    parentCfg.build_command || null,   
-    parentCfg.install_command || null, 
-    JSON.stringify(fallbackEnvVars),   
-    tgARN                              
+    parentCfg.build_command || null,
+    parentCfg.install_command || null,
+    JSON.stringify(fallbackEnvVars),
+    tgArn
   ];
 
   if (existing) {
@@ -188,18 +188,18 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         WHERE domain_id = $12
       `,
       [
-        timestamp,                
-        deploymentID,             
-        certARN,                  
-        parentCfg.repository || null,  
-        parentCfg.branch || null,      
-        parentCfg.root_directory || null, 
-        parentCfg.output_directory || null, 
-        parentCfg.build_command || null,   
-        parentCfg.install_command || null, 
-        JSON.stringify(fallbackEnvVars),   
-        tgARN,                            
-        domainID                          
+        timestamp,
+        deploymentID,
+        certArn,
+        parentCfg.repository || null,
+        parentCfg.branch || null,
+        parentCfg.root_directory || null,
+        parentCfg.output_directory || null,
+        parentCfg.build_command || null,
+        parentCfg.install_command || null,
+        JSON.stringify(fallbackEnvVars),
+        tgArn,
+        domainID
       ]
     );
   } else {
@@ -238,7 +238,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   const wildcard = `*.${projectName}.stackforgeengine.com`;
   const altNames = [wildcard, `${projectName}.stackforgeengine.com`];
 
-  if (!certARN) {
+  if (!certArn) {
     const reqCert = await acm.send(
       new RequestCertificateCommand({
         DomainName: wildcard,
@@ -246,43 +246,51 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         ValidationMethod: "DNS"
       })
     );
-    certARN = reqCert.CertificateARN;
+    certArn = reqCert.CertificateArn;
 
     const certInfo = await acm.send(
-      new DescribeCertificateCommand({ CertificateARN: certARN })
+      new DescribeCertificateCommand({ CertificateArn: certArn })
     );
     const rr = certInfo.Certificate.DomainValidationOptions?.[0]?.ResourceRecord;
     if (rr) {
-      await r53.send(
-        new ChangeResourceRecordSetsCommand({
-          HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
-          ChangeBatch: {
-            Changes: [
-              {
-                Action: "UPSERT",
-                ResourceRecordSet: {
-                  Name: rr.Name,
-                  Type: rr.Type,
-                  TTL: 300,
-                  ResourceRecords: [{ Value: rr.Value }]
+      if (!process.env.ROUTE53_HOSTED_ZONE_ID) {
+        throw new Error("ROUTE53_HOSTED_ZONE_ID is not defined in environment variables.");
+      }
+      const hostedZoneId = process.env.ROUTE53_HOSTED_ZONE_ID.replace(/^\/hostedzone\//, "");
+      try {
+        await r53.send(
+          new ChangeResourceRecordSetsCommand({
+            HostedZoneId: hostedZoneId,
+            ChangeBatch: {
+              Changes: [
+                {
+                  Action: "UPSERT",
+                  ResourceRecordSet: {
+                    Name: rr.Name,
+                    Type: rr.Type,
+                    TTL: 300,
+                    ResourceRecords: [{ Value: rr.Value }]
+                  }
                 }
-              }
-            ]
-          }
-        })
-      );
+              ]
+            }
+          })
+        );
+      } catch (route53Error) {
+        throw new Error(`Failed to upsert DNS validation record: ${route53Error.message}`);
+      }
     }
 
     await pool.query(
       `UPDATE domains SET certificate_arn = $1 WHERE domain_id = $2`,
-      [certARN, domainID]
+      [certArn, domainID]
     );
   }
 
   let certReady = false;
   for (let i = 0; i < 12; i++) {
     const info = await acm.send(
-      new DescribeCertificateCommand({ CertificateARN: certARN })
+      new DescribeCertificateCommand({ CertificateArn: certArn })
     );
     if (info.Certificate.Status === "ISSUED") {
       certReady = true;
@@ -293,29 +301,29 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   if (!certReady) {
     return res.status(202).json({
       message: `Certificate request created for ${wildcard}. Re-run validation once DNS is ready.`,
-      certificateARN: certARN
+      certificateArn: certArn
     });
   }
 
   const { Certificates } = await elbv2.send(
-    new DescribeListenerCertificatesCommand({ ListenerARN: L_HTTPS })
+    new DescribeListenerCertificatesCommand({ ListenerArn: L_HTTPS })
   );
-  if (!Certificates.some(c => c.CertificateARN === certARN)) {
+  if (!Certificates.some(c => c.CertificateArn === certArn)) {
     if (Certificates.length >= 25) {
       const victim = Certificates.find(c => !c.IsDefault);
       if (victim) {
         await elbv2.send(
           new RemoveListenerCertificatesCommand({
-            ListenerARN: L_HTTPS,
-            Certificates: [{ CertificateARN: victim.CertificateARN }]
+            ListenerArn: L_HTTPS,
+            Certificates: [{ CertificateArn: victim.CertificateArn }]
           })
         );
       }
     }
     await elbv2.send(
       new AddListenerCertificatesCommand({
-        ListenerARN: L_HTTPS,
-        Certificates: [{ CertificateARN: certARN }]
+        ListenerArn: L_HTTPS,
+        Certificates: [{ CertificateArn: certArn }]
       })
     );
   }
@@ -331,13 +339,13 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   let finalEnvVars = Array.isArray(parsedEnv) ? parsedEnv : fallbackEnvVars;
 
   const cfg = {
-    repository : repository || parentCfg.repository || null,
-    branch : branch || parentCfg.branch || "main",
-    rootDirectory : rootDirectory || parentCfg.root_directory  || ".",
-    outputDirectory : outputDirectory || parentCfg.output_directory || "",
-    buildCommand : buildCommand || parentCfg.build_command || "",
-    installCommand : installCommand || parentCfg.install_command || "npm install",
-    envVars : finalEnvVars
+    repository: repository || parentCfg.repository || null,
+    branch: branch || parentCfg.branch || "main",
+    rootDirectory: rootDirectory || parentCfg.root_directory || ".",
+    outputDirectory: outputDirectory || parentCfg.output_directory || "",
+    buildCommand: buildCommand || parentCfg.build_command || "",
+    installCommand: installCommand || parentCfg.install_command || "npm install",
+    envVars: finalEnvVars
   };
 
   if (!Array.isArray(cfg.envVars)) cfg.envVars = [];
@@ -353,66 +361,78 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       commitSha = await deployManager.getLatestCommitSha(
         cfg.repository, cfg.branch, githubAccessToken
       );
-    } catch {}
+    } catch { }
   }
 
-  async function upsertDNS(host) {
+  async function upsertDns(host) {
     const isApex = host.split(".").length === 3;
+    if (!process.env.ROUTE53_HOSTED_ZONE_ID) {
+      throw new Error("ROUTE53_HOSTED_ZONE_ID is not defined in environment variables.");
+    }
+    const hostedZoneId = process.env.ROUTE53_HOSTED_ZONE_ID.replace(/^\/hostedzone\//, "");
     if (isApex) {
       const lb = await elbv2.send(
         new DescribeLoadBalancersCommand({ Names: [process.env.LOAD_BALANCER_NAME] })
       );
-      await r53.send(
-        new ChangeResourceRecordSetsCommand({
-          HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
-          ChangeBatch: {
-            Changes: [
-              {
-                Action: "UPSERT",
-                ResourceRecordSet: {
-                  Name: host,
-                  Type: "A",
-                  AliasTarget: {
-                    HostedZoneID : lb.LoadBalancers[0].CanonicalHostedZoneID,
-                    DNSName : albDNS,
-                    EvaluateTargetHealth: false
+      try {
+        await r53.send(
+          new ChangeResourceRecordSetsCommand({
+            HostedZoneId: hostedZoneId,
+            ChangeBatch: {
+              Changes: [
+                {
+                  Action: "UPSERT",
+                  ResourceRecordSet: {
+                    Name: host,
+                    Type: "A",
+                    AliasTarget: {
+                      HostedZoneId: lb.LoadBalancers[0].CanonicalHostedZoneId,
+                      DNSName: albDns,
+                      EvaluateTargetHealth: false
+                    }
                   }
                 }
-              }
-            ]
-          }
-        })
-      );
+              ]
+            }
+          })
+        );
+      } catch (route53Error) {
+        throw new Error(`Failed to upsert A record for ${host}: ${route53Error.message}`);
+      }
     } else {
-      await r53.send(
-        new ChangeResourceRecordSetsCommand({
-          HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
-          ChangeBatch: {
-            Changes: [
-              {
-                Action: "UPSERT",
-                ResourceRecordSet: {
-                  Name : host,
-                  Type : "CNAME",
-                  TTL : 60,
-                  ResourceRecords : [{ Value: albDNS }]
+      try {
+        await r53.send(
+          new ChangeResourceRecordSetsCommand({
+            HostedZoneId: hostedZoneId,
+            ChangeBatch: {
+              Changes: [
+                {
+                  Action: "UPSERT",
+                  ResourceRecordSet: {
+                    Name: host,
+                    Type: "CNAME",
+                    TTL: 60,
+                    ResourceRecords: [{ Value: albDns }]
+                  }
                 }
-              }
-            ]
-          }
-        })
-      );
+              ]
+            }
+          })
+        );
+      } catch (route53Error) {
+        throw new Error(`Failed to upsert CNAME record for ${host}: ${route53Error.message}`);
+      }
     }
   }
 
-  await upsertDNS(fqdn);
+  await upsertDns(fqdn);
 
   if (!existingRedirect) {
-    tgARN = tgARN ||
+    tgArn = tgArn ||
       (await deployManager.ensureTargetGroup(projectName, isParent ? null : subLabel));
 
     for (const L of [L_HTTP, L_HTTPS]) {
-      const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerARN: L }));
+      const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: L }));
       const missing = !Rules.some(r =>
         r.Conditions.some(c =>
           c.Field === "host-header" &&
@@ -425,22 +445,22 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         while (used.has(pr)) pr++;
         await elbv2.send(
           new CreateRuleCommand({
-            ListenerARN: L,
-            Priority    : pr,
-            Conditions  : [{ Field: "host-header", Values: [fqdn] }],
-            Actions     : [{ Type: "forward", TargetGroupARN: tgARN }]
+            ListenerArn: L,
+            Priority: pr,
+            Conditions: [{ Field: "host-header", Values: [fqdn] }],
+            Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
           })
         );
       }
     }
   }
 
-  if (!existingRedirect && parentTaskDefARN) {
+  if (!existingRedirect && parentTaskDefArn) {
     await deployManager.createOrUpdateService({
       projectName,
-      subdomain      : isParent ? null : subLabel,
-      taskDefARN     : parentTaskDefARN,
-      targetGroupARN : tgARN
+      subdomain: isParent ? null : subLabel,
+      taskDefArn: parentTaskDefArn,
+      targetGroupArn: tgArn
     });
   }
 
@@ -487,7 +507,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
         organizationID, userID, deploymentID, projectID, domainID,
         "active", `https://${fqdn}`, "default",
         timestamp, timestamp, timestamp,
-        parentTaskDefARN || null, commitSha,
+        parentTaskDefArn || null, commitSha,
         cfg.rootDirectory, cfg.outputDirectory,
         cfg.buildCommand, cfg.installCommand,
         JSON.stringify(cfg.envVars)
@@ -526,7 +546,7 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
       `,
       [
         timestamp, "active", `https://${fqdn}`,
-        parentTaskDefARN || null, commitSha,
+        parentTaskDefArn || null, commitSha,
         cfg.rootDirectory, cfg.outputDirectory,
         cfg.buildCommand, cfg.installCommand,
         JSON.stringify(cfg.envVars),
@@ -536,10 +556,10 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
   }
 
   const recs = [];
-  try { const a = await dns.resolve4(fqdn);    if (a.length) recs.push({ type: "A",     name: "@", value: a[0] }); } catch {}
-  try { const aaaa = await dns.resolve6(fqdn);  if (aaaa.length) recs.push({ type: "AAAA",  name: "@", value: aaaa[0] }); } catch {}
-  try { const cname = await dns.resolveCname(fqdn); if (cname.length) recs.push({ type: "CNAME", name: "@", value: cname[0] }); } catch {}
-  try { const mx = await dns.resolveMx(fqdn);   if (mx.length)   recs.push({ type: "MX",    name: "@", value: mx.map(r => `${r.priority} ${r.exchange}`).join(", ") }); } catch {}
+  try { const a = await dns.resolve4(fqdn); if (a.length) recs.push({ type: "A", name: "@", value: a[0] }); } catch { }
+  try { const aaaa = await dns.resolve6(fqdn); if (aaaa.length) recs.push({ type: "AAAA", name: "@", value: aaaa[0] }); } catch { }
+  try { const cname = await dns.resolveCname(fqdn); if (cname.length) recs.push({ type: "CNAME", name: "@", value: cname[0] }); } catch { }
+  try { const mx = await dns.resolveMx(fqdn); if (mx.length) recs.push({ type: "MX", name: "@", value: mx.map(r => `${r.priority} ${r.exchange}`).join(", ") }); } catch { }
   await pool.query(
     "UPDATE domains SET dns_records = $1 WHERE domain_id = $2",
     [JSON.stringify(recs), domainID]
@@ -547,9 +567,9 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   if (!existingRedirect) {
     await deployManager.recordRuntimeLogs(
-      organizationID, 
-      userID, 
-      deploymentID, 
+      organizationID,
+      userID,
+      deploymentID,
       projectName,
       isParent ? null : subLabel
     );
@@ -557,165 +577,226 @@ router.post("/validate-domain", authenticateToken, async (req, res, next) => {
 
   return res.status(200).json({
     message: existingRedirect ? `Subdomain ${subLabel} refreshed (redirect still → ${existingRedirect}).` : `Subdomain ${subLabel} validated${existing ? "" : " and deployment initiated"}.`,
-    url : `https://${fqdn}`,
-    certificateARN : certARN,
-    dnsRecords : recs,
+    url: `https://${fqdn}`,
+    certificateArn: certArn,
+    dnsRecords: recs,
     deploymentID
   });
 });
-
 
 router.post("/delete-domain", authenticateToken, async (req, res, next) => {
   const { userID, organizationID, projectID, domainID } = req.body;
 
   if (!userID || !organizationID || !projectID || !domainID) {
-      return res.status(400).json({
-          message: "userID, organizationID, projectID, and domainID are required."
-      });
+    return res.status(400).json({
+      message: "userID, organizationID, projectID, and domainID are required.",
+    });
   }
 
   let client;
   try {
-      client = await pool.connect();
-      await client.query("BEGIN");
+    client = await pool.connect();
+    await client.query("BEGIN");
 
-      const domainResult = await client.query(
-          `
-            SELECT domain_name, certificate_arn, target_group_arn, deployment_id
-            FROM domains
-            WHERE domain_id = $1
-              AND project_id = $2
-              AND orgid = $3
-              AND username = $4
-          `,
-          [domainID, projectID, organizationID, userID]
+    const domainResult = await client.query(
+      `
+        SELECT domain_name, certificate_arn, target_group_arn, deployment_id
+        FROM domains
+        WHERE domain_id = $1
+          AND project_id = $2
+          AND orgid = $3
+          AND username = $4
+      `,
+      [domainID, projectID, organizationID, userID]
+    );
+    if (domainResult.rows.length === 0) {
+      throw new Error("Domain not found or access denied.");
+    }
+    const {
+      domain_name,
+      certificate_arn: certArn,
+      target_group_arn: tgArn,
+      deployment_id: deploymentID,
+    } = domainResult.rows[0];
+    const fqdn = `${domain_name}.stackforgeengine.com`;
+
+    if (!process.env.ROUTE53_HOSTED_ZONE_ID) {
+      throw new Error("ROUTE53_HOSTED_ZONE_ID is not defined in environment variables.");
+    }
+    if (!process.env.LOAD_BALANCER_DNS) {
+      throw new Error("LOAD_BALANCER_DNS is not defined in environment variables.");
+    }
+    if (!process.env.LOAD_BALANCER_NAME) {
+      throw new Error("LOAD_BALANCER_NAME is not defined in environment variables.");
+    }
+    if (!process.env.AWS_REGION) {
+      throw new Error("AWS_REGION is not defined in environment variables.");
+    }
+
+    const acmClient = new ACMClient({ region: process.env.AWS_REGION });
+    const route53Client = new Route53Client({ region: process.env.AWS_REGION });
+    const elbv2Client = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
+    const L_HTTP = process.env.ALB_LISTENER_ARN_HTTP;
+    const L_HTTPS = process.env.ALB_LISTENER_ARN_HTTPS;
+    const hostedZoneId = process.env.ROUTE53_HOSTED_ZONE_ID.replace(/^\/hostedzone\//, "");
+
+    if (certArn) {
+      const listenersResp = await elbv2Client.send(
+        new DescribeListenersCommand({
+          LoadBalancerArn: process.env.LOAD_BALANCER_ARN,
+        })
       );
-      if (domainResult.rows.length === 0) {
-          throw new Error("Domain not found or access denied.");
+      for (const listener of listenersResp.Listeners || []) {
+        const certsResp = await elbv2Client.send(
+          new DescribeListenerCertificatesCommand({
+            ListenerArn: listener.ListenerArn,
+          })
+        );
+        if (certsResp.Certificates?.some((c) => c.CertificateArn === certArn)) {
+          await elbv2Client.send(
+            new RemoveListenerCertificatesCommand({
+              ListenerArn: listener.ListenerArn,
+              Certificates: [{ CertificateArn: certArn }],
+            })
+          );
+        }
       }
-      const {
-          domain_name,
-          certificate_arn: certARN,
-          target_group_arn: tgARN,
-          deployment_id: deploymentID
-      } = domainResult.rows[0];
-      const fqdn = `${domain_name}.stackforgeengine.com`;
-
-      const acmClient = new ACMClient({ region: process.env.AWS_REGION });
-      const route53Client = new Route53Client({ region: process.env.AWS_REGION });
-      const elbv2Client = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
-      const L_HTTP = process.env.ALB_LISTENER_ARN_HTTP;
-      const L_HTTPS = process.env.ALB_LISTENER_ARN_HTTPS;
-
-      if (certARN) {
-          const listenersResp = await elbv2Client.send(new DescribeListenersCommand({
-              LoadBalancerARN: process.env.LOAD_BALANCER_ARN
-          }));
-          for (const listener of listenersResp.Listeners || []) {
-              const certsResp = await elbv2Client.send(new DescribeListenerCertificatesCommand({
-                  ListenerARN: listener.ListenerARN
-              }));
-              if (certsResp.Certificates?.some(c => c.CertificateARN === certARN)) {
-                  await elbv2Client.send(new RemoveListenerCertificatesCommand({
-                      ListenerARN: listener.ListenerARN,
-                      Certificates: [{ CertificateARN: certARN }]
-                  }));
-              }
-          }
-          try {
-              await acmClient.send(new DeleteCertificateCommand({
-                  CertificateARN: certARN
-              }));
-          } catch {}
-      }
-
-      const deleteChanges = [];
-      deleteChanges.push({
-          Action: "DELETE",
-          ResourceRecordSet: {
-              Name: fqdn,
-              Type: "A",
-              AliasTarget: {
-                  HostedZoneID : (await elbv2Client.send(new DescribeLoadBalancersCommand({
-                    Names: [process.env.LOAD_BALANCER_NAME]
-                  }))).LoadBalancers[0].CanonicalHostedZoneID,
-                  DNSName : process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.`,
-                  EvaluateTargetHealth: false
-              }
-          }
-      });
-      deleteChanges.push({
-          Action: "DELETE",
-          ResourceRecordSet: {
-              Name : fqdn,
-              Type : "CNAME",
-              TTL : 60,
-              ResourceRecords : [{ Value: process.env.LOAD_BALANCER_DNS.endsWith(".") ? process.env.LOAD_BALANCER_DNS : `${process.env.LOAD_BALANCER_DNS}.` }]
-          }
-      });
       try {
-          await route53Client.send(new ChangeResourceRecordSetsCommand({
-              HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
-              ChangeBatch: { Changes: deleteChanges }
-          }));
-      } catch (error) {
-          if (!error.message.includes("but it was not found")) {
-              throw error;
-          }
+        await acmClient.send(
+          new DeleteCertificateCommand({
+            CertificateArn: certArn,
+          })
+        );
+      } catch (acmError) { }
+    }
+
+    const loadBalancerResp = await elbv2Client.send(
+      new DescribeLoadBalancersCommand({
+        Names: [process.env.LOAD_BALANCER_NAME],
+      })
+    );
+    if (!loadBalancerResp.LoadBalancers || loadBalancerResp.LoadBalancers.length === 0) {
+      throw new Error(`Load balancer ${process.env.LOAD_BALANCER_NAME} not found.`);
+    }
+    const canonicalHostedZoneId = loadBalancerResp.LoadBalancers[0].CanonicalHostedZoneId;
+    const deleteChanges = [
+      {
+        Action: "DELETE",
+        ResourceRecordSet: {
+          Name: fqdn,
+          Type: "A",
+          AliasTarget: {
+            HostedZoneId: canonicalHostedZoneId,
+            DNSName: process.env.LOAD_BALANCER_DNS.endsWith(".")
+              ? process.env.LOAD_BALANCER_DNS
+              : `${process.env.LOAD_BALANCER_DNS}.`,
+            EvaluateTargetHealth: false,
+          },
+        },
+      },
+      {
+        Action: "DELETE",
+        ResourceRecordSet: {
+          Name: fqdn,
+          Type: "CNAME",
+          TTL: 60,
+          ResourceRecords: [
+            {
+              Value: process.env.LOAD_BALANCER_DNS.endsWith(".")
+                ? process.env.LOAD_BALANCER_DNS
+                : `${process.env.LOAD_BALANCER_DNS}.`,
+            },
+          ],
+        },
+      },
+    ];
+
+    try {
+      await route53Client.send(
+        new ChangeResourceRecordSetsCommand({
+          HostedZoneId: hostedZoneId,
+          ChangeBatch: { Changes: deleteChanges },
+        })
+      );
+    } catch (route53Error) {
+      if (!route53Error.message.includes("but it was not found")) {
+        throw new Error(`Route 53 error: ${route53Error.message}`);
       }
+    }
 
-      if (typeof deployManager.deleteService === "function") {
-          await deployManager.deleteService({
-              projectName: domain_name.split(".")[1],
-              subdomain: domain_name.includes(".") ? domain_name.split(".")[0] : null
-          });
-      }
-
-      if (tgARN) {
-          for (const listenerARN of [L_HTTP, L_HTTPS]) {
-              try {
-                  const { Rules } = await elbv2Client.send(new DescribeRulesCommand({ ListenerARN: listenerARN }));
-                  for (const rule of Rules || []) {
-                      if (!rule.IsDefault &&
-                          rule.Actions.some(a => a.Type === "forward" && a.TargetGroupARN === tgARN)) {
-                          await elbv2Client.send(new DeleteRuleCommand({ RuleARN: rule.RuleARN }));
-                      }
-                  }
-              } catch {}
-          }
-      }
-
-      if (tgARN) {
-          await elbv2Client.send(new DeleteTargetGroupCommand({
-              TargetGroupARN: tgARN
-          }));
-      }
-
-      await client.query("DELETE FROM metrics_events WHERE domain = $1", [domain_name]);
-      await client.query("DELETE FROM metrics_daily WHERE domain = $1", [domain_name]);
-      await client.query("DELETE FROM metrics_edge_requests WHERE domain = $1", [domain_name]);
-      if (deploymentID) {
-          await client.query("DELETE FROM deployment_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
-          await client.query("DELETE FROM build_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
-          await client.query("DELETE FROM runtime_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
-          await client.query("DELETE FROM deployments WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
-      }
-      await client.query("DELETE FROM domains WHERE domain_id = $1", [domainID]);
-
-      await client.query("COMMIT");
-
-      return res.status(200).json({
-          success: true,
-          message: `Subdomain "${domain_name}" and its resources have been deleted.`
+    if (typeof deployManager.deleteService === "function") {
+      await deployManager.deleteService({
+        projectName: domain_name.split(".")[1],
+        subdomain: domain_name.includes(".") ? domain_name.split(".")[0] : null,
       });
-  } catch (error) {
-      if (client) await client.query("ROLLBACK");
-      if (!res.headersSent) {
-          res.status(500).json({ message: `Failed to delete subdomain: ${error.message}.` });
+    }
+
+    if (tgArn) {
+      for (const listenerArn of [L_HTTP, L_HTTPS]) {
+        if (!listenerArn) continue;
+        try {
+          const { Rules } = await elbv2Client.send(
+            new DescribeRulesCommand({ ListenerArn: listenerArn })
+          );
+          for (const rule of Rules || []) {
+            if (
+              !rule.IsDefault &&
+              rule.Actions.some((a) => a.Type === "forward" && a.TargetGroupArn === tgArn)
+            ) {
+              await elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn }));
+            }
+          }
+        } catch (ruleError) { }
       }
-      next(error);
+    }
+
+    if (tgArn) {
+      try {
+        await elbv2Client.send(
+          new DeleteTargetGroupCommand({
+            TargetGroupArn: tgArn,
+          })
+        );
+      } catch (tgError) { }
+    }
+
+    await client.query("DELETE FROM metrics_events WHERE domain = $1", [domain_name]);
+    await client.query("DELETE FROM metrics_daily WHERE domain = $1", [domain_name]);
+    await client.query("DELETE FROM metrics_edge_requests WHERE domain = $1", [domain_name]);
+    if (deploymentID) {
+      await client.query("DELETE FROM deployment_logs WHERE deployment_id = $1 AND orgid = $2", [
+        deploymentID,
+        organizationID,
+      ]);
+      await client.query("DELETE FROM build_logs WHERE deployment_id = $1 AND orgid = $2", [
+        deploymentID,
+        organizationID,
+      ]);
+      await client.query("DELETE FROM runtime_logs WHERE deployment_id = $1 AND orgid = $2", [
+        deploymentID,
+        organizationID,
+      ]);
+      await client.query("DELETE FROM deployments WHERE deployment_id = $1 AND orgid = $2", [
+        deploymentID,
+        organizationID,
+      ]);
+    }
+    await client.query("DELETE FROM domains WHERE domain_id = $1", [domainID]);
+
+    await client.query("COMMIT");
+
+    return res.status(200).json({
+      success: true,
+      message: `Subdomain "${domain_name}" and its resources have been deleted.`,
+    });
+  } catch (error) {
+    if (client) await client.query("ROLLBACK");
+    if (!res.headersSent) {
+      res.status(500).json({ message: `Failed to delete subdomain: ${error.message}.` });
+    }
+    next(error);
   } finally {
-      if (client) client.release();
+    if (client) client.release();
   }
 });
 
@@ -731,14 +812,14 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
   const elbv2 = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
   const cloudfront = new CloudFrontClient({ region: process.env.AWS_REGION });
   const route53Client = new Route53Client({ region: process.env.AWS_REGION });
-  const lbDNS = process.env.LOAD_BALANCER_DNS.endsWith(".")
+  const lbDns = process.env.LOAD_BALANCER_DNS.endsWith(".")
     ? process.env.LOAD_BALANCER_DNS
     : `${process.env.LOAD_BALANCER_DNS}.`;
-  const httpsARN = process.env.ALB_LISTENER_ARN_HTTPS;
-  const httpARN = process.env.ALB_LISTENER_ARN_HTTP;
+  const httpsArn = process.env.ALB_LISTENER_ARN_HTTPS;
+  const httpArn = process.env.ALB_LISTENER_ARN_HTTP;
 
-  async function getFreePriority(listenerARN) {
-    const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerARN: listenerARN }));
+  async function getFreePriority(listenerArn) {
+    const { Rules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: listenerArn }));
     const used = Rules.filter(r => !r.IsDefault).map(r => parseInt(r.Priority));
     for (let p = 1; p <= 50000; p++) if (!used.includes(p)) return p;
     throw new Error("No free ALB rule priority available.");
@@ -756,7 +837,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
               Name: fqdn,
               Type: "CNAME",
               TTL: 60,
-              ResourceRecords: [{ Value: lbDNS }]
+              ResourceRecords: [{ Value: lbDns }]
             }
           }]
         }
@@ -772,11 +853,11 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
       hostedZoneID = LoadBalancers[0].CanonicalHostedZoneID;
     } else {
       const { Listeners } = await elbv2.send(
-        new DescribeListenersCommand({ ListenerARNs: [httpsARN] })
+        new DescribeListenersCommand({ ListenerArns: [httpsArn] })
       );
-      const lbARN = Listeners[0].LoadBalancerARN;
+      const lbArn = Listeners[0].LoadBalancerArn;
       const { LoadBalancers } = await elbv2.send(
-        new DescribeLoadBalancersCommand({ LoadBalancerARNs: [lbARN] })
+        new DescribeLoadBalancersCommand({ LoadBalancerArns: [lbArn] })
       );
       hostedZoneID = LoadBalancers[0].CanonicalHostedZoneID;
     }
@@ -791,7 +872,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
             Type: "A",
             AliasTarget: {
               HostedZoneID: hostedZoneID,
-              DNSName: lbDNS,
+              DNSName: lbDns,
               EvaluateTargetHealth: false
             }
           }
@@ -800,10 +881,10 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     }));
   }
 
-  async function validateTargetGroupHealth(tgARN) {
+  async function validateTargetGroupHealth(tgArn) {
     try {
       const { TargetHealthDescriptions } = await elbv2.send(
-        new DescribeTargetHealthCommand({ TargetGroupARN: tgARN })
+        new DescribeTargetHealthCommand({ TargetGroupArn: tgArn })
       );
       return TargetHealthDescriptions.some(t => t.TargetHealth.State === "healthy");
     } catch (error) {
@@ -824,7 +905,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
         }));
         break;
       } catch (error) {
-        await new Promise(resolve => setTimeout(resolve, 3000)); 
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
   }
@@ -854,7 +935,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     const projectName = projResult.rows[0].name.toLowerCase();
     const sourceSub = domRes.rows[0].domain_name.toLowerCase();
     const sourceFqdn = `${sourceSub}.stackforgeengine.com`;
-    let tgARN = domRes.rows[0].target_group_arn || null;
+    let tgArn = domRes.rows[0].target_group_arn || null;
     const parentTaskDef = parentRes.rows[0]?.task_def_arn || null;
     const isApex = sourceSub === projectName;
 
@@ -878,48 +959,48 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
       await upsertRecord(targetFqdn);
     }
 
-    const { Rules: httpRules } = await elbv2.send(new DescribeRulesCommand({ ListenerARN: httpARN }));
-    const { Rules: httpsRules } = await elbv2.send(new DescribeRulesCommand({ ListenerARN: httpsARN }));
+    const { Rules: httpRules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: httpArn }));
+    const { Rules: httpsRules } = await elbv2.send(new DescribeRulesCommand({ ListenerArn: httpsArn }));
     const deletePromises = [];
     for (const r of [...httpRules, ...httpsRules]) {
       if (!r.IsDefault &&
-          r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(sourceFqdn))) {
-        deletePromises.push(elbv2.send(new DeleteRuleCommand({ RuleARN: r.RuleARN })));
+        r.Conditions.some(c => c.Field === "host-header" && c.Values.includes(sourceFqdn))) {
+        deletePromises.push(elbv2.send(new DeleteRuleCommand({ RuleArn: r.RuleArn })));
       }
     }
     await Promise.all(deletePromises);
 
     if (redirectTarget === null) {
-      if (!tgARN) {
-        tgARN = await deployManager.ensureTargetGroup(
+      if (!tgArn) {
+        tgArn = await deployManager.ensureTargetGroup(
           projectName, isApex ? null : sourceSub.split(".")[0]
         );
         await pool.query(
           "UPDATE domains SET target_group_arn=$1 WHERE domain_id=$2",
-          [tgARN, domainID]
+          [tgArn, domainID]
         );
       }
 
-      let isTgHealthy = await validateTargetGroupHealth(tgARN);
+      let isTgHealthy = await validateTargetGroupHealth(tgArn);
 
       if (parentTaskDef && !isTgHealthy) {
         try {
           await deployManager.createOrUpdateService({
             projectName,
             subdomain: isApex ? null : sourceSub.split(".")[0],
-            taskDefARN: parentTaskDef,
-            targetGroupARN: tgARN
+            taskDefArn: parentTaskDef,
+            targetGroupArn: tgArn
           });
 
           let healthCheckRetries = 3;
           while (healthCheckRetries > 0) {
-            isTgHealthy = await validateTargetGroupHealth(tgARN);
+            isTgHealthy = await validateTargetGroupHealth(tgArn);
             if (isTgHealthy) break;
-            await new Promise(resolve => setTimeout(resolve, 5000)); 
+            await new Promise(resolve => setTimeout(resolve, 5000));
             healthCheckRetries--;
           }
           if (!isTgHealthy) {
-            throw new Error(`Target group ${tgARN} has no healthy targets after service deployment.`);
+            throw new Error(`Target group ${tgArn} has no healthy targets after service deployment.`);
           }
         } catch (error) {
           return res.status(500).json({
@@ -933,21 +1014,21 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
       }
 
       const [httpPrio, httpsPrio] = await Promise.all([
-        getFreePriority(httpARN),
-        getFreePriority(httpsARN)
+        getFreePriority(httpArn),
+        getFreePriority(httpsArn)
       ]);
       await Promise.all([
         elbv2.send(new CreateRuleCommand({
-          ListenerARN: httpARN,
+          ListenerArn: httpArn,
           Priority: httpPrio,
           Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
-          Actions: [{ Type: "forward", TargetGroupARN: tgARN }]
+          Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
         })),
         elbv2.send(new CreateRuleCommand({
-          ListenerARN: httpsARN,
+          ListenerArn: httpsArn,
           Priority: httpsPrio,
           Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
-          Actions: [{ Type: "forward", TargetGroupARN: tgARN }]
+          Actions: [{ Type: "forward", TargetGroupArn: tgArn }]
         }))
       ]);
 
@@ -968,12 +1049,12 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
     }
 
     const [httpPrio, httpsPrio] = await Promise.all([
-      getFreePriority(httpARN),
-      getFreePriority(httpsARN)
+      getFreePriority(httpArn),
+      getFreePriority(httpsArn)
     ]);
     await Promise.all([
       elbv2.send(new CreateRuleCommand({
-        ListenerARN: httpARN,
+        ListenerArn: httpArn,
         Priority: httpPrio,
         Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
         Actions: [{
@@ -989,7 +1070,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
         }]
       })),
       elbv2.send(new CreateRuleCommand({
-        ListenerARN: httpsARN,
+        ListenerArn: httpsArn,
         Priority: httpsPrio,
         Conditions: [{ Field: "host-header", Values: [sourceFqdn] }],
         Actions: [{
@@ -1026,7 +1107,7 @@ router.post("/edit-redirect", authenticateToken, async (req, res, next) => {
       res.status(500).json({ message: `Failed to update redirect rules: ${error.message}.` });
     }
     next(error);
-  }
+  } D
 });
 
 router.post("/edit-environment", authenticateToken, async (req, res, next) => {
