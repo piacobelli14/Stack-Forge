@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Laravel App</title>
+    <link rel="stylesheet" href="{{ asset('css/globals.css') }}">
+    <link rel="icon" type="image/svg+xml" href="/StackForgeLogo.png" />
+</head>
+<body>
+    <div class="template-wrapper">
+        <img src="{{ asset('/StackForgeLogo.png') }}" alt="StackForge Logo">
+        <h1>Stack Forge with Laravel</h1>
+        <p>
+            This is a single page built with Laravel by the Stack Forge team for you to get started!
+        </p>
+        <a href="https://stackforgeengine.com" target="_blank" rel="noopener noreferrer">
+            https://stackforgeengine.com
+        </a>
+    </div>
+</body>
+</html>
