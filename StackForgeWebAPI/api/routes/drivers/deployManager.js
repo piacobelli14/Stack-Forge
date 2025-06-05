@@ -3016,12 +3016,24 @@ class DeployManager {
         const ecrClient = new ECRClient({ region: process.env.AWS_REGION });
         const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
         const cloudFrontClient = new CloudFrontClient({ region: process.env.AWS_REGION });
-
+    
         let client;
+        const errors = [];
+        const warnings = [];
+    
+        const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), ms));
+        const timeoutMs = 60000;
+    
+        if (!process.env.AWS_REGION) errors.push('AWS_REGION is not set');
+        if (!process.env.ROUTE53_HOSTED_ZONE_ID) errors.push('ROUTE53_HOSTED_ZONE_ID is not set');
+        if (errors.length > 0) {
+            throw new Error(`Environment variable validation failed: ${errors.join('; ')}`);
+        }
+    
         try {
             client = await pool.connect();
             await client.query("BEGIN");
-
+    
             const projectResult = await client.query(
                 "SELECT * FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
                 [projectID, organizationID, userID]
@@ -3029,7 +3041,7 @@ class DeployManager {
             if (projectResult.rows.length === 0) {
                 throw new Error("Project not found or access denied.");
             }
-
+    
             const domainResult = await client.query(
                 "SELECT domain_name, certificate_arn, target_group_arn FROM domains WHERE project_id = $1 AND orgid = $2",
                 [projectID, organizationID]
@@ -3039,122 +3051,176 @@ class DeployManager {
                 certificateArn: row.certificate_arn,
                 targetGroupArn: row.target_group_arn
             }));
-
+    
             const domainsToClean = new Set([
                 `${projectName}.stackforgeengine.com`,
                 `*.${projectName}.stackforgeengine.com`,
                 ...domains.map(d => d.name)
             ]);
-
+    
+            let targetGroupArns = domains
+                .map(d => d.targetGroupArn)
+                .filter(arn => arn && arn.match(/:targetgroup\/[a-zA-Z0-9-]+\/[a-f0-9]+$/));
+            try {
+                const tgResp = await Promise.race([
+                    elbv2Client.send(new DescribeTargetGroupsCommand({})),
+                    timeout(timeoutMs)
+                ]);
+                targetGroupArns.push(...tgResp.TargetGroups
+                    .filter(tg => tg.TargetGroupName.toLowerCase().includes(projectName.toLowerCase()))
+                    .map(tg => tg.TargetGroupArn)
+                );
+                targetGroupArns = [...new Set(targetGroupArns)];
+            } catch (error) {
+                warnings.push(`Failed to list target groups: ${error.message}`);
+            }
+    
             const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
             if (listenerArn) {
                 try {
-                    const rulesResp = await elbv2Client.send(new DescribeRulesCommand({
-                        ListenerArn: listenerArn
-                    }));
-                    const rulesToDelete = rulesResp.Rules.filter(rule => !rule.IsDefault);
+                    const rulesResp = await Promise.race([
+                        elbv2Client.send(new DescribeRulesCommand({ ListenerArn: listenerArn })),
+                        timeout(timeoutMs)
+                    ]);
+                    const rulesToDelete = rulesResp.Rules.filter(rule =>
+                        !rule.IsDefault && rule.Actions.some(action =>
+                            targetGroupArns.includes(action.TargetGroupArn)
+                        )
+                    );
                     for (const rule of rulesToDelete) {
-                        const maxRetries = 5;
-                        let retryCount = 0;
-                        while (retryCount < maxRetries) {
-                            try {
-                                await elbv2Client.send(new DeleteRuleCommand({
-                                    RuleArn: rule.RuleArn
-                                }));
-                                break;
-                            } catch (error) {
-                                if ((error.name === "OperationNotPermittedException" || error.name === "ResourceInUseException") && retryCount < maxRetries - 1) {
-                                    await new Promise(resolve => setTimeout(resolve, 15000 * (retryCount + 1)));
-                                    retryCount++;
-                                } else {
-                                    break;
-                                }
-                            }
+                        try {
+                            await Promise.race([
+                                elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn })),
+                                timeout(timeoutMs)
+                            ]);
+                        } catch (error) {
+                            warnings.push(`Failed to delete ELB rule ${rule.RuleArn}: ${error.message}`);
                         }
                     }
-                    await new Promise(resolve => setTimeout(resolve, 15000));
-                } catch (error) { }
-            } else { }
-
+                } catch (error) {
+                    warnings.push(`Failed to process ELB rules: ${error.message}`);
+                }
+            }
+    
             try {
-                const servicesResp = await ecsClient.send(new ListServicesCommand({
-                    cluster: "stackforge-cluster"
-                }));
+                const servicesResp = await Promise.race([
+                    ecsClient.send(new ListServicesCommand({ cluster: "stackforge-cluster" })),
+                    timeout(timeoutMs)
+                ]);
                 const servicesToDelete = servicesResp.serviceArns.filter(arn =>
                     arn.toLowerCase().includes(projectName.toLowerCase())
                 );
                 for (const serviceArn of servicesToDelete) {
                     const serviceName = serviceArn.split('/').pop();
                     try {
-                        await ecsClient.send(new UpdateServiceCommand({
-                            cluster: "stackforge-cluster",
-                            service: serviceName,
-                            desiredCount: 0
-                        }));
-                        let tasksRunning = true;
-                        let retries = 10;
-                        while (tasksRunning && retries > 0) {
-                            const tasksResp = await ecsClient.send(new ListTasksCommand({
+                        await Promise.race([
+                            ecsClient.send(new UpdateServiceCommand({
                                 cluster: "stackforge-cluster",
-                                serviceName
-                            }));
+                                service: serviceName,
+                                desiredCount: 0
+                            })),
+                            timeout(timeoutMs)
+                        ]);
+    
+                        let tasksRunning = true;
+                        let retries = 3;
+                        while (tasksRunning && retries > 0) {
+                            const tasksResp = await Promise.race([
+                                ecsClient.send(new ListTasksCommand({
+                                    cluster: "stackforge-cluster",
+                                    serviceName
+                                })),
+                                timeout(timeoutMs)
+                            ]);
                             if (!tasksResp.taskArns?.length) {
                                 tasksRunning = false;
                             } else {
                                 for (const taskArn of tasksResp.taskArns) {
-                                    await ecsClient.send(new StopTaskCommand({
-                                        cluster: "stackforge-cluster",
-                                        task: taskArn,
-                                        reason: `Stopping task for project ${projectName} deletion`
-                                    }));
+                                    try {
+                                        await Promise.race([
+                                            ecsClient.send(new StopTaskCommand({
+                                                cluster: "stackforge-cluster",
+                                                task: taskArn,
+                                                reason: `Stopping task for project ${projectName} deletion`
+                                            })),
+                                            timeout(timeoutMs)
+                                        ]);
+                                    } catch (taskError) {
+                                        warnings.push(`Failed to stop ECS task ${taskArn}: ${taskError.message}`);
+                                    }
                                 }
-                                await new Promise(resolve => setTimeout(resolve, 10000));
+                                await new Promise(resolve => setTimeout(resolve, 5000));
                                 retries--;
                             }
                         }
-
-                        await ecsClient.send(new DeleteServiceCommand({
-                            cluster: "stackforge-cluster",
-                            service: serviceName,
-                            force: true
-                        }));
-
-                        const taskDefsResp = await ecsClient.send(new ListTaskDefinitionsCommand({
-                            familyPrefix: serviceName
-                        }));
-                        for (const taskDefArn of taskDefsResp.taskDefinitionArns || []) {
-                            await ecsClient.send(new DeregisterTaskDefinitionCommand({
-                                taskDefinition: taskDefArn
-                            }));
+                        if (tasksRunning) {
+                            warnings.push(`Tasks still running for ECS service ${serviceName}`);
                         }
-                    } catch (error) { }
+    
+                        await Promise.race([
+                            ecsClient.send(new DeleteServiceCommand({
+                                cluster: "stackforge-cluster",
+                                service: serviceName,
+                                force: true
+                            })),
+                            timeout(timeoutMs)
+                        ]);
+    
+                        const taskDefsResp = await Promise.race([
+                            ecsClient.send(new ListTaskDefinitionsCommand({ familyPrefix: serviceName })),
+                            timeout(timeoutMs)
+                        ]);
+                        for (const taskDefArn of taskDefsResp.taskDefinitionArns || []) {
+                            await Promise.race([
+                                ecsClient.send(new DeregisterTaskDefinitionCommand({ taskDefinition: taskDefArn })),
+                                timeout(timeoutMs)
+                            ]);
+                        }
+                    } catch (error) {
+                        warnings.push(`Failed to delete ECS service ${serviceName}: ${error.message}`);
+                    }
                 }
-            } catch (error) { }
-
+            } catch (error) {
+                warnings.push(`Failed to process ECS services: ${error.message}`);
+            }
+    
             try {
-                const reposResp = await ecrClient.send(new DescribeRepositoriesCommand({}));
+                const reposResp = await Promise.race([
+                    ecrClient.send(new DescribeRepositoriesCommand({})),
+                    timeout(timeoutMs)
+                ]);
                 const reposToDelete = reposResp.repositories.filter(repo =>
                     repo.repositoryName.toLowerCase().includes(projectName.toLowerCase())
                 );
                 for (const repo of reposToDelete) {
                     try {
-                        await ecrClient.send(new DeleteRepositoryCommand({
-                            repositoryName: repo.repositoryName,
-                            force: true
-                        }));
-                    } catch (error) { }
+                        await Promise.race([
+                            ecrClient.send(new DeleteRepositoryCommand({
+                                repositoryName: repo.repositoryName,
+                                force: true
+                            })),
+                            timeout(timeoutMs)
+                        ]);
+                    } catch (error) {
+                        warnings.push(`Failed to delete ECR repository ${repo.repositoryName}: ${error.message}`);
+                    }
                 }
-            } catch (error) { }
-
+            } catch (error) {
+                warnings.push(`Failed to list ECR repositories: ${error.message}`);
+            }
+    
             const changes = [];
             for (const domain of domainsToClean) {
                 const recordName = domain.endsWith(".") ? domain : `${domain}.`;
                 try {
-                    const listResp = await route53Client.send(new ListResourceRecordSetsCommand({
-                        HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
-                        StartRecordName: recordName,
-                        MaxItems: "10"
-                    }));
+                    const listResp = await Promise.race([
+                        route53Client.send(new ListResourceRecordSetsCommand({
+                            HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+                            StartRecordName: recordName,
+                            MaxItems: "10"
+                        })),
+                        timeout(timeoutMs)
+                    ]);
                     const records = listResp.ResourceRecordSets.filter(r =>
                         r.Name === recordName &&
                         ["A", "CNAME", "MX", "AAAA"].includes(r.Type)
@@ -3165,56 +3231,83 @@ class DeployManager {
                             ResourceRecordSet: record
                         });
                     }
-                } catch (error) { }
+                } catch (error) {
+                    warnings.push(`Failed to list Route53 records for ${recordName}: ${error.message}`);
+                }
             }
             if (changes.length > 0) {
                 try {
-                    await route53Client.send(new ChangeResourceRecordSetsCommand({
-                        HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
-                        ChangeBatch: { Changes: changes }
-                    }));
-                } catch (error) { }
+                    await Promise.race([
+                        route53Client.send(new ChangeResourceRecordSetsCommand({
+                            HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+                            ChangeBatch: { Changes: changes }
+                        })),
+                        timeout(timeoutMs)
+                    ]);
+                } catch (error) {
+                    warnings.push(`Failed to delete Route53 records: ${error.message}`);
+                }
             }
-
-            let targetGroupArns = domains
-                .map(d => d.targetGroupArn)
-                .filter(arn => arn && arn.match(/:targetgroup\/[a-zA-Z0-9-]+\/[a-f0-9]+$/));
-            try {
-                const tgResp = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
-                targetGroupArns.push(...tgResp.TargetGroups
-                    .filter(tg => tg.TargetGroupName.toLowerCase().includes(projectName.toLowerCase()))
-                    .map(tg => tg.TargetGroupArn)
-                );
-                targetGroupArns = [...new Set(targetGroupArns)];
-            } catch (error) { }
-
+    
             for (const tgArn of targetGroupArns) {
                 try {
-                    const maxRetries = 5;
+                    const maxRetries = 3;
                     let retryCount = 0;
                     while (retryCount < maxRetries) {
                         try {
-                            await elbv2Client.send(new DeleteTargetGroupCommand({ TargetGroupArn: tgArn }));
+                            await Promise.race([
+                                elbv2Client.send(new DeleteTargetGroupCommand({ TargetGroupArn: tgArn })),
+                                timeout(timeoutMs)
+                            ]);
                             break;
                         } catch (error) {
                             if (error.name === "ResourceInUseException" && retryCount < maxRetries - 1) {
-                                await new Promise(resolve => setTimeout(resolve, 15000 * (retryCount + 1)));
+                                const listenersResp = await Promise.race([
+                                    elbv2Client.send(new DescribeListenersCommand({})),
+                                    timeout(timeoutMs)
+                                ]);
+                                for (const listener of listenersResp.Listeners || []) {
+                                    const rulesResp = await Promise.race([
+                                        elbv2Client.send(new DescribeRulesCommand({ ListenerArn: listener.ListenerArn })),
+                                        timeout(timeoutMs)
+                                    ]);
+                                    const rulesUsingTg = rulesResp.Rules.filter(rule =>
+                                        rule.Actions.some(action => action.TargetGroupArn === tgArn)
+                                    );
+                                    for (const rule of rulesUsingTg) {
+                                        try {
+                                            await Promise.race([
+                                                elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn })),
+                                                timeout(timeoutMs)
+                                            ]);
+                                        } catch (ruleError) {
+                                            warnings.push(`Failed to delete rule ${rule.RuleArn} for target group ${tgArn}: ${ruleError.message}`);
+                                        }
+                                    }
+                                }
+                                await new Promise(resolve => setTimeout(resolve, 5000));
                                 retryCount++;
                             } else {
+                                warnings.push(`Failed to delete target group ${tgArn}: ${error.message}`);
                                 break;
                             }
                         }
                     }
-                } catch (error) { }
+                } catch (error) {
+                    warnings.push(`Failed to process target group ${tgArn}: ${error.message}`);
+                }
             }
-
+    
             const certificateArns = [...new Set(domains
                 .map(d => d.certificateArn)
                 .filter(arn => arn))];
             try {
-                const certList = await acmClient.send(new ListCertificatesCommand({
-                    CertificateStatuses: ["ISSUED", "PENDING_VALIDATION"]
-                }));
+                const certList = await Promise.race([
+                    acmClient.send(new ListCertificatesCommand({
+                        CertificateStatuses: ["ISSUED", "PENDING_VALIDATION"]
+                    })),
+                    timeout(timeoutMs)
+                ]);
                 for (const cert of certList.CertificateSummaryList || []) {
                     const domainLower = cert.DomainName.toLowerCase();
                     if (domainLower.includes(projectName.toLowerCase()) ||
@@ -3223,118 +3316,168 @@ class DeployManager {
                         certificateArns.push(cert.CertificateArn);
                     }
                 }
-            } catch (error) { }
-
+            } catch (error) {
+                warnings.push(`Failed to list ACM certificates: ${error.message}`);
+            }
+    
             for (const certArn of certificateArns) {
                 try {
-                    const maxDetachRetries = 15;
+                    const maxDetachRetries = 2;
                     let detachRetryCount = 0;
                     let isDetached = false;
                     while (detachRetryCount < maxDetachRetries && !isDetached) {
-                        const listenersResp = await elbv2Client.send(new DescribeListenersCommand({
-                            LoadBalancerArn: process.env.LOAD_BALANCER_ARN
-                        }));
+                        const lbsResp = await Promise.race([
+                            elbv2Client.send(new DescribeLoadBalancersCommand({})),
+                            timeout(timeoutMs)
+                        ]);
                         let foundCert = false;
-                        for (const listener of listenersResp.Listeners || []) {
-                            const certsResp = await elbv2Client.send(new DescribeListenerCertificatesCommand({
-                                ListenerArn: listener.ListenerArn
-                            }));
-                            if (certsResp.Certificates?.some(c => c.CertificateArn === certArn)) {
-                                foundCert = true;
-                                try {
-                                    await elbv2Client.send(new RemoveListenerCertificatesCommand({
-                                        ListenerArn: listener.ListenerArn,
-                                        Certificates: [{ CertificateArn: certArn }]
-                                    }));
-                                } catch (error) { }
+                        for (const lb of lbsResp.LoadBalancers || []) {
+                            const listenersResp = await Promise.race([
+                                elbv2Client.send(new DescribeListenersCommand({ LoadBalancerArn: lb.LoadBalancerArn })),
+                                timeout(timeoutMs)
+                            ]);
+                            for (const listener of listenersResp.Listeners || []) {
+                                const certsResp = await Promise.race([
+                                    elbv2Client.send(new DescribeListenerCertificatesCommand({ ListenerArn: listener.ListenerArn })),
+                                    timeout(timeoutMs)
+                                ]);
+                                if (certsResp.Certificates?.some(c => c.CertificateArn === certArn)) {
+                                    foundCert = true;
+                                    try {
+                                        await Promise.race([
+                                            elbv2Client.send(new RemoveListenerCertificatesCommand({
+                                                ListenerArn: listener.ListenerArn,
+                                                Certificates: [{ CertificateArn: certArn }]
+                                            })),
+                                            timeout(timeoutMs)
+                                        ]);
+                                    } catch (error) {
+                                        warnings.push(`Failed to remove certificate ${certArn} from listener: ${error.message}`);
+                                    }
+                                }
                             }
                         }
                         isDetached = !foundCert;
                         if (!isDetached) {
-                            await new Promise(resolve => setTimeout(resolve, 20000));
+                            await new Promise(resolve => setTimeout(resolve, 5000));
                             detachRetryCount++;
                         }
                     }
-
-                    const distributions = await cloudFrontClient.send(new ListDistributionsCommand({}));
+    
+                    const distributions = await Promise.race([
+                        cloudFrontClient.send(new ListDistributionsCommand({})),
+                        timeout(timeoutMs)
+                    ]);
                     let distributionAttached = false;
                     for (const dist of distributions.DistributionList?.Items || []) {
                         if (dist.ViewerCertificate?.ACMCertificateArn === certArn) {
                             distributionAttached = true;
                             try {
-                                const distConfig = await cloudFrontClient.send(new GetDistributionConfigCommand({
-                                    ID: dist.Id
-                                }));
-                                await cloudFrontClient.send(new UpdateDistributionCommand({
-                                    ID: dist.Id,
-                                    IfMatch: distConfig.ETag,
-                                    DistributionConfig: {
-                                        ...distConfig.DistributionConfig,
-                                        ViewerCertificate: {
-                                            CloudFrontDefaultCertificate: true,
-                                            MinimumProtocolVersion: "TLSv1"
+                                const distConfig = await Promise.race([
+                                    cloudFrontClient.send(new GetDistributionConfigCommand({ Id: dist.Id })),
+                                    timeout(timeoutMs)
+                                ]);
+                                await Promise.race([
+                                    cloudFrontClient.send(new UpdateDistributionCommand({
+                                        Id: dist.Id,
+                                        IfMatch: distConfig.ETag,
+                                        DistributionConfig: {
+                                            ...distConfig.DistributionConfig,
+                                            ViewerCertificate: {
+                                                CloudFrontDefaultCertificate: true,
+                                                MinimumProtocolVersion: "TLSv1"
+                                            }
                                         }
-                                    }
-                                }));
-                                await new Promise(resolve => setTimeout(resolve, 60000));
-                            } catch (error) { }
+                                    })),
+                                    timeout(timeoutMs)
+                                ]);
+                                await new Promise(resolve => setTimeout(resolve, 5000));
+                            } catch (error) {
+                                warnings.push(`Failed to update CloudFront distribution ${dist.Id}: ${error.message}`);
+                            }
                         }
                     }
-
+    
                     if (!distributionAttached && isDetached) {
-                        const maxRetries = 15;
+                        const maxRetries = 2;
                         let retryCount = 0;
                         while (retryCount < maxRetries) {
                             try {
-                                const certInfo = await acmClient.send(new DescribeCertificateCommand({
-                                    CertificateArn: certArn
-                                }));
+                                const certInfo = await Promise.race([
+                                    acmClient.send(new DescribeCertificateCommand({ CertificateArn: certArn })),
+                                    timeout(timeoutMs)
+                                ]);
                                 if (certInfo.Certificate.InUseBy?.length > 0) {
+                                    warnings.push(`Certificate ${certArn} still in use by: ${certInfo.Certificate.InUseBy.join(', ')}`);
                                     break;
                                 }
-                                await acmClient.send(new DeleteCertificateCommand({
-                                    CertificateArn: certArn
-                                }));
+                                await Promise.race([
+                                    acmClient.send(new DeleteCertificateCommand({ CertificateArn: certArn })),
+                                    timeout(timeoutMs)
+                                ]);
                                 break;
                             } catch (error) {
                                 if (error.name === "ResourceInUseException" && retryCount < maxRetries - 1) {
-                                    await new Promise(resolve => setTimeout(resolve, 20000 * (retryCount + 1)));
+                                    await new Promise(resolve => setTimeout(resolve, 5000));
                                     retryCount++;
                                 } else {
+                                    warnings.push(`Failed to delete ACM certificate ${certArn}: ${error.message}`);
                                     break;
                                 }
                             }
                         }
+                    } else {
+                        warnings.push(`Certificate ${certArn} not deleted due to attachments`);
                     }
-                } catch (error) { }
+                } catch (error) {
+                    warnings.push(`Failed to process ACM certificate ${certArn}: ${error.message}`);
+                }
             }
-
+    
             try {
-                const listProjectsResp = await codeBuildClient.send(new ListProjectsCommand({}));
-                const projectsToDelete = listProjectsResp.projects.filter(p =>
+                const projectsResp = await Promise.race([
+                    codeBuildClient.send(new ListProjectsCommand({})),
+                    timeout(timeoutMs)
+                ]);
+                const projectsToDelete = projectsResp.projects.filter(p =>
                     p.toLowerCase().includes(projectName.toLowerCase())
                 );
                 for (const project of projectsToDelete) {
                     try {
-                        await codeBuildClient.send(new DeleteProjectCommand({ name: project }));
-                    } catch (error) { }
+                        await Promise.race([
+                            codeBuildClient.send(new DeleteProjectCommand({ name: project })),
+                            timeout(timeoutMs)
+                        ]);
+                    } catch (error) {
+                        warnings.push(`Failed to delete CodeBuild project ${project}: ${error.message}`);
+                    }
                 }
-            } catch (error) { }
-
+            } catch (error) {
+                warnings.push(`Failed to list CodeBuild projects: ${error.message}`);
+            }
+    
             try {
-                const logGroupsResp = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({}));
+                const logGroupsResp = await Promise.race([
+                    cloudWatchLogsClient.send(new DescribeLogGroupsCommand({})),
+                    timeout(timeoutMs)
+                ]);
                 const logGroupsToDelete = logGroupsResp.logGroups.filter(group =>
                     group.logGroupName.toLowerCase().includes(projectName.toLowerCase())
                 );
                 for (const logGroup of logGroupsToDelete) {
                     try {
-                        await cloudWatchLogsClient.send(new DeleteLogGroupCommand({
-                            logGroupName: group.logGroupName
-                        }));
-                    } catch (error) { }
+                        await Promise.race([
+                            cloudWatchLogsClient.send(new DeleteLogGroupCommand({ logGroupName: logGroup.logGroupName })),
+                            timeout(timeoutMs)
+                        ]);
+                    } catch (error) {
+                        warnings.push(`Failed to delete CloudWatch log group ${logGroup.logGroupName}: ${error.message}`);
+                    }
                 }
-            } catch (error) { }
-
+            } catch (error) {
+                warnings.push(`Failed to list CloudWatch log groups: ${error.message}`);
+            }
+    
             for (const domain of domains.map(d => d.name)) {
                 await client.query("DELETE FROM metrics_events WHERE domain = $1", [domain]);
                 await client.query("DELETE FROM metrics_daily WHERE domain = $1", [domain]);
@@ -3355,23 +3498,30 @@ class DeployManager {
                 "DELETE FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
                 [projectID, organizationID, userID]
             );
-
+    
             await client.query(
                 `INSERT INTO deployment_logs (orgid, username, project_id, project_name, action, timestamp, ip_address) 
                  VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [organizationID, userID, projectID, projectName, "delete", timestamp, "127.0.0.1"]
             );
-
+    
             await client.query("COMMIT");
-            return { message: `Project ${projectName} and all associated resources deleted successfully.` };
+            return {
+                message: `Project ${projectName} deleted successfully.`,
+                warnings: warnings.length > 0 ? warnings.join('; ') : undefined
+            };
         } catch (error) {
-            if (client) await client.query("ROLLBACK");
-            throw new Error(`Failed to delete project: ${error.message}`);
+            if (client) {
+                await client.query("ROLLBACK");
+            }
+            throw new Error(`Failed to delete project: ${error.message}${warnings.length > 0 ? `; Warnings: ${warnings.join('; ')}` : ''}`);
         } finally {
-            if (client) client.release();
+            if (client) {
+                client.release();
+            }
         }
     }
-
+    
     async cleanupFailedDeployment({ organizationID, userID, projectID, projectName, domainName, deploymentID, domainID, certificateArn, targetGroupArn }) {
         const timestamp = new Date().toISOString();
         const acmClient = new ACMClient({ region: process.env.AWS_REGION });
@@ -3382,301 +3532,442 @@ class DeployManager {
         const ecrClient = new ECRClient({ region: process.env.AWS_REGION });
         const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
         const cloudFrontClient = new CloudFrontClient({ region: process.env.AWS_REGION });
-
+    
         let client;
+        const errors = [];
+        const warnings = [];
+    
+        const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), ms));
+        const timeoutMs = 60000;
+    
+        if (!process.env.AWS_REGION) errors.push('AWS_REGION is not set');
+        if (!process.env.ROUTE53_HOSTED_ZONE_ID) errors.push('ROUTE53_HOSTED_ZONE_ID is not set');
+        if (errors.length > 0) {
+            throw new Error(`Environment variable validation failed: ${errors.join('; ')}`);
+        }
+    
         try {
             client = await pool.connect();
             await client.query("BEGIN");
-
+    
+            let targetGroupArns = [targetGroupArn].filter(arn => arn && arn.match(/:targetgroup\/[a-zA-Z0-9-]+\/[a-f0-9]+$/));
+            try {
+                const tgResp = await Promise.race([
+                    elbv2Client.send(new DescribeTargetGroupsCommand({})),
+                    timeout(timeoutMs)
+                ]);
+                targetGroupArns.push(...tgResp.TargetGroups
+                    .filter(tg => tg.TargetGroupName.toLowerCase().includes(projectName.toLowerCase()))
+                    .map(tg => tg.TargetGroupArn)
+                );
+                targetGroupArns = [...new Set(targetGroupArns)];
+            } catch (error) {
+                warnings.push(`Failed to list target groups: ${error.message}`);
+            }
+    
             const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
             if (listenerArn) {
                 try {
-                    const rulesResp = await elbv2Client.send(new DescribeRulesCommand({
-                        ListenerArn: listenerArn
-                    }));
-                    const rulesToDelete = rulesResp.Rules.filter(rule => !rule.IsDefault);
+                    const rulesResp = await Promise.race([
+                        elbv2Client.send(new DescribeRulesCommand({ ListenerArn: listenerArn })),
+                        timeout(timeoutMs)
+                    ]);
+                    const rulesToDelete = rulesResp.Rules.filter(rule =>
+                        !rule.IsDefault && rule.Actions.some(action =>
+                            targetGroupArns.includes(action.TargetGroupArn)
+                        )
+                    );
                     for (const rule of rulesToDelete) {
-                        const maxRetries = 5;
-                        let retryCount = 0;
-                        while (retryCount < maxRetries) {
-                            try {
-                                await elbv2Client.send(new DeleteRuleCommand({
-                                    RuleArn: rule.RuleArn
-                                }));
-                                break;
-                            } catch (error) {
-                                if ((error.name === "OperationNotPermittedException" || error.name === "ResourceInUseException") && retryCount < maxRetries - 1) {
-                                    await new Promise(resolve => setTimeout(resolve, 15000 * (retryCount + 1)));
-                                    retryCount++;
-                                } else {
-                                    break;
-                                }
-                            }
+                        try {
+                            await Promise.race([
+                                elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn })),
+                                timeout(timeoutMs)
+                            ]);
+                        } catch (error) {
+                            warnings.push(`Failed to delete ELB rule ${rule.RuleArn}: ${error.message}`);
                         }
                     }
-                    await new Promise(resolve => setTimeout(resolve, 15000));
-                } catch (error) { }
-            } else { }
-
+                } catch (error) {
+                    warnings.push(`Failed to process ELB rules: ${error.message}`);
+                }
+            }
+    
             try {
-                const servicesResp = await ecsClient.send(new ListServicesCommand({
-                    cluster: "stackforge-cluster"
-                }));
+                const servicesResp = await Promise.race([
+                    ecsClient.send(new ListServicesCommand({ cluster: "stackforge-cluster" })),
+                    timeout(timeoutMs)
+                ]);
                 const servicesToDelete = servicesResp.serviceArns.filter(arn =>
-                    arn.includes(projectName)
+                    arn.toLowerCase().includes(projectName.toLowerCase())
                 );
                 for (const serviceArn of servicesToDelete) {
                     const serviceName = serviceArn.split('/').pop();
                     try {
-                        await ecsClient.send(new UpdateServiceCommand({
-                            cluster: "stackforge-cluster",
-                            service: serviceName,
-                            desiredCount: 0
-                        }));
-                        let tasksRunning = true;
-                        let retries = 10;
-                        while (tasksRunning && retries > 0) {
-                            const tasksResp = await ecsClient.send(new ListTasksCommand({
+                        await Promise.race([
+                            ecsClient.send(new UpdateServiceCommand({
                                 cluster: "stackforge-cluster",
-                                serviceName
-                            }));
+                                service: serviceName,
+                                desiredCount: 0
+                            })),
+                            timeout(timeoutMs)
+                        ]);
+    
+                        let tasksRunning = true;
+                        let retries = 3;
+                        while (tasksRunning && retries > 0) {
+                            const tasksResp = await Promise.race([
+                                ecsClient.send(new ListTasksCommand({
+                                    cluster: "stackforge-cluster",
+                                    serviceName
+                                })),
+                                timeout(timeoutMs)
+                            ]);
                             if (!tasksResp.taskArns?.length) {
                                 tasksRunning = false;
                             } else {
                                 for (const taskArn of tasksResp.taskArns) {
-                                    await ecsClient.send(new StopTaskCommand({
-                                        cluster: "stackforge-cluster",
-                                        task: taskArn,
-                                        reason: `Stopping task for failed deployment ${deploymentID}`
-                                    }));
+                                    try {
+                                        await Promise.race([
+                                            ecsClient.send(new StopTaskCommand({
+                                                cluster: "stackforge-cluster",
+                                                task: taskArn,
+                                                reason: `Stopping task for failed deployment ${deploymentID}`
+                                            })),
+                                            timeout(timeoutMs)
+                                        ]);
+                                    } catch (taskError) {
+                                        warnings.push(`Failed to stop ECS task ${taskArn}: ${taskError.message}`);
+                                    }
                                 }
-                                await new Promise(resolve => setTimeout(resolve, 10000));
+                                await new Promise(resolve => setTimeout(resolve, 5000));
                                 retries--;
                             }
                         }
-                        if (tasksRunning) { }
-
-                        await ecsClient.send(new DeleteServiceCommand({
-                            cluster: "stackforge-cluster",
-                            service: serviceName,
-                            force: true
-                        }));
-
-                        const taskDefsResp = await ecsClient.send(new ListTaskDefinitionsCommand({
-                            familyPrefix: serviceName
-                        }));
-                        for (const taskDefArn of taskDefsResp.taskDefinitionArns) {
-                            await ecsClient.send(new DeregisterTaskDefinitionCommand({
-                                taskDefinition: taskDefArn
-                            }));
+                        if (tasksRunning) {
+                            warnings.push(`Tasks still running for ECS service ${serviceName}`);
                         }
-                    } catch (error) { }
+    
+                        await Promise.race([
+                            ecsClient.send(new DeleteServiceCommand({
+                                cluster: "stackforge-cluster",
+                                service: serviceName,
+                                force: true
+                            })),
+                            timeout(timeoutMs)
+                        ]);
+    
+                        const taskDefsResp = await Promise.race([
+                            ecsClient.send(new ListTaskDefinitionsCommand({ familyPrefix: serviceName })),
+                            timeout(timeoutMs)
+                        ]);
+                        for (const taskDefArn of taskDefsResp.taskDefinitionArns || []) {
+                            await Promise.race([
+                                ecsClient.send(new DeregisterTaskDefinitionCommand({ taskDefinition: taskDefArn })),
+                                timeout(timeoutMs)
+                            ]);
+                        }
+                    } catch (error) {
+                        warnings.push(`Failed to delete ECS service ${serviceName}: ${error.message}`);
+                    }
                 }
-            } catch (error) { }
-
+            } catch (error) {
+                warnings.push(`Failed to process ECS services: ${error.message}`);
+            }
+    
             const domainFqdn = domainName.includes('.') ? domainName : `${domainName}.stackforgeengine.com`;
             const recordName = domainFqdn.endsWith(".") ? domainFqdn : `${domainFqdn}.`;
             try {
-                const listResp = await route53Client.send(new ListResourceRecordSetsCommand({
-                    HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
-                    StartRecordName: recordName,
-                    MaxItems: "10"
-                }));
+                const listResp = await Promise.race([
+                    route53Client.send(new ListResourceRecordSetsCommand({
+                        HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+                        StartRecordName: recordName,
+                        MaxItems: "10"
+                    })),
+                    timeout(timeoutMs)
+                ]);
                 const records = listResp.ResourceRecordSets.filter(r =>
                     r.Name === recordName &&
                     ["A", "CNAME", "MX", "AAAA"].includes(r.Type)
                 );
                 if (records.length > 0) {
-                    await route53Client.send(new ChangeResourceRecordSetsCommand({
-                        HostedZoneID: process.env.ROUTE53_HOSTED_ZONE_ID,
-                        ChangeBatch: {
-                            Changes: records.map(record => ({
-                                Action: "DELETE",
-                                ResourceRecordSet: record
-                            }))
-                        }
-                    }));
+                    await Promise.race([
+                        route53Client.send(new ChangeResourceRecordSetsCommand({
+                            HostedZoneId: process.env.ROUTE53_HOSTED_ZONE_ID,
+                            ChangeBatch: {
+                                Changes: records.map(record => ({
+                                    Action: "DELETE",
+                                    ResourceRecordSet: record
+                                }))
+                            }
+                        })),
+                        timeout(timeoutMs)
+                    ]);
                 }
-            } catch (error) { }
-
-            let targetGroupArns = [targetGroupArn].filter(arn => arn && arn.match(/:targetgroup\/[a-zA-Z0-9-]+\/[a-f0-9]+$/));
-            try {
-                const tgResp = await elbv2Client.send(new DescribeTargetGroupsCommand({}));
-                targetGroupArns.push(...tgResp.TargetGroups
-                    .filter(tg => tg.TargetGroupName.includes(projectName))
-                    .map(tg => tg.TargetGroupArn)
-                );
-                targetGroupArns = [...new Set(targetGroupArns)];
-            } catch (error) { }
-
+            } catch (error) {
+                warnings.push(`Failed to process Route53 records for ${recordName}: ${error.message}`);
+            }
+    
             for (const tgArn of targetGroupArns) {
                 try {
-                    const maxRetries = 5;
+                    const maxRetries = 3;
                     let retryCount = 0;
                     while (retryCount < maxRetries) {
                         try {
-                            await elbv2Client.send(new DeleteTargetGroupCommand({ TargetGroupArn: tgArn }));
+                            await Promise.race([
+                                elbv2Client.send(new DeleteTargetGroupCommand({ TargetGroupArn: tgArn })),
+                                timeout(timeoutMs)
+                            ]);
                             break;
                         } catch (error) {
                             if (error.name === "ResourceInUseException" && retryCount < maxRetries - 1) {
-                                await new Promise(resolve => setTimeout(resolve, 15000 * (retryCount + 1)));
+                                const listenersResp = await Promise.race([
+                                    elbv2Client.send(new DescribeListenersCommand({})),
+                                    timeout(timeoutMs)
+                                ]);
+                                for (const listener of listenersResp.Listeners || []) {
+                                    const rulesResp = await Promise.race([
+                                        elbv2Client.send(new DescribeRulesCommand({ ListenerArn: listener.ListenerArn })),
+                                        timeout(timeoutMs)
+                                    ]);
+                                    const rulesUsingTg = rulesResp.Rules.filter(rule =>
+                                        rule.Actions.some(action => action.TargetGroupArn === tgArn)
+                                    );
+                                    for (const rule of rulesUsingTg) {
+                                        try {
+                                            await Promise.race([
+                                                elbv2Client.send(new DeleteRuleCommand({ RuleArn: rule.RuleArn })),
+                                                timeout(timeoutMs)
+                                            ]);
+                                        } catch (ruleError) {
+                                            warnings.push(`Failed to delete rule ${rule.RuleArn} for target group ${tgArn}: ${ruleError.message}`);
+                                        }
+                                    }
+                                }
+                                await new Promise(resolve => setTimeout(resolve, 5000));
                                 retryCount++;
                             } else {
+                                warnings.push(`Failed to delete target group ${tgArn}: ${error.message}`);
                                 break;
                             }
                         }
                     }
-                } catch (error) { }
+                } catch (error) {
+                    warnings.push(`Failed to process target group ${tgArn}: ${error.message}`);
+                }
             }
-
+    
             const certificateArns = [certificateArn].filter(arn => arn);
             try {
-                const certList = await acmClient.send(new ListCertificatesCommand({
-                    CertificateStatuses: ["ISSUED", "PENDING_VALIDATION"]
-                }));
+                const certList = await Promise.race([
+                    acmClient.send(new ListCertificatesCommand({
+                        CertificateStatuses: ["ISSUED", "PENDING_VALIDATION"]
+                    })),
+                    timeout(timeoutMs)
+                ]);
                 for (const cert of certList.CertificateSummaryList || []) {
                     const domainLower = cert.DomainName.toLowerCase();
-                    if (domainLower.includes(projectName) ||
+                    if (domainLower.includes(projectName.toLowerCase()) ||
                         domainLower === `${projectName.toLowerCase()}.stackforgeengine.com` ||
                         domainLower === `*.${projectName.toLowerCase()}.stackforgeengine.com`) {
                         certificateArns.push(cert.CertificateArn);
                     }
                 }
-            } catch (error) { }
-
+            } catch (error) {
+                warnings.push(`Failed to list ACM certificates: ${error.message}`);
+            }
+    
             for (const certArn of certificateArns) {
                 try {
-                    const maxDetachRetries = 15;
-                    let detachRetryCount = 0;
-                    let isDetached = false;
-                    while (detachRetryCount < maxDetachRetries && !isDetached) {
-                        const listenersResp = await elbv2Client.send(new DescribeListenersCommand({
-                            LoadBalancerArn: process.env.LOAD_BALANCER_ARN
-                        }));
+                    const maxDetachRetries = 2;
+                    let detachRetry = 0;
+                    let isDetached = true;
+                    while (detachRetry < maxDetachRetries && !isDetached) {
+                        const lbsResp = await Promise.race([
+                            elbv2Client.send(new DescribeLoadBalancers({})),
+                            [],
+                            timeout(timeoutMs)
+                        ]);
                         let foundCert = false;
-                        for (const listener of listenersResp.Listeners || []) {
-                            const certsResp = await elbv2Client.send(new DescribeListenerCertificatesCommand({
-                                ListenerArn: listener.ListenerArn
-                            }));
-                            if (certsResp.Certificates?.some(c => c.CertificateArn === certArn)) {
-                                foundCert = true;
-                                try {
-                                    await elbv2Client.send(new RemoveListenerCertificatesCommand({
-                                        ListenerArn: listener.ListenerArn,
-                                        Certificates: [{ CertificateArn: certArn }]
-                                    }));
-                                } catch (error) { }
+                        for (const lb of lbsResp.LoadBalancers || []) {
+                            const listenersResp = await Promise.race([
+                                elbv2Client.send(new DescribeListeners({ LoadBalancerArn: lb.LoadBalancerArn })),
+                                [],
+                                timeout(timeoutMs)
+                            ]);
+                            for (const listener of listenersResp.Listeners || []) {
+                                const certsResp = await Promise.race([
+                                    elbv2Client.send(new DescribeListenerCertificates({ ListenerArn: listener.ListenerArn })),
+                                    { Certificates: [] },
+                                    timeout(timeoutMs)
+                                ]);
+                                if (certsResp.Certificates?.some(c => c.CertificateArn === certArn)) {
+                                    foundCert = true;
+                                    try {
+                                        await Promise.race([
+                                            elbv2Client.send(new RemoveListenerCertificatesCommand({
+                                                ListenerArn: listener.ListenerArn,
+                                                Certificates: [{ CertificateArn: certArn }]
+                                            })),
+                                            timeout(timeoutMs)
+                                        ]);
+                                    } catch (error) {
+                                        warnings.push(`Failed to remove certificate ${certArn} from listener: ${error.message}`);
+                                    }
+                                }
                             }
                         }
                         isDetached = !foundCert;
                         if (!isDetached) {
-                            await new Promise(resolve => setTimeout(resolve, 20000));
-                            detachRetryCount++;
+                            await new Promise(resolve => setTimeout(resolve, 0));
+                            detachRetry++;
                         }
                     }
-
-                    const distributions = await cloudFrontClient.send(new ListDistributionsCommand({}));
+    
+                    const distributions = await Promise.race([
+                        cloudFrontClient.send(new ListDistributions({})),
+                        { DistributionList: {} },
+                        timeout(timeoutMs)
+                    ]);
                     let distributionAttached = false;
                     for (const dist of distributions.DistributionList?.Items || []) {
                         if (dist.ViewerCertificate?.ACMCertificateArn === certArn) {
                             distributionAttached = true;
                             try {
-                                const distConfig = await cloudFrontClient.send(new GetDistributionConfigCommand({
-                                    ID: dist.Id
-                                }));
-                                await cloudFrontClient.send(new UpdateDistributionCommand({
-                                    ID: dist.Id,
-                                    IfMatch: distConfig.ETag,
-                                    DistributionConfig: {
-                                        ...distConfig.DistributionConfig,
-                                        ViewerCertificate: {
-                                            CloudFrontDefaultCertificate: true,
-                                            MinimumProtocolVersion: "TLSv1"
+                                const distConfig = await new Promise.race([
+                                    cloudFrontClient.send(new GetDistributionConfig({ Id: dist.Id })),
+                                    {},
+                                    timeout(timeoutMs)
+                                ]);
+                                await Promise.race([
+                                    cloudFrontClient.send(new UpdateDistribution({
+                                        Id: dist.Id,
+                                        IfMatch: distConfig.ETag,
+                                        DistributionConfig: {
+                                            ...distConfig.DistributionConfig,
+                                            ViewerCertificate: {
+                                                CloudFrontDefaultCertificate: true,
+                                            }
                                         }
-                                    }
-                                }));
-                                await new Promise(resolve => setTimeout(resolve, 60000));
-                            } catch (error) { }
+                                    })),
+                                    timeout(timeoutMs)
+                                ]);
+                                await new Promise(resolve => setTimeout(resolve, 0));
+                            } catch (error) {
+                                warnings.push(`Failed to update CloudFront distribution ${dist.Id}: ${error.message}`);
+                            }
                         }
                     }
-
+    
                     if (!distributionAttached && isDetached) {
-                        const maxRetries = 15;
-                        let retryCount = 0;
-                        while (retryCount < maxRetries) {
+                        const maxRetries = 2;
+                        let attempt = 0;
+                        while (attempt < maxRetries) {
                             try {
-                                const certInfo = await acmClient.send(new DescribeCertificateCommand({
-                                    CertificateArn: certArn
-                                }));
+                                const certInfo = await Promise.race([
+                                    acmClient.send(new DescribeCertificateCommand({ CertificateArn: certArn })),
+                                    { Certificate: {} },
+                                    timeout(timeoutMs)
+                                ]);
                                 if (certInfo.Certificate.InUseBy?.length > 0) {
+                                    warnings.push(`Certificate ${certArn} still in use by: ${certInfo.Certificate.InUseBy.join(', ')}`);
                                     break;
                                 }
-                                await acmClient.send(new DeleteCertificateCommand({
-                                    CertificateArn: certArn
-                                }));
+                                await Promise.race([
+                                    acmClient.send(new DeleteCertificateCommand({ CertificateArn: certArn })),
+                                    timeout(timeoutMs)
+                                ]);
                                 break;
                             } catch (error) {
-                                if (error.name === "ResourceInUseException" && retryCount < maxRetries - 1) {
-                                    await new Promise(resolve => setTimeout(resolve, 20000 * (retryCount + 1)));
-                                    retryCount++;
+                                if (error.name === "ResourceInUseException" && attempt < maxRetries - 1) {
+                                    await new Promise(resolve => setTimeout(resolve, 0));
+                                    attempt++;
                                 } else {
+                                    warnings.push(`Failed to delete ACM certificate ${certArn}: ${error.message}`);
                                     break;
                                 }
                             }
                         }
-                    } else { }
-                } catch (error) { }
+                    } else {
+                        warnings.push(`Certificate ${certArn} not deleted due to attachments`);
+                    }
+                } catch (error) {
+                    warnings.push(`Failed to process certificate ${certArn}: ${error.message}`);
+                }
             }
-
+    
             try {
-                const listProjectsResp = await codeBuildClient.send(new ListProjectsCommand({}));
-                const projectsToDelete = listProjectsResp.projects.filter(p =>
-                    p.includes(projectName)
-                );
-                for (const project of projectsToDelete) {
+                const projectsResp = await Promise.race([
+                    codeBuildClient.send(new ListProjects()),
+                    [],
+                    timeout(timeoutMs)
+                ]);
+                const projectsToDelete = projectsResp.projects.filter(p => p.toLowerCase().includes(projectName.toLowerCase()));
+                for (const p of projectsToDelete) {
                     try {
-                        await codeBuildClient.send(new DeleteProjectCommand({ name: project }));
-                    } catch (error) { }
+                        await Promise.race([
+                            codeBuildClient.send(new DeleteProject({ name: p })),
+                            timeout(timeoutMs)
+                        ]);
+                    } catch (error) {
+                        warnings.push(`Failed to delete CodeBuild ${p}: ${error.message}`);
+                    }
                 }
-            } catch (error) { }
-
+            } catch (error) {
+                warnings.push(`Failed to list CodeBuild: ${error.message}`);
+            }
+    
             try {
-                const logGroupsResp = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({}));
-                const logGroupsToDelete = logGroupsResp.logGroups.filter(group =>
-                    group.logGroupName.includes(projectName)
-                );
-                for (const logGroup of logGroupsToDelete) {
+                const logGroupsResp = await Promise.race([
+                    cloudWatchLogsClient.send(new DescribeLogGroups()),
+                    [],
+                    timeout(timeoutMs)
+                ]);
+                const logGroupsToDelete = logGroupsResp.logGroups.filter(g => g.logGroupName.toLowerCase().includes(projectName.toLowerCase()));
+                for (const g of logGroupsToDelete) {
                     try {
-                        await cloudWatchLogsClient.send(new DeleteLogGroupCommand({
-                            logGroupName: group.logGroupName
-                        }));
-                    } catch (error) { }
+                        await Promise.race([
+                            cloudWatchLogsClient.send(new DeleteLogGroup({ logGroupName: g.logGroupName })),
+                            timeout(timeoutMs)
+                        ]);
+                    } catch (error) {
+                        warnings.push(`Failed to delete log group ${g.logGroupName}: ${error.message}`);
+                    }
                 }
-            } catch (error) { }
-
-            await client.query("DELETE FROM metrics_events WHERE domain = $1", [domainFqdn]);
-            await client.query("DELETE FROM metrics_daily WHERE domain = $1", [domainFqdn]);
-            await client.query("DELETE FROM metrics_edge_requests WHERE domain = $1", [domainFqdn]);
+            } catch (error) {
+                warnings.push(`Failed to list log groups: ${error.message}`);
+            }
+    
+            await client.query("DELETE FROM metrics_events WHERE domain = $1", [domainName]);
+            await client.query("DELETE FROM metrics_daily WHERE domain = $1", [domainName]);
+            await client.query("DELETE FROM metrics_edge_requests WHERE domain = $1", [domainName]);
             await client.query("DELETE FROM deployment_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
             await client.query("DELETE FROM build_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
             await client.query("DELETE FROM runtime_logs WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
             await client.query("DELETE FROM deployments WHERE deployment_id = $1 AND orgid = $2", [deploymentID, organizationID]);
             if (domainID) {
-                await client.query("DELETE FROM domains WHERE domain_id = $1 AND orgid = $2", [domainID, organizationID]);
+                await client.query("DELETE FROM domains WHERE id = $1 AND orgid = $2", [domainID, organizationID]);
             }
-
+    
             await client.query(
-                `INSERT INTO deployment_logs (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
+                `INSERT INTO deployment_logs (orgid, username, deployment_id, project_id, project_name, action, timestamp, ip_address)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [organizationID, userID, projectID, projectName, "cleanup_failed", deploymentID, timestamp, "127.0.0.1"]
+                [organizationID, userID, deploymentID, projectID, projectName, "cleanup_failed", timestamp, "127.0.0.1"]
             );
-
+    
             await client.query("COMMIT");
+            return {
+                message: `Cleanup of deployment ${deploymentID} completed successfully.`,
+                warnings: warnings.length > 0 ? warnings.join(", ") : undefined
+            };
         } catch (error) {
-            if (client) await client.query("ROLLBACK");
-            throw new Error(`Cleanup failed: ${error.message}`);
+            if (client) {
+                await client.query("ROLLBACK");
+            }
+            throw new Error(`Cleanup failed: ${error.message}${warnings.length > 0 ? `; Warnings: ${warnings.join(', ')}` : ''}`);
         } finally {
-            if (client) client.release();
+            if (client) {
+                client.release();
+            }
         }
     }
 }
