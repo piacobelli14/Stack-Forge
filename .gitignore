@@ -135,6 +135,13 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# directory to ignore
+# directories to ignore
 StackForgeWebAPI/info
 StackForgeWebAPI/api/.env
+StackForgeProjectTemplates/StackForge-Django-Template/venv
+StackForgeProjectTemplates/StackForge-Flask-Template/venv
+StackForge-Express-Template/node_modules
+StackForge-Next-Template/node_modules
+StackForge-Svelte-Template/node_modules
+StackForge-Vite_React-Template/node_modules
+StackForge-Vite_TypeScript-Template/node_modules
