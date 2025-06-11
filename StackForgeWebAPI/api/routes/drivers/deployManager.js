@@ -637,23 +637,69 @@ class DeployManager {
 
         const containerEnvVars = Array.isArray(envVars)
             ? envVars
-                .filter(envVar => envVar.key && envVar.key.trim() && envVar.value != null)
-                .map(envVar => ({
-                    name: envVar.key.trim(),
-                    value: envVar.value.toString()
-                }))
+                .filter(e => e.key && e.key.trim() && e.value != null)
+                .map(e => ({ name: e.key.trim(), value: e.value.toString() }))
             : [];
 
-        let commandArray = ["node", "api/index.js"];
-        if (runCommand && typeof runCommand === 'string' && runCommand.trim()) {
+        if (!containerEnvVars.some(e => e.name === "PORT")) {
+            containerEnvVars.push({ name: "PORT", value: "3000" });
+        }
+        if (!containerEnvVars.some(e => e.name === "HOST")) {
+            containerEnvVars.push({ name: "HOST", value: "0.0.0.0" });
+        }
+
+        const fqdn = subdomain
+            ? `${subdomain}.stackforgeengine.com`
+            : `${projectName}.stackforgeengine.com`;
+        const allowedKeys = [
+            "VITE_EXTRA_SERVER_ALLOWED_HOSTS",
+            "VITE_SERVER_ALLOWED_HOSTS",
+            "__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS"
+        ];
+        for (const k of allowedKeys) {
+            if (!containerEnvVars.some(e => e.name === k)) {
+                containerEnvVars.push({ name: k, value: fqdn });
+            }
+        }
+
+        let commandArray = ["npx", "serve", "-s", "dist", "-l", "3000"];   // default
+
+        if (runCommand && typeof runCommand === "string" && runCommand.trim()) {
             try {
                 commandArray = JSON.parse(runCommand);
-                if (!Array.isArray(commandArray) || !commandArray.every(c => typeof c === 'string')) {
+                if (!Array.isArray(commandArray) || !commandArray.every(c => typeof c === "string")) {
                     throw new Error("runCommand must be a JSON array of strings.");
                 }
-            } catch (error) {
+            } catch (_) {
                 commandArray = runCommand.trim().split(/\s+/);
             }
+        }
+
+        const joined = commandArray.join(" ");
+        const looksLikeViteDev =
+            /(^|\/)vite(\.js)?(\s|$)/.test(joined) ||
+            /npm\s+run\s+(dev|preview)/.test(joined);
+
+        if (looksLikeViteDev) {
+            commandArray = ["npx", "serve", "-s", "dist", "-l", "3000"];
+        } else {
+            const needsPort = !commandArray.some(c => c === "--port" || c.startsWith("--port="));
+            const needsHost = !commandArray.some(c => c === "--host" || c.startsWith("--host="));
+            const needsAllowed = !commandArray.some(c => c === "--allowedHosts" || c.startsWith("--allowedHosts="));
+
+            const pushArgs = (args) => {
+                if (commandArray[0] === "npm" && commandArray[1] === "run") {
+                    commandArray.push("--", ...args);
+                } else {
+                    commandArray.push(...args);
+                }
+            };
+
+            const extra = [];
+            if (needsPort)    extra.push("--port", "3000");
+            if (needsHost)    extra.push("--host", "0.0.0.0");
+            if (needsAllowed) extra.push("--allowedHosts", fqdn);
+            if (extra.length) pushArgs(extra);
         }
 
         const params = {
@@ -682,12 +728,13 @@ class DeployManager {
                 }
             ]
         };
+
         try {
-            const result = await this.ecs.send(new RegisterTaskDefinitionCommand(params));
-            return result.taskDefinition.taskDefinitionArn;
+            const res = await this.ecs.send(new RegisterTaskDefinitionCommand(params));
+            return res.taskDefinition.taskDefinitionArn;
         } catch (error) {
             if (error.name === "AccessDeniedException") {
-                throw new Error(`IAM permissions error: ${error.message}. Ensure your IAM user or role has 'iam:PassRole' permission on the role ${process.env.ECS_EXECUTION_ROLE}.`);
+                throw new Error(`IAM permissions error: ${error.message}. Ensure 'iam:PassRole' is allowed on ${process.env.ECS_EXECUTION_ROLE}.`);
             }
             throw error;
         }
@@ -748,10 +795,12 @@ class DeployManager {
             if (drainingTargets.length) {
                 await elbClient.send(new DeregisterTargetsCommand({
                     TargetGroupArn: targetGroupArn,
-                    Targets: drainingTargets.map(t => ({
-                        ID: t.Target.Id,
-                        Port: t.Target.Port
-                    }))
+                    Targets: drainingTargets
+                        .filter(t => t.Target.Id)
+                        .map(t => ({
+                            Id: t.Target.Id,
+                            Port: t.Target.Port
+                        }))
                 }));
                 let round = 0;
                 while (true) {
@@ -799,10 +848,12 @@ class DeployManager {
                             await elbClient.send(
                                 new DeregisterTargetsCommand({
                                     TargetGroupArn: targetGroupArn,
-                                    Targets: healthyExtras.map((t) => ({
-                                        ID: t.Target.Id,
-                                        Port: t.Target.Port,
-                                    })),
+                                    Targets: healthyExtras
+                                        .filter(t => t.Target.Id)
+                                        .map((t) => ({
+                                            Id: t.Target.Id,
+                                            Port: t.Target.Port,
+                                        })),
                                 })
                             );
                         } catch (error) {
@@ -1084,10 +1135,11 @@ class DeployManager {
         await this.validateGitHubToken(githubAccessToken, repository);
 
         const repoUrl = /^https?:\/|^git@/.test(repository) ? repository : `https://github.com/${repository.replace(/^\/|\/$/g, "")}.git`;
-        const rootDir = rootDirectory?.trim() || ".";
+        const rootDir = (rootDirectory ? rootDirectory.trim().replace(/^\/+/, "") : ".");
+        const autoBuildCmd = buildCommand || "";
+        const outDir = (outputDirectory && outputDirectory.trim()) || "";
         const imageTag = subdomain
-            ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(
-                repository, branch, githubAccessToken)}`
+            ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}`
             : "latest";
         const repoUri = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}`;
         const cbName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
@@ -1102,13 +1154,12 @@ class DeployManager {
                     activeCbNames.add(r.name);
                 }
             });
-
             if (projectMap.size > 0) {
                 const projectIDs = Array.from(projectMap.keys());
                 const domainRes = await pool.query(
                     `SELECT project_id, domain_name 
-                    FROM domains 
-                    WHERE project_id = ANY($1)`,
+                     FROM domains 
+                     WHERE project_id = ANY($1)`,
                     [projectIDs]
                 );
                 domainRes.rows.forEach(r => {
@@ -1119,7 +1170,7 @@ class DeployManager {
                     }
                 });
             }
-        } catch (error) {
+        } catch (_) {
             activeCbNames.clear();
             activeCbNames.add(cbName);
         }
@@ -1142,13 +1193,9 @@ class DeployManager {
                             lastModified: proj.lastModified
                         });
                     });
-                } catch (error) { }
+                } catch (_) { }
             }
-
-            projectDetails.sort((a, b) => {
-                return new Date(a.lastModified).getTime() - new Date(b.lastModified).getTime();
-            });
-
+            projectDetails.sort((a, b) => new Date(a.lastModified).getTime() - new Date(b.lastModified).getTime());
             const toDeleteCount = allNames.length - (MAX_SAFE_CB_PROJECTS - 1);
             let deletedCount = 0;
             for (let i = 0; i < projectDetails.length && deletedCount < toDeleteCount; i++) {
@@ -1158,13 +1205,11 @@ class DeployManager {
                         new (require("@aws-sdk/client-codebuild").DeleteProjectCommand)({ name: toDelete })
                     );
                     deletedCount += 1;
-                } catch (error) { }
+                } catch (_) { }
             }
-
             if (deletedCount < toDeleteCount) {
                 throw new Error(
-                    `Cannot prune enough CodeBuild projects: Only ${deletedCount} inactive projects ` +
-                    `found, but need to delete ${toDeleteCount}. Consider manual cleanup or requesting a quota increase.`
+                    `Cannot prune enough CodeBuild projects: Only ${deletedCount} inactive projects found, but need to delete ${toDeleteCount}. Consider manual cleanup or requesting a quota increase.`
                 );
             }
         }
@@ -1186,36 +1231,30 @@ class DeployManager {
                     ]
                 },
                 build: {
-                    commands: buildCommand
-                        ? [buildCommand]
-                        : ['echo "No custom build command provided, skipping build step"']
+                    commands: autoBuildCmd ? [autoBuildCmd] : ['echo "No custom build command provided, skipping build step"']
                 },
                 post_build: {
                     commands: [
                         `cd $CODEBUILD_SRC_DIR/${rootDir}`,
-                        'echo "Injecting monitoring script into HTML files"',
-                        `find . -type f -name '*.html' -exec sed -i 's|</head>|<script src="http://localhost:3000/z-analytics-inject.js"></script></head>|g' {} \\;`,
+                        'echo "Creating production Dockerfile"',
                         'cat > Dockerfile <<EOF\n' +
                         'FROM node:20-slim AS deps\n' +
                         'WORKDIR /app\n' +
                         'COPY package*.json ./\n' +
-                        'RUN npm ci --omit=dev --prefer-offline --no-audit\n' +
+                        'RUN npm ci --prefer-offline --no-audit\n' +
                         '\n' +
                         'FROM node:20-slim\n' +
                         'WORKDIR /app\n' +
+                        'RUN npm install -g serve@14.2.0\n' +
                         'COPY --from=deps /app/node_modules ./node_modules\n' +
-                        'COPY . .\n' +
-                        (outputDirectory ? `COPY ${outputDirectory} ./dist\n` : '') +
-                        'CMD ["node","api/index.js"]\n' +
+                        (outDir ? `COPY ${outDir} ./dist\n` : 'COPY . .\n') +
+                        'EXPOSE 3000\n' +
+                        (outDir ? 'CMD ["npx","serve","-s","dist","-l","3000"]\n' : 'CMD ["npm","start"]\n') +
                         'EOF',
-                        '[ "$DOCKER_HUB_USERNAME" ] && [ "$DOCKER_HUB_PASSWORD" ] && ' +
-                        'echo "$DOCKER_HUB_PASSWORD" | docker login --username "$DOCKER_HUB_USERNAME" --password-stdin || true',
+                        '[ "$DOCKER_HUB_USERNAME" ] && [ "$DOCKER_HUB_PASSWORD" ] && echo "$DOCKER_HUB_PASSWORD" | docker login --username "$DOCKER_HUB_USERNAME" --password-stdin || true',
                         'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPO_URI',
                         'docker pull $REPO_URI:latest || true',
-                        `docker build --progress=plain ` +
-                        `--build-arg BUILDKIT_INLINE_CACHE=1 ` +
-                        `--cache-from=$REPO_URI:latest ` +
-                        `-t $REPO_URI:${imageTag} .`,
+                        `docker build --progress=plain --build-arg BUILDKIT_INLINE_CACHE=1 --cache-from=$REPO_URI:latest -t $REPO_URI:${imageTag} .`,
                         `docker push $REPO_URI:${imageTag}`,
                         `docker tag $REPO_URI:${imageTag} $REPO_URI:latest`,
                         'docker push $REPO_URI:latest'
@@ -1265,8 +1304,7 @@ class DeployManager {
                 await codeBuildClient.send(new UpdateProjectCommand(params));
             } else if (error.name === "TooManyProjectsException" || error.name === "TooManyProjects") {
                 throw new Error(
-                    "TooManyCodeBuildProjects: unable to create new project even after pruning inactive ones. " +
-                    "Consider requesting a CodeBuild quota increase."
+                    "TooManyCodeBuildProjects: unable to create new project even after pruning inactive ones. Consider requesting a CodeBuild quota increase."
                 );
             } else {
                 throw new Error(`Failed to create CodeBuild project: ${error.message}.`);
@@ -1275,11 +1313,10 @@ class DeployManager {
 
         if (subdomain) {
             await pool.query(
-                `
-                    UPDATE domains SET image_tag = $1
-                    WHERE domain_name = $2
-                    AND project_id = (SELECT project_id FROM projects WHERE name = $3)
-                `,
+                `UPDATE domains
+                 SET image_tag = $1
+                 WHERE domain_name = $2
+                   AND project_id = (SELECT project_id FROM projects WHERE name = $3)`,
                 [imageTag, subdomain, projectName]
             );
         }
@@ -1566,21 +1603,21 @@ class DeployManager {
         deploymentID,
         onData = null
     }) {
-        const emit = typeof onData === "function" ? onData : () => { };
+        const emit = typeof onData === "function" ? onData : () => {};
         const logDir = path.join("/tmp", `${projectName}-${uuidv4()}`, "logs");
         fs.mkdirSync(logDir, { recursive: true });
 
         const isBase = domainName === projectName;
-        const subdomain = isBase ? null : domainName;
+        let subdomain = isBase ? null : domainName;
+        const dnsLabel = subdomain ?? projectName;          
+
         let cfg = { repository, branch, rootDirectory, installCommand, buildCommand, envVars };
         if (!isBase) {
             const domResult = await pool.query(
-                `
-                    SELECT repository, branch, root_directory, install_command, build_command, run_command, env_vars
-                    FROM domains
-                    WHERE domain_name=$1
-                        AND project_id=(SELECT project_id FROM projects WHERE name=$2)
-                `,
+                `SELECT repository, branch, root_directory, install_command, build_command, run_command, env_vars
+                 FROM domains
+                 WHERE domain_name=$1
+                   AND project_id=(SELECT project_id FROM projects WHERE name=$2)`,
                 [domainName, projectName]
             );
             if (!domResult.rows.length)
@@ -1660,10 +1697,13 @@ class DeployManager {
             envVars: cfg.envVars,
             runCommand
         });
-        emit(`Task‑def: ${taskDefArn}\n`);
+        emit(`Task-def: ${taskDefArn}\n`);
 
         const targetGroupArn = await this.ensureTargetGroup(projectName, subdomain);
-        emit(`Target‑group: ${targetGroupArn}\n`);
+        emit(`Target-group: ${targetGroupArn}\n`);
+
+        await this.updateDNSRecord(projectName, [dnsLabel], targetGroupArn);
+        emit(`DNS / ALB rule created for ${dnsLabel}.stackforgeengine.com\n`);
 
         await this.createOrUpdateService({
             projectName,

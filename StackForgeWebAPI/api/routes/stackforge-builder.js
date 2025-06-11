@@ -103,6 +103,21 @@ router.get("/deploy-project-stream", (req, res, next) => {
             envVars
         } = req.query;
 
+        console.log({
+            userID: userID,
+            organizationID: organizationID,
+            repository: repository,
+            branch: branch,
+            teamName: teamName,
+            projectName: projectName,
+            rootDirectory: rootDirectory,
+            outputDirectory: outputDirectory,
+            buildCommand: buildCommand,
+            runCommand: runCommand,
+            installCommand: installCommand,
+            envVars: envVars
+        }); 
+
         let parsedEnvVars = [];
         try {
             parsedEnvVars = JSON.parse(envVars || "[]");
