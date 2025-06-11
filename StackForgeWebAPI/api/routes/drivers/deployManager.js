@@ -622,9 +622,7 @@ class DeployManager {
     }
 
     async createTaskDef({ projectName, subdomain, imageUri, envVars, runCommand }) {
-        const taskFamily = subdomain
-            ? `${projectName}-${subdomain.replace(/\./g, '-')}`
-            : projectName;
+        const taskFamily = subdomain ? `${projectName}-${subdomain.replace(/\./g, '-')}` : projectName;
         const logGroupName = `/ecs/${taskFamily}`;
 
         try {
@@ -662,7 +660,7 @@ class DeployManager {
             }
         }
 
-        let commandArray = ["npx", "serve", "-s", "dist", "-l", "3000"];   // default
+        let commandArray = ["npx", "serve", "-s", "dist", "-l", "3000"];  
 
         if (runCommand && typeof runCommand === "string" && runCommand.trim()) {
             try {
@@ -696,8 +694,8 @@ class DeployManager {
             };
 
             const extra = [];
-            if (needsPort)    extra.push("--port", "3000");
-            if (needsHost)    extra.push("--host", "0.0.0.0");
+            if (needsPort) extra.push("--port", "3000");
+            if (needsHost) extra.push("--host", "0.0.0.0");
             if (needsAllowed) extra.push("--allowedHosts", fqdn);
             if (extra.length) pushArgs(extra);
         }
@@ -1138,9 +1136,7 @@ class DeployManager {
         const rootDir = (rootDirectory ? rootDirectory.trim().replace(/^\/+/, "") : ".");
         const autoBuildCmd = buildCommand || "";
         const outDir = (outputDirectory && outputDirectory.trim()) || "";
-        const imageTag = subdomain
-            ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}`
-            : "latest";
+        const imageTag = subdomain ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}` : "latest";
         const repoUri = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}`;
         const cbName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
 
@@ -1157,9 +1153,11 @@ class DeployManager {
             if (projectMap.size > 0) {
                 const projectIDs = Array.from(projectMap.keys());
                 const domainRes = await pool.query(
-                    `SELECT project_id, domain_name 
-                     FROM domains 
-                     WHERE project_id = ANY($1)`,
+                    `
+                        SELECT project_id, domain_name 
+                        FROM domains 
+                        WHERE project_id = ANY($1)
+                    `,   
                     [projectIDs]
                 );
                 domainRes.rows.forEach(r => {
@@ -1338,9 +1336,7 @@ class DeployManager {
             : projectName;
 
         const logGroupName = `/aws/codebuild/${codeBuildProjectName}`;
-        const repoUrl = /^https?:\/\//i.test(repository) || /^git@/i.test(repository)
-            ? repository
-            : `https://github.com/${repository}.git`;
+        const repoUrl = /^https?:\/\//i.test(repository) || /^git@/i.test(repository) ? repository : `https://github.com/${repository}.git`;
 
         if (!githubAccessToken) {
             throw new Error("GitHub access token is required for CodeBuild.");
@@ -1614,10 +1610,12 @@ class DeployManager {
         let cfg = { repository, branch, rootDirectory, installCommand, buildCommand, envVars };
         if (!isBase) {
             const domResult = await pool.query(
-                `SELECT repository, branch, root_directory, install_command, build_command, run_command, env_vars
-                 FROM domains
-                 WHERE domain_name=$1
-                   AND project_id=(SELECT project_id FROM projects WHERE name=$2)`,
+                `
+                    SELECT repository, branch, root_directory, install_command, build_command, run_command, env_vars
+                    FROM domains
+                    WHERE domain_name=$1
+                    AND project_id=(SELECT project_id FROM projects WHERE name=$2)
+                `,
                 [domainName, projectName]
             );
             if (!domResult.rows.length)
