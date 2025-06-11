@@ -1132,14 +1132,24 @@ class DeployManager {
         if (!githubAccessToken?.trim()) throw new Error("GitHub token missing");
         await this.validateGitHubToken(githubAccessToken, repository);
 
-        const repoUrl = /^https?:\/|^git@/.test(repository) ? repository : `https://github.com/${repository.replace(/^\/|\/$/g, "")}.git`;
-        const rootDir = (rootDirectory ? rootDirectory.trim().replace(/^\/+/, "") : ".");
+        const repoUrl = /^https?:\/|^git@/.test(repository)
+            ? repository
+            : `https://github.com/${repository.replace(/^\/|\/$/g, "")}.git`;
+        const rootDir      = (rootDirectory ? rootDirectory.trim().replace(/^\/+/, "") : ".");
         const autoBuildCmd = buildCommand || "";
-        const outDir = (outputDirectory && outputDirectory.trim()) || "";
-        const imageTag = subdomain ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}` : "latest";
-        const repoUri = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}`;
-        const cbName = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
+        const outDir       = (outputDirectory && outputDirectory.trim()) || "";
+        const imageTag     = subdomain
+            ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(repository, branch, githubAccessToken)}`
+            : "latest";
+        const repoUri      = `${process.env.AWS_ACCOUNT_ID}.dkr.ecr.${process.env.AWS_REGION}.amazonaws.com/${projectName}`;
+        const cbName       = subdomain ? `${projectName}-${subdomain.replace(/\./g, "-")}` : projectName;
 
+        /* ---------- analytics-script injection path (supports Express & Vite) ---------- */
+        const injectionCmd =
+            `find ${outDir || "."} -type f -name '*.html' -exec sed -i ` +
+            `'s|</head>|<script src="http://localhost:3000/z-analytics-inject.js"></script></head>|g' {} \\;`;
+
+        /* ------------------------------- quota hygiene ------------------------------- */
         const activeCbNames = new Set();
         try {
             const projRes = await pool.query("SELECT project_id, name FROM projects");
@@ -1153,11 +1163,7 @@ class DeployManager {
             if (projectMap.size > 0) {
                 const projectIDs = Array.from(projectMap.keys());
                 const domainRes = await pool.query(
-                    `
-                        SELECT project_id, domain_name 
-                        FROM domains 
-                        WHERE project_id = ANY($1)
-                    `,   
+                    `SELECT project_id, domain_name FROM domains WHERE project_id = ANY($1)`,
                     [projectIDs]
                 );
                 domainRes.rows.forEach(r => {
@@ -1173,27 +1179,24 @@ class DeployManager {
             activeCbNames.add(cbName);
         }
 
-        const listResp = await codeBuildClient.send(new ListProjectsCommand({}));
-        const allNames = listResp.projects || [];
+        const listResp        = await codeBuildClient.send(new ListProjectsCommand({}));
+        const allNames        = listResp.projects || [];
         const inactiveProjects = allNames.filter(n => !activeCbNames.has(n));
 
         const MAX_SAFE_CB_PROJECTS = 450;
         if (allNames.length >= MAX_SAFE_CB_PROJECTS) {
             const projectDetails = [];
-            const BatchGetProjects = require("@aws-sdk/client-codebuild").BatchGetProjectsCommand;
+            const { BatchGetProjectsCommand } = require("@aws-sdk/client-codebuild");
             for (let i = 0; i < inactiveProjects.length; i += 100) {
                 const slice = inactiveProjects.slice(i, i + 100);
                 try {
-                    const batchResp = await codeBuildClient.send(new BatchGetProjects({ names: slice }));
+                    const batchResp = await codeBuildClient.send(new BatchGetProjectsCommand({ names: slice }));
                     (batchResp.projects || []).forEach(proj => {
-                        projectDetails.push({
-                            name: proj.name,
-                            lastModified: proj.lastModified
-                        });
+                        projectDetails.push({ name: proj.name, lastModified: proj.lastModified });
                     });
                 } catch (_) { }
             }
-            projectDetails.sort((a, b) => new Date(a.lastModified).getTime() - new Date(b.lastModified).getTime());
+            projectDetails.sort((a, b) => new Date(a.lastModified) - new Date(b.lastModified));
             const toDeleteCount = allNames.length - (MAX_SAFE_CB_PROJECTS - 1);
             let deletedCount = 0;
             for (let i = 0; i < projectDetails.length && deletedCount < toDeleteCount; i++) {
@@ -1202,16 +1205,18 @@ class DeployManager {
                     await codeBuildClient.send(
                         new (require("@aws-sdk/client-codebuild").DeleteProjectCommand)({ name: toDelete })
                     );
-                    deletedCount += 1;
+                    deletedCount++;
                 } catch (_) { }
             }
             if (deletedCount < toDeleteCount) {
                 throw new Error(
-                    `Cannot prune enough CodeBuild projects: Only ${deletedCount} inactive projects found, but need to delete ${toDeleteCount}. Consider manual cleanup or requesting a quota increase.`
+                    `Cannot prune enough CodeBuild projects: Only ${deletedCount} inactive projects found, ` +
+                    `but need to delete ${toDeleteCount}. Consider manual cleanup or requesting a quota increase.`
                 );
             }
         }
 
+        /* ---------------------------- BUILD-SPEC definition --------------------------- */
         const buildspec = {
             version: "0.2",
             env: { variables: { DOCKER_BUILDKIT: "1" } },
@@ -1229,11 +1234,15 @@ class DeployManager {
                     ]
                 },
                 build: {
-                    commands: autoBuildCmd ? [autoBuildCmd] : ['echo "No custom build command provided, skipping build step"']
+                    commands: autoBuildCmd
+                        ? [autoBuildCmd]
+                        : ['echo "No custom build command provided, skipping build step"']
                 },
                 post_build: {
                     commands: [
                         `cd $CODEBUILD_SRC_DIR/${rootDir}`,
+                        /* inject analytics into built HTML (Express / Vite) */
+                        injectionCmd,
                         'echo "Creating production Dockerfile"',
                         'cat > Dockerfile <<EOF\n' +
                         'FROM node:20-slim AS deps\n' +
@@ -1262,14 +1271,15 @@ class DeployManager {
             artifacts: { files: [], "discard-paths": "yes" }
         };
 
+        /* -------------------------------- env vars ----------------------------------- */
         const envVars = [
-            { name: "ROOT_DIRECTORY", value: rootDir, type: "PLAINTEXT" },
-            { name: "REPO_URI", value: repoUri, type: "PLAINTEXT" },
-            { name: "AWS_REGION", value: process.env.AWS_REGION, type: "PLAINTEXT" },
-            { name: "GITHUB_TOKEN", value: githubAccessToken, type: "PLAINTEXT" },
-            { name: "REPO_URL", value: repoUrl, type: "PLAINTEXT" },
-            { name: "REPO_BRANCH", value: branch, type: "PLAINTEXT" },
-            { name: "IMAGE_TAG", value: imageTag, type: "PLAINTEXT" },
+            { name: "ROOT_DIRECTORY",      value: rootDir,  type: "PLAINTEXT" },
+            { name: "REPO_URI",            value: repoUri,  type: "PLAINTEXT" },
+            { name: "AWS_REGION",          value: process.env.AWS_REGION, type: "PLAINTEXT" },
+            { name: "GITHUB_TOKEN",        value: githubAccessToken,       type: "PLAINTEXT" },
+            { name: "REPO_URL",            value: repoUrl,  type: "PLAINTEXT" },
+            { name: "REPO_BRANCH",         value: branch,   type: "PLAINTEXT" },
+            { name: "IMAGE_TAG",           value: imageTag, type: "PLAINTEXT" },
             { name: "DOCKER_HUB_USERNAME", value: process.env.DOCKER_HUB_USERNAME || "", type: "PLAINTEXT" },
             { name: "DOCKER_HUB_PASSWORD", value: process.env.DOCKER_HUB_PASSWORD || "", type: "PLAINTEXT" }
         ];
@@ -1302,7 +1312,8 @@ class DeployManager {
                 await codeBuildClient.send(new UpdateProjectCommand(params));
             } else if (error.name === "TooManyProjectsException" || error.name === "TooManyProjects") {
                 throw new Error(
-                    "TooManyCodeBuildProjects: unable to create new project even after pruning inactive ones. Consider requesting a CodeBuild quota increase."
+                    "TooManyCodeBuildProjects: unable to create new project even after pruning inactive ones. " +
+                    "Consider requesting a CodeBuild quota increase."
                 );
             } else {
                 throw new Error(`Failed to create CodeBuild project: ${error.message}.`);
@@ -1319,6 +1330,7 @@ class DeployManager {
             );
         }
     }
+
 
     async startCodeBuild({
         projectName,
