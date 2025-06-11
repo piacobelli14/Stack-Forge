@@ -129,8 +129,7 @@ const StackForgeRuntimeLogs = () => {
             "past_30_mins"
         })
       });
-      if (!response.ok)
-        throw new Error(`HTTP error! status: ${response.status}`);
+      
       const data = await response.json();
       setLogs(data.logs);
     } catch {

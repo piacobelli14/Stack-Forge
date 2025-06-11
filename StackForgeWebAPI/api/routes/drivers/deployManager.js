@@ -225,9 +225,9 @@ class DeployManager {
             baseName = p0.slice(0, 26);
         } else {
             const subSlug = subdomain
-                .split(".")[0]
                 .toLowerCase()
-                .replace(/[^a-z0-9-]/g, "");
+                .replace(/[^a-z0-9.-]/g, "")
+                .replace(/\./g, "-");
             const pPart = p0.slice(0, 18);
             baseName = `${pPart}-${subSlug.slice(0, 7)}`;
         }
@@ -560,7 +560,6 @@ class DeployManager {
         return this._currentListenerArn;
     }
 
-
     async createNewALBListener() {
         const elbClient = new ElasticLoadBalancingV2Client({ region: process.env.AWS_REGION });
         const albName = `stackforge-alb-${Date.now()}`;
@@ -622,7 +621,7 @@ class DeployManager {
         return listenerArn;
     }
 
-    async createTaskDef({ projectName, subdomain, imageUri, envVars }) {
+    async createTaskDef({ projectName, subdomain, imageUri, envVars, runCommand }) {
         const taskFamily = subdomain
             ? `${projectName}-${subdomain.replace(/\./g, '-')}`
             : projectName;
@@ -645,6 +644,18 @@ class DeployManager {
                 }))
             : [];
 
+        let commandArray = ["node", "api/index.js"];
+        if (runCommand && typeof runCommand === 'string' && runCommand.trim()) {
+            try {
+                commandArray = JSON.parse(runCommand);
+                if (!Array.isArray(commandArray) || !commandArray.every(c => typeof c === 'string')) {
+                    throw new Error("runCommand must be a JSON array of strings.");
+                }
+            } catch (error) {
+                commandArray = runCommand.trim().split(/\s+/);
+            }
+        }
+
         const params = {
             family: taskFamily,
             networkMode: "awsvpc",
@@ -659,6 +670,7 @@ class DeployManager {
                     portMappings: [{ containerPort: 3000, protocol: "tcp" }],
                     essential: true,
                     environment: containerEnvVars,
+                    command: commandArray,
                     logConfiguration: {
                         logDriver: "awslogs",
                         options: {
@@ -1056,7 +1068,6 @@ class DeployManager {
         }
     }
 
-
     async createCodeBuildProject({
         projectName,
         subdomain,
@@ -1073,7 +1084,7 @@ class DeployManager {
         await this.validateGitHubToken(githubAccessToken, repository);
 
         const repoUrl = /^https?:\/|^git@/.test(repository) ? repository : `https://github.com/${repository.replace(/^\/|\/$/g, "")}.git`;
-        const rootDir = rootDirectory || ".";
+        const rootDir = rootDirectory?.trim() || ".";
         const imageTag = subdomain
             ? `${subdomain.replace(/\./g, "-")}-${await this.getLatestCommitSha(
                 repository, branch, githubAccessToken)}`
@@ -1170,14 +1181,18 @@ class DeployManager {
                     commands: [
                         'git config --global credential.helper "!f() { echo username=x-oauth-basic; echo password=$GITHUB_TOKEN; }; f"',
                         'git clone --depth 1 --branch $REPO_BRANCH $REPO_URL $CODEBUILD_SRC_DIR',
-                        `cd $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
+                        `cd $CODEBUILD_SRC_DIR/${rootDir}`,
                         installCommand || "npm ci --prefer-offline --no-audit"
                     ]
                 },
-                build: { commands: ['echo "No extra app build"'] },
+                build: {
+                    commands: buildCommand
+                        ? [buildCommand]
+                        : ['echo "No custom build command provided, skipping build step"']
+                },
                 post_build: {
                     commands: [
-                        `cd $CODEBUILD_SRC_DIR/$ROOT_DIRECTORY`,
+                        `cd $CODEBUILD_SRC_DIR/${rootDir}`,
                         'echo "Injecting monitoring script into HTML files"',
                         `find . -type f -name '*.html' -exec sed -i 's|</head>|<script src="http://localhost:3000/z-analytics-inject.js"></script></head>|g' {} \\;`,
                         'cat > Dockerfile <<EOF\n' +
@@ -1190,6 +1205,7 @@ class DeployManager {
                         'WORKDIR /app\n' +
                         'COPY --from=deps /app/node_modules ./node_modules\n' +
                         'COPY . .\n' +
+                        (outputDirectory ? `COPY ${outputDirectory} ./dist\n` : '') +
                         'CMD ["node","api/index.js"]\n' +
                         'EOF',
                         '[ "$DOCKER_HUB_USERNAME" ] && [ "$DOCKER_HUB_PASSWORD" ] && ' +
@@ -1275,7 +1291,10 @@ class DeployManager {
         repository,
         branch,
         logDir,
-        githubAccessToken
+        githubAccessToken,
+        rootDirectory,
+        buildCommand,
+        installCommand
     }) {
         const codeBuildProjectName = subdomain
             ? `${projectName}-${subdomain.replace(/\./g, '-')}`
@@ -1307,7 +1326,10 @@ class DeployManager {
                 { name: "GITHUB_TOKEN", value: githubAccessToken, type: "PLAINTEXT" },
                 { name: "REPO_URL", value: repoUrl, type: "PLAINTEXT" },
                 { name: "REPO_BRANCH", value: branch, type: "PLAINTEXT" },
-                { name: "IMAGE_TAG", value: imageTag, type: "PLAINTEXT" }
+                { name: "IMAGE_TAG", value: imageTag, type: "PLAINTEXT" },
+                { name: "ROOT_DIRECTORY", value: rootDirectory?.trim() || ".", type: "PLAINTEXT" },
+                { name: "BUILD_COMMAND", value: buildCommand || "", type: "PLAINTEXT" },
+                { name: "INSTALL_COMMAND", value: installCommand || "npm ci --prefer-offline --no-audit", type: "PLAINTEXT" }
             ]
         }));
         const buildID = startResp.build.id;
@@ -1361,7 +1383,7 @@ class DeployManager {
     }
 
     async streamCodeBuild(
-        { projectName, subdomain = null, repository, branch, githubAccessToken },
+        { projectName, subdomain = null, repository, branch, githubAccessToken, rootDirectory, buildCommand, installCommand },
         onChunk
     ) {
         if (typeof onChunk !== "function") {
@@ -1401,7 +1423,10 @@ class DeployManager {
                     { name: "GITHUB_TOKEN", value: githubAccessToken, type: "PLAINTEXT" },
                     { name: "REPO_URL", value: repoUrl, type: "PLAINTEXT" },
                     { name: "REPO_BRANCH", value: branch, type: "PLAINTEXT" },
-                    { name: "IMAGE_TAG", value: imageTag, type: "PLAINTEXT" }
+                    { name: "IMAGE_TAG", value: imageTag, type: "PLAINTEXT" },
+                    { name: "ROOT_DIRECTORY", value: rootDirectory?.trim() || ".", type: "PLAINTEXT" },
+                    { name: "BUILD_COMMAND", value: buildCommand || "", type: "PLAINTEXT" },
+                    { name: "INSTALL_COMMAND", value: installCommand || "npm ci --prefer-offline --no-audit", type: "PLAINTEXT" }
                 ]
             }));
             onChunk(`CodeBuild started: id ${build.build.id}\n`);
@@ -1421,7 +1446,7 @@ class DeployManager {
 
         while (buildStatus === "IN_PROGRESS") {
             if (Date.now() - t0 > timeoutMs)
-                throw new Error("Build timed‑out after 20 minutes.");
+                throw new Error("Build timed‑out after 20 minutes.");
 
             try {
                 const logs = await cloudWatchLogsClient.send(new GetLogEventsCommand({
@@ -1466,6 +1491,7 @@ class DeployManager {
         rootDirectory,
         outputDirectory,
         buildCommand,
+        runCommand,
         installCommand,
         envVars,
         projectName,
@@ -1483,15 +1509,15 @@ class DeployManager {
 
         await pool.query(
             `UPDATE deployments 
-             SET root_directory = $1, output_directory = $2, build_command = $3, install_command = $4, env_vars = $5
-             WHERE deployment_id = $6`,
-            [rootDirectory, outputDirectory, buildCommand, installCommand, JSON.stringify(envVars), deploymentID]
+             SET root_directory = $1, output_directory = $2, build_command = $3, run_command = $4, install_command = $5, env_vars = $6
+             WHERE deployment_id = $7`,
+            [rootDirectory, outputDirectory, buildCommand, runCommand, installCommand, JSON.stringify(envVars), deploymentID]
         );
         return logDir;
     }
 
     async cloneAndBuildStream(
-        { repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, envVars, projectName, deploymentID },
+        { repository, branch, rootDirectory, outputDirectory, buildCommand, runCommand, installCommand, envVars, projectName, deploymentID },
         onData
     ) {
         const logDir = path.join("/tmp", `${projectName}-${uuidv4()}`, "logs");
@@ -1512,10 +1538,10 @@ class DeployManager {
             await pool.query(
                 `
                     UPDATE deployments 
-                    SET root_directory = $1, output_directory = $2, build_command = $3, install_command = $4, env_vars = $5
-                    WHERE deployment_id = $6
+                    SET root_directory = $1, output_directory = $2, build_command = $3, run_command = $4, install_command = $5, env_vars = $6
+                    WHERE deployment_id = $7
                 `,
-                [rootDirectory, outputDirectory, buildCommand, installCommand, JSON.stringify(envVars), deploymentID]
+                [rootDirectory, outputDirectory, buildCommand, runCommand, installCommand, JSON.stringify(envVars), deploymentID]
             );
             return logDir;
         } catch (error) {
@@ -1535,6 +1561,7 @@ class DeployManager {
         rootDirectory,
         installCommand,
         buildCommand,
+        runCommand,
         envVars,
         deploymentID,
         onData = null
@@ -1549,7 +1576,7 @@ class DeployManager {
         if (!isBase) {
             const domResult = await pool.query(
                 `
-                    SELECT repository,branch,root_directory,install_command, build_command,env_vars
+                    SELECT repository, branch, root_directory, install_command, build_command, run_command, env_vars
                     FROM domains
                     WHERE domain_name=$1
                         AND project_id=(SELECT project_id FROM projects WHERE name=$2)
@@ -1565,6 +1592,7 @@ class DeployManager {
                 rootDirectory: cfg.rootDirectory || row.root_directory || ".",
                 installCommand: cfg.installCommand || row.install_command || "npm install",
                 buildCommand: cfg.buildCommand || row.build_command || "",
+                runCommand: cfg.runCommand || row.run_command || "",
                 envVars: cfg.envVars || (row.env_vars ? JSON.parse(row.env_vars) : [])
             };
         }
@@ -1592,10 +1620,17 @@ class DeployManager {
             emit(`Streaming CodeBuild logs …\n`);
             imageUri = await this.streamCodeBuild(
                 {
-                    projectName, subdomain, repository: cfg.repository, branch: cfg.branch, githubAccessToken: (await pool.query(
+                    projectName,
+                    subdomain,
+                    repository: cfg.repository,
+                    branch: cfg.branch,
+                    githubAccessToken: (await pool.query(
                         "SELECT github_access_token FROM users WHERE username=$1",
                         [userID]
-                    )).rows[0].github_access_token
+                    )).rows[0].github_access_token,
+                    rootDirectory: cfg.rootDirectory,
+                    buildCommand: cfg.buildCommand,
+                    installCommand: cfg.installCommand
                 },
                 emit
             );
@@ -1609,7 +1644,10 @@ class DeployManager {
                 githubAccessToken: (await pool.query(
                     "SELECT github_access_token FROM users WHERE username=$1",
                     [userID]
-                )).rows[0].github_access_token
+                )).rows[0].github_access_token,
+                rootDirectory: cfg.rootDirectory,
+                buildCommand: cfg.buildCommand,
+                installCommand: cfg.installCommand
             });
             imageUri = uri;
         }
@@ -1619,7 +1657,8 @@ class DeployManager {
             projectName,
             subdomain,
             imageUri,
-            envVars: cfg.envVars
+            envVars: cfg.envVars,
+            runCommand
         });
         emit(`Task‑def: ${taskDefArn}\n`);
 
@@ -1648,6 +1687,7 @@ class DeployManager {
         rootDirectory,
         outputDirectory,
         buildCommand,
+        runCommand,
         installCommand,
         envVars,
         deploymentProtection = false,
@@ -1701,15 +1741,15 @@ class DeployManager {
         const taskDefArns = {};
         const urls = [];
         for (const domainName of domainNames) {
-            const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
+            const subdomain = domainName === projectName ? projectName : domainName;
             const url = `https://${subdomain}.stackforgeengine.com`;
             urls.push(url);
             let domainID;
-            let domainDetails = { repository, branch, rootDirectory, installCommand, buildCommand, envVars };
+            let domainDetails = { repository, branch, rootDirectory, installCommand, buildCommand, runCommand, envVars };
             if (subdomain !== projectName) {
                 const domainResult = await pool.query(
                     `
-                        SELECT repository, branch, root_directory, install_command, build_command, env_vars
+                        SELECT repository, branch, root_directory, install_command, build_command, run_command, env_vars
                         FROM domains
                         WHERE domain_name = $1 AND project_id = (SELECT project_id FROM projects WHERE name = $2)
                     `,
@@ -1722,7 +1762,8 @@ class DeployManager {
                         rootDirectory: domainResult.rows[0].root_directory || rootDirectory,
                         installCommand: domainResult.rows[0].install_command || installCommand,
                         buildCommand: domainResult.rows[0].build_command || buildCommand,
-                        envVars: domainResult.rows[0].env_vars || envVars
+                        runCommand: domainResult.rows[0].run_command || runCommand,
+                        envVars: domainResult.rows[0].env_vars ? JSON.parse(domainResult.rows[0].env_vars) : envVars
                     };
                 }
             }
@@ -1744,11 +1785,12 @@ class DeployManager {
                                 root_directory = $5, 
                                 output_directory = $6, 
                                 build_command = $7, 
-                                install_command = $8, 
-                                env_vars = $9,
-                                deployment_protection = $10, 
-                                deployment_authentication = $11
-                            WHERE domain_id = $12
+                                run_command = $8,
+                                install_command = $9, 
+                                env_vars = $10,
+                                deployment_protection = $11, 
+                                deployment_authentication = $12
+                            WHERE domain_id = $13
                         `,
                         [
                             timestamp,
@@ -1758,6 +1800,7 @@ class DeployManager {
                             rootDirectory,
                             outputDirectory,
                             buildCommand,
+                            runCommand,
                             installCommand,
                             JSON.stringify(envVars),
                             deploymentProtection,
@@ -1770,8 +1813,8 @@ class DeployManager {
                     await pool.query(
                         `
                             INSERT INTO domains 
-                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection, deployment_authentication) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, run_command, install_command, env_vars, deployment_protection, deployment_authentication) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
                         `,
                         [
                             organizationID,
@@ -1789,6 +1832,7 @@ class DeployManager {
                             rootDirectory,
                             outputDirectory,
                             buildCommand,
+                            runCommand,
                             installCommand,
                             JSON.stringify(envVars),
                             deploymentProtection,
@@ -1820,14 +1864,18 @@ class DeployManager {
                 repository: domainDetails.repository,
                 branch: domainDetails.branch,
                 logDir,
-                githubAccessToken
+                githubAccessToken,
+                rootDirectory: domainDetails.rootDirectory,
+                buildCommand: domainDetails.buildCommand,
+                installCommand: domainDetails.installCommand
             });
 
             const taskDefArn = await this.createTaskDef({
                 projectName,
                 subdomain,
                 imageUri,
-                envVars: domainDetails.envVars
+                envVars: domainDetails.envVars,
+                runCommand: domainDetails.runCommand
             });
             taskDefArns[subdomain] = taskDefArn;
 
@@ -1843,10 +1891,10 @@ class DeployManager {
             await pool.query(
                 `
                     UPDATE deployments 
-                    SET root_directory = $1, build_command = $2, install_command = $3, env_vars = $4
-                    WHERE deployment_id = $5
+                    SET root_directory = $1, build_command = $2, run_command = $3, install_command = $4, env_vars = $5
+                    WHERE deployment_id = $6
                 `,
-                [domainDetails.rootDirectory, domainDetails.buildCommand, domainDetails.installCommand, JSON.stringify(domainDetails.envVars), deploymentID]
+                [domainDetails.rootDirectory, domainDetails.buildCommand, domainDetails.runCommand, domainDetails.installCommand, JSON.stringify(domainDetails.envVars), deploymentID]
             );
 
             if (subdomain !== projectName) {
@@ -1858,10 +1906,11 @@ class DeployManager {
                             root_directory = $3, 
                             install_command = $4, 
                             build_command = $5, 
-                            env_vars = $6,
-                            deployment_protection = $7, 
-                            deployment_authentication = $8
-                        WHERE domain_name = $9 AND project_id = (SELECT project_id FROM projects WHERE name = $10)
+                            run_command = $6,
+                            env_vars = $7,
+                            deployment_protection = $8, 
+                            deployment_authentication = $9
+                        WHERE domain_name = $10 AND project_id = (SELECT project_id FROM projects WHERE name = $11)
                     `,
                     [
                         domainDetails.repository,
@@ -1869,6 +1918,7 @@ class DeployManager {
                         domainDetails.rootDirectory,
                         domainDetails.installCommand,
                         domainDetails.buildCommand,
+                        domainDetails.runCommand,
                         JSON.stringify(domainDetails.envVars),
                         deploymentProtection,
                         deploymentAuthentication,
@@ -1913,8 +1963,7 @@ class DeployManager {
                 await pool.query(
                     `
                         INSERT INTO projects 
-                            (orgid, username, project_id, name, description, branch, team_name, created_by, created_at, updated_at, url, repository, previous_deployment, current_deployment, image) 
-                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                            (orgid, username, project_id, name, description, branch, team_name, created_by, created_at, updated_at, url, repository, previous_deployment, current использования = $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
                     `,
                     [
                         organizationID,
@@ -1936,18 +1985,17 @@ class DeployManager {
                 );
 
                 for (const domainName of domainNames) {
-                    const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
-                    const domainID = domainIDs[subdomain];
+                    const subdomain = domainName === projectName ? projectName : domainName;
                     await pool.query(
                         `
                             INSERT INTO domains 
-                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, deployment_protection, deployment_authentication, dns_records) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, deployment_id, repository, branch, root_directory, output_directory, build_command, run_command, install_command, env_vars, deployment_protection, deployment_authentication, dns_records) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
                         `,
                         [
                             organizationID,
                             userID,
-                            domainID,
+                            domainIDs[subdomain],
                             subdomain,
                             projectID,
                             userID,
@@ -1960,6 +2008,7 @@ class DeployManager {
                             rootDirectory,
                             outputDirectory,
                             buildCommand,
+                            runCommand,
                             installCommand,
                             JSON.stringify(envVars),
                             deploymentProtection,
@@ -1972,8 +2021,8 @@ class DeployManager {
                 await pool.query(
                     `
                         INSERT INTO deployments 
-                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, run_command, install_command, env_vars) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
                     `,
                     [
                         organizationID,
@@ -1992,6 +2041,7 @@ class DeployManager {
                         rootDirectory,
                         outputDirectory,
                         buildCommand,
+                        runCommand,
                         installCommand,
                         JSON.stringify(envVars)
                     ]
@@ -2024,8 +2074,8 @@ class DeployManager {
                 await pool.query(
                     `
                         INSERT INTO deployments 
-                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, run_command, install_command, env_vars) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
                     `,
                     [
                         organizationID,
@@ -2044,13 +2094,14 @@ class DeployManager {
                         rootDirectory,
                         outputDirectory,
                         buildCommand,
+                        runCommand,
                         installCommand,
                         JSON.stringify(envVars)
                     ]
                 );
 
                 for (const domainName of domainNames) {
-                    const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
+                    const subdomain = domainName === projectName ? projectName : domainName;
                     await pool.query(
                         "UPDATE domains SET dns_records = $1, deployment_protection = $2, deployment_authentication = $3 WHERE domain_id = $4",
                         [JSON.stringify(records[`${subdomain}.stackforgeengine.com`] || []), deploymentProtection, deploymentAuthentication, domainIDs[subdomain]]
@@ -2090,6 +2141,7 @@ class DeployManager {
             rootDirectory,
             outputDirectory,
             buildCommand,
+            runCommand,
             installCommand,
             envVars
         },
@@ -2162,7 +2214,7 @@ class DeployManager {
         const urls = [];
         let streamBuffer = "";
         for (const domainName of domainNames) {
-            const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
+            const subdomain = domainName === projectName ? projectName : domainName;
             const url = `https://${subdomain}.stackforgeengine.com`;
             urls.push(url);
             let domainID;
@@ -2179,10 +2231,10 @@ class DeployManager {
                     await pool.query(
                         `
                             UPDATE domains
-                            SET updated_at = $1, deployment_id = $2, repository = $3, branch = $4, root_directory = $5, output_directory = $6, build_command = $7, install_command = $8, env_vars = $9
-                            WHERE domain_id = $10
+                            SET updated_at = $1, deployment_id = $2, repository = $3, branch = $4, root_directory = $5, output_directory = $6, build_command = $7, run_command = $8, install_command = $9, env_vars = $10
+                            WHERE domain_id = $11
                         `,
-                        [timestamp, deploymentID, repository, branch, rootDirectory, outputDirectory, buildCommand, installCommand, JSON.stringify(envVars), domainID]
+                        [timestamp, deploymentID, repository, branch, rootDirectory, outputDirectory, buildCommand, runCommand, installCommand, JSON.stringify(envVars), domainID]
                     );
                     onData(`Updated domain timestamp and deployment_id\n`);
                 } else {
@@ -2190,8 +2242,8 @@ class DeployManager {
                     await pool.query(
                         `
                             INSERT INTO domains 
-                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary, deployment_id, repository, branch, root_directory, output_directory, build_command, run_command, install_command, env_vars) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
                         `,
                         [
                             organizationID,
@@ -2210,6 +2262,7 @@ class DeployManager {
                             rootDirectory,
                             outputDirectory,
                             buildCommand,
+                            runCommand,
                             installCommand,
                             JSON.stringify(envVars)
                         ]
@@ -2251,7 +2304,10 @@ class DeployManager {
                     subdomain,
                     repository,
                     branch,
-                    githubAccessToken
+                    githubAccessToken,
+                    rootDirectory,
+                    buildCommand,
+                    installCommand
                 },
                 capturingOnData
             );
@@ -2262,7 +2318,8 @@ class DeployManager {
                 projectName,
                 subdomain,
                 imageUri,
-                envVars
+                envVars,
+                runCommand
             });
             taskDefArns[subdomain] = taskDefArn;
             onData(`ECS task definition registered: ${taskDefArn}\n`);
@@ -2355,12 +2412,12 @@ class DeployManager {
                 onData(`Project record created\n`);
 
                 for (const domainName of domainNames) {
-                    const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
+                    const subdomain = domainName === projectName ? projectName : domainName;
                     await pool.query(
                         `
                             INSERT INTO domains 
-                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary, deployment_id, repository, branch, root_directory, output_directory, build_command, install_command, env_vars, dns_records) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                                (orgid, username, domain_id, domain_name, project_id, created_by, created_at, updated_at, environment, is_primary, deployment_id, repository, branch, root_directory, output_directory, build_command, run_command, install_command, env_vars, dns_records) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
                         `,
                         [
                             organizationID,
@@ -2379,6 +2436,7 @@ class DeployManager {
                             rootDirectory,
                             outputDirectory,
                             buildCommand,
+                            runCommand,
                             installCommand,
                             JSON.stringify(envVars),
                             JSON.stringify(records[`${subdomain}.stackforgeengine.com`] || [])
@@ -2390,8 +2448,8 @@ class DeployManager {
                 await pool.query(
                     `
                         INSERT INTO deployments 
-                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, run_command, install_command, env_vars) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
                     `,
                     [
                         organizationID,
@@ -2410,6 +2468,7 @@ class DeployManager {
                         rootDirectory,
                         outputDirectory,
                         buildCommand,
+                        runCommand,
                         installCommand,
                         JSON.stringify(envVars)
                     ]
@@ -2443,8 +2502,8 @@ class DeployManager {
                 await pool.query(
                     `
                         INSERT INTO deployments 
-                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                            (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, run_command, install_command, env_vars) 
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
                     `,
                     [
                         organizationID,
@@ -2463,12 +2522,13 @@ class DeployManager {
                         rootDirectory,
                         outputDirectory,
                         buildCommand,
+                        runCommand,
                         installCommand,
                         JSON.stringify(envVars)
                     ]
                 );
                 for (const domainName of domainNames) {
-                    const subdomain = domainName.includes(`.${projectName}`) ? domainName.split(`.${projectName}`)[0] : domainName;
+                    const subdomain = domainName === projectName ? projectName : domainName;
                     await pool.query(
                         "UPDATE domains SET dns_records = $1 WHERE domain_id = $2",
                         [JSON.stringify(records[`${subdomain}.stackforgeengine.com`] || []), domainIDs[subdomain]]
@@ -2884,7 +2944,6 @@ class DeployManager {
         return { certificateArn };
     }
 
-
     async rollbackDeployment({
         organizationID, userID,
         projectID, deploymentID,
@@ -3016,24 +3075,24 @@ class DeployManager {
         const ecrClient = new ECRClient({ region: process.env.AWS_REGION });
         const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
         const cloudFrontClient = new CloudFrontClient({ region: process.env.AWS_REGION });
-    
+
         let client;
         const errors = [];
         const warnings = [];
-    
+
         const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), ms));
         const timeoutMs = 60000;
-    
+
         if (!process.env.AWS_REGION) errors.push('AWS_REGION is not set');
         if (!process.env.ROUTE53_HOSTED_ZONE_ID) errors.push('ROUTE53_HOSTED_ZONE_ID is not set');
         if (errors.length > 0) {
             throw new Error(`Environment variable validation failed: ${errors.join('; ')}`);
         }
-    
+
         try {
             client = await pool.connect();
             await client.query("BEGIN");
-    
+
             const projectResult = await client.query(
                 "SELECT * FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
                 [projectID, organizationID, userID]
@@ -3041,7 +3100,7 @@ class DeployManager {
             if (projectResult.rows.length === 0) {
                 throw new Error("Project not found or access denied.");
             }
-    
+
             const domainResult = await client.query(
                 "SELECT domain_name, certificate_arn, target_group_arn FROM domains WHERE project_id = $1 AND orgid = $2",
                 [projectID, organizationID]
@@ -3051,13 +3110,13 @@ class DeployManager {
                 certificateArn: row.certificate_arn,
                 targetGroupArn: row.target_group_arn
             }));
-    
+
             const domainsToClean = new Set([
                 `${projectName}.stackforgeengine.com`,
                 `*.${projectName}.stackforgeengine.com`,
                 ...domains.map(d => d.name)
             ]);
-    
+
             let targetGroupArns = domains
                 .map(d => d.targetGroupArn)
                 .filter(arn => arn && arn.match(/:targetgroup\/[a-zA-Z0-9-]+\/[a-f0-9]+$/));
@@ -3074,7 +3133,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to list target groups: ${error.message}`);
             }
-    
+
             const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
             if (listenerArn) {
                 try {
@@ -3101,7 +3160,7 @@ class DeployManager {
                     warnings.push(`Failed to process ELB rules: ${error.message}`);
                 }
             }
-    
+
             try {
                 const servicesResp = await Promise.race([
                     ecsClient.send(new ListServicesCommand({ cluster: "stackforge-cluster" })),
@@ -3121,7 +3180,7 @@ class DeployManager {
                             })),
                             timeout(timeoutMs)
                         ]);
-    
+
                         let tasksRunning = true;
                         let retries = 3;
                         while (tasksRunning && retries > 0) {
@@ -3156,7 +3215,7 @@ class DeployManager {
                         if (tasksRunning) {
                             warnings.push(`Tasks still running for ECS service ${serviceName}`);
                         }
-    
+
                         await Promise.race([
                             ecsClient.send(new DeleteServiceCommand({
                                 cluster: "stackforge-cluster",
@@ -3165,7 +3224,7 @@ class DeployManager {
                             })),
                             timeout(timeoutMs)
                         ]);
-    
+
                         const taskDefsResp = await Promise.race([
                             ecsClient.send(new ListTaskDefinitionsCommand({ familyPrefix: serviceName })),
                             timeout(timeoutMs)
@@ -3183,7 +3242,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to process ECS services: ${error.message}`);
             }
-    
+
             try {
                 const reposResp = await Promise.race([
                     ecrClient.send(new DescribeRepositoriesCommand({})),
@@ -3208,7 +3267,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to list ECR repositories: ${error.message}`);
             }
-    
+
             const changes = [];
             for (const domain of domainsToClean) {
                 const recordName = domain.endsWith(".") ? domain : `${domain}.`;
@@ -3248,7 +3307,7 @@ class DeployManager {
                     warnings.push(`Failed to delete Route53 records: ${error.message}`);
                 }
             }
-    
+
             for (const tgArn of targetGroupArns) {
                 try {
                     const maxRetries = 3;
@@ -3297,7 +3356,7 @@ class DeployManager {
                     warnings.push(`Failed to process target group ${tgArn}: ${error.message}`);
                 }
             }
-    
+
             const certificateArns = [...new Set(domains
                 .map(d => d.certificateArn)
                 .filter(arn => arn))];
@@ -3319,7 +3378,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to list ACM certificates: ${error.message}`);
             }
-    
+
             for (const certArn of certificateArns) {
                 try {
                     const maxDetachRetries = 2;
@@ -3363,7 +3422,7 @@ class DeployManager {
                             detachRetryCount++;
                         }
                     }
-    
+
                     const distributions = await Promise.race([
                         cloudFrontClient.send(new ListDistributionsCommand({})),
                         timeout(timeoutMs)
@@ -3397,7 +3456,7 @@ class DeployManager {
                             }
                         }
                     }
-    
+
                     if (!distributionAttached && isDetached) {
                         const maxRetries = 2;
                         let retryCount = 0;
@@ -3433,7 +3492,7 @@ class DeployManager {
                     warnings.push(`Failed to process ACM certificate ${certArn}: ${error.message}`);
                 }
             }
-    
+
             try {
                 const projectsResp = await Promise.race([
                     codeBuildClient.send(new ListProjectsCommand({})),
@@ -3455,7 +3514,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to list CodeBuild projects: ${error.message}`);
             }
-    
+
             try {
                 const logGroupsResp = await Promise.race([
                     cloudWatchLogsClient.send(new DescribeLogGroupsCommand({})),
@@ -3477,7 +3536,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to list CloudWatch log groups: ${error.message}`);
             }
-    
+
             for (const domain of domains.map(d => d.name)) {
                 await client.query("DELETE FROM metrics_events WHERE domain = $1", [domain]);
                 await client.query("DELETE FROM metrics_daily WHERE domain = $1", [domain]);
@@ -3498,13 +3557,13 @@ class DeployManager {
                 "DELETE FROM projects WHERE project_id = $1 AND orgid = $2 AND username = $3",
                 [projectID, organizationID, userID]
             );
-    
+
             await client.query(
                 `INSERT INTO deployment_logs (orgid, username, project_id, project_name, action, timestamp, ip_address) 
                  VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [organizationID, userID, projectID, projectName, "delete", timestamp, "127.0.0.1"]
             );
-    
+
             await client.query("COMMIT");
             return {
                 message: `Project ${projectName} deleted successfully.`,
@@ -3521,7 +3580,7 @@ class DeployManager {
             }
         }
     }
-    
+
     async cleanupFailedDeployment({ organizationID, userID, projectID, projectName, domainName, deploymentID, domainID, certificateArn, targetGroupArn }) {
         const timestamp = new Date().toISOString();
         const acmClient = new ACMClient({ region: process.env.AWS_REGION });
@@ -3532,24 +3591,24 @@ class DeployManager {
         const ecrClient = new ECRClient({ region: process.env.AWS_REGION });
         const ecsClient = new ECSClient({ region: process.env.AWS_REGION });
         const cloudFrontClient = new CloudFrontClient({ region: process.env.AWS_REGION });
-    
+
         let client;
         const errors = [];
         const warnings = [];
-    
+
         const timeout = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error('Operation timed out')), ms));
         const timeoutMs = 60000;
-    
+
         if (!process.env.AWS_REGION) errors.push('AWS_REGION is not set');
         if (!process.env.ROUTE53_HOSTED_ZONE_ID) errors.push('ROUTE53_HOSTED_ZONE_ID is not set');
         if (errors.length > 0) {
             throw new Error(`Environment variable validation failed: ${errors.join('; ')}`);
         }
-    
+
         try {
             client = await pool.connect();
             await client.query("BEGIN");
-    
+
             let targetGroupArns = [targetGroupArn].filter(arn => arn && arn.match(/:targetgroup\/[a-zA-Z0-9-]+\/[a-f0-9]+$/));
             try {
                 const tgResp = await Promise.race([
@@ -3564,7 +3623,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to list target groups: ${error.message}`);
             }
-    
+
             const listenerArn = process.env.ALB_LISTENER_ARN_HTTPS;
             if (listenerArn) {
                 try {
@@ -3591,7 +3650,7 @@ class DeployManager {
                     warnings.push(`Failed to process ELB rules: ${error.message}`);
                 }
             }
-    
+
             try {
                 const servicesResp = await Promise.race([
                     ecsClient.send(new ListServicesCommand({ cluster: "stackforge-cluster" })),
@@ -3611,7 +3670,7 @@ class DeployManager {
                             })),
                             timeout(timeoutMs)
                         ]);
-    
+
                         let tasksRunning = true;
                         let retries = 3;
                         while (tasksRunning && retries > 0) {
@@ -3646,7 +3705,7 @@ class DeployManager {
                         if (tasksRunning) {
                             warnings.push(`Tasks still running for ECS service ${serviceName}`);
                         }
-    
+
                         await Promise.race([
                             ecsClient.send(new DeleteServiceCommand({
                                 cluster: "stackforge-cluster",
@@ -3655,7 +3714,7 @@ class DeployManager {
                             })),
                             timeout(timeoutMs)
                         ]);
-    
+
                         const taskDefsResp = await Promise.race([
                             ecsClient.send(new ListTaskDefinitionsCommand({ familyPrefix: serviceName })),
                             timeout(timeoutMs)
@@ -3673,7 +3732,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to process ECS services: ${error.message}`);
             }
-    
+
             const domainFqdn = domainName.includes('.') ? domainName : `${domainName}.stackforgeengine.com`;
             const recordName = domainFqdn.endsWith(".") ? domainFqdn : `${domainFqdn}.`;
             try {
@@ -3706,7 +3765,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to process Route53 records for ${recordName}: ${error.message}`);
             }
-    
+
             for (const tgArn of targetGroupArns) {
                 try {
                     const maxRetries = 3;
@@ -3755,7 +3814,7 @@ class DeployManager {
                     warnings.push(`Failed to process target group ${tgArn}: ${error.message}`);
                 }
             }
-    
+
             const certificateArns = [certificateArn].filter(arn => arn);
             try {
                 const certList = await Promise.race([
@@ -3775,7 +3834,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to list ACM certificates: ${error.message}`);
             }
-    
+
             for (const certArn of certificateArns) {
                 try {
                     const maxDetachRetries = 2;
@@ -3822,7 +3881,7 @@ class DeployManager {
                             detachRetry++;
                         }
                     }
-    
+
                     const distributions = await Promise.race([
                         cloudFrontClient.send(new ListDistributions({})),
                         { DistributionList: {} },
@@ -3857,7 +3916,7 @@ class DeployManager {
                             }
                         }
                     }
-    
+
                     if (!distributionAttached && isDetached) {
                         const maxRetries = 2;
                         let attempt = 0;
@@ -3894,7 +3953,7 @@ class DeployManager {
                     warnings.push(`Failed to process certificate ${certArn}: ${error.message}`);
                 }
             }
-    
+
             try {
                 const projectsResp = await Promise.race([
                     codeBuildClient.send(new ListProjects()),
@@ -3915,7 +3974,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to list CodeBuild: ${error.message}`);
             }
-    
+
             try {
                 const logGroupsResp = await Promise.race([
                     cloudWatchLogsClient.send(new DescribeLogGroups()),
@@ -3936,7 +3995,7 @@ class DeployManager {
             } catch (error) {
                 warnings.push(`Failed to list log groups: ${error.message}`);
             }
-    
+
             await client.query("DELETE FROM metrics_events WHERE domain = $1", [domainName]);
             await client.query("DELETE FROM metrics_daily WHERE domain = $1", [domainName]);
             await client.query("DELETE FROM metrics_edge_requests WHERE domain = $1", [domainName]);
@@ -3947,13 +4006,13 @@ class DeployManager {
             if (domainID) {
                 await client.query("DELETE FROM domains WHERE id = $1 AND orgid = $2", [domainID, organizationID]);
             }
-    
+
             await client.query(
                 `INSERT INTO deployment_logs (orgid, username, deployment_id, project_id, project_name, action, timestamp, ip_address)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
                 [organizationID, userID, deploymentID, projectID, projectName, "cleanup_failed", timestamp, "127.0.0.1"]
             );
-    
+
             await client.query("COMMIT");
             return {
                 message: `Cleanup of deployment ${deploymentID} completed successfully.`,

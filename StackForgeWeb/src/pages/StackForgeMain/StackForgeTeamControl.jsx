@@ -170,7 +170,7 @@ const StackForgeTeamControl = () => {
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID })
             });
-            if (!response.ok) throw new Error("Failed to fetch team members.");
+
             const data = await response.json();
             setTeamMembers(data.teamMemberInfo);
             setIsLoadingTeamMembers(false);
@@ -186,7 +186,7 @@ const StackForgeTeamControl = () => {
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID })
             });
-            if (!response.ok) throw new Error("Failed to fetch access requests.");
+
             const data = await response.json();
             setAccessRequests(data.accessRequestsInfo);
             setIsLoadingAccessRequests(false);
@@ -201,7 +201,7 @@ const StackForgeTeamControl = () => {
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID, requestUsername, action })
             });
-            if (!response.ok) throw new Error("Failed to respond to access request.");
+
             fetchAccessRequests();
             fetchTeamMembers();
         } catch (error) {
@@ -217,7 +217,7 @@ const StackForgeTeamControl = () => {
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID, memberUsername })
             });
-            if (!response.ok) throw new Error("Failed to remove team member.");
+            
             fetchTeamMembers();
         } catch (error) {}
     };

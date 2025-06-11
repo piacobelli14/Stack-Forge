@@ -200,11 +200,8 @@ const StackForgeProjects = () => {
           setActivities([]);
           return;
         }
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const result = await response.json();
-        setActivities(result.data || []);
+        const data = await response.json();
+        setActivities(data.data || []);
       } catch (error) {
         setActivities([]);
       } finally {
@@ -237,9 +234,6 @@ const StackForgeProjects = () => {
           }),
         });
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
         const data = await response.json();
         setMonitoringData(data.data || []);
   
@@ -302,7 +296,7 @@ const StackForgeProjects = () => {
       const subs = new Set();
       for (const proj of projects) {
         try {
-          const res = await fetch("http://localhost:3000/project-domains", {
+          const response = await fetch("http://localhost:3000/project-domains", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -314,8 +308,8 @@ const StackForgeProjects = () => {
               projectID: proj.project_id,
             }),
           });
-          if (!res.ok) continue;
-          const data = await res.json();
+          if (!response.ok) continue;
+          const data = await response.json();
           data.domains.forEach((d) => {
             subs.add(`${d.domainName}.stackforgeengine.com`);
           });
@@ -342,7 +336,6 @@ const StackForgeProjects = () => {
       });
       if (!response.ok) {
         setIsLoadingProjects(false);
-        throw new Error(`HTTP error! status: ${response.status}.`);
       }
       const data = await response.json();
       setProjects(Array.isArray(data) ? data : []);
@@ -389,11 +382,9 @@ const StackForgeProjects = () => {
         setActivities([]);
         return;
       }
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const result = await response.json();
-      setActivities(result.data || []);
+
+      const data = await response.json();
+      setActivities(data.data || []);
     } catch (error) {
       setActivities([]);
     } finally {

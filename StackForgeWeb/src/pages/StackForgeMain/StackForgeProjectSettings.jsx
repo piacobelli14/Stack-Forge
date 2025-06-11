@@ -172,7 +172,7 @@ const StackForgeProjectSettings = () => {
 
   const fetchProtectionStates = async () => {
     try {
-      const res = await fetch("http://localhost:3000/get-deployment-protections", {
+      const response = await fetch("http://localhost:3000/get-deployment-protections", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -180,10 +180,8 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID }),
       });
-      if (!res.ok) {
-        throw new Error(`Failed to fetch protection states: ${res.status}`);
-      }
-      const { deploymentProtection } = await res.json();
+
+      const { deploymentProtection } = await response.json();
       const states = {};
       deploymentProtection.forEach(({ domainID, protectionEnabled }) => {
         states[domainID] = protectionEnabled;
@@ -199,7 +197,7 @@ const StackForgeProjectSettings = () => {
 
   const fetchAuthenticationStates = async () => {
     try {
-      const res = await fetch("http://localhost:3000/get-deployment-authentications", {
+      const response = await fetch("http://localhost:3000/get-deployment-authentications", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -207,10 +205,8 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID }),
       });
-      if (!res.ok) {
-        throw new Error(`Failed to fetch authentication states: ${res.status}`);
-      }
-      const { deploymentAuthentication } = await res.json();
+
+      const { deploymentAuthentication } = await response.json();
       const states = {};
       deploymentAuthentication.forEach(({ domainID, authenticationEnabled }) => {
         states[domainID] = authenticationEnabled;
@@ -235,9 +231,7 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID }),
       });
-      if (!response.ok) {
-        throw new Error(`Failed to fetch domains: ${response.status}`);
-      }
+
       const data = await response.json();
       setDomains(
         data.domains.map((domain) => ({
@@ -274,9 +268,6 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID, domain: domainName }),
       });
-      if (!response.ok) {
-        throw new Error(`Failed to validate domain: ${response.status}`);
-      }
 
       await fetchDomains();
     } catch (error) {
@@ -323,10 +314,7 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID, domainID }),
       });
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(errText || `Failed to delete domain: ${response.status}`);
-      }
+
       setDomains((prev) => prev.filter((d) => d.domainID !== domainID));
     } catch (error) {
       await showDialog({
@@ -351,10 +339,7 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify(payload),
       });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to update redirect: ${response.status}`);
-      }
+
       setDomains((prev) =>
         prev.map((d) => (d.domainID === domainID ? { ...d, redirectTarget } : d))
       );
@@ -380,10 +365,7 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify(payload),
       });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to update environment: ${response.status}`);
-      }
+
       setDomains((prev) =>
         prev.map((d) => (d.domainID === domainID ? { ...d, environment } : d))
       );
@@ -458,10 +440,7 @@ const StackForgeProjectSettings = () => {
           protectionEnabled: newEnabled,
         }),   
       });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Error ${response.status}`);
-      }
+      
     } catch (error) {
       setProtectionStates((prev) => ({
         ...prev,
@@ -495,10 +474,7 @@ const StackForgeProjectSettings = () => {
           authenticationEnabled: newEnabled,
         }),
       });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Error ${response.status}`);
-      }
+
     } catch (error) {
       setAuthenticationStates((prev) => ({
         ...prev,
@@ -526,15 +502,15 @@ const StackForgeProjectSettings = () => {
         try {
           const token = localStorage.getItem("token");
           if (!token) return;
-          const res = await fetch("http://localhost:3000/edit-project-image", {
+          const response = await fetch("http://localhost:3000/edit-project-image", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({ userID, organizationID, projectID, image: base64Data }),
           });
-          if (!res.ok)
+          if (!response.ok)
             return await showDialog({
               title: "Alert",
-              message: `Error uploading image: ${res.status} - ${await res.text()}`,
+              message: `Error uploading image: ${response.status} - ${await response.text()}`,
             });
           setProjectImage(base64Data);
           e.target.value = "";
@@ -560,12 +536,11 @@ const StackForgeProjectSettings = () => {
     }
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:3000/" + endpoints[fieldKey], {
+      const response = await fetch("http://localhost:3000/" + endpoints[fieldKey], {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userID, organizationID, projectID, [fieldKey]: value }),
       });
-      if (res.status !== 200) throw new Error("Internal Server Error");
       setEditModes((prev) => ({ ...prev, [fieldKey]: false }));
     } catch {}
   };
@@ -599,11 +574,11 @@ const StackForgeProjectSettings = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID, projectName, domainName: projectName }),
       });
-      if (response.status !== 200) {
-        throw new Error("Internal Server Error");
-      } else {
+
+      if (response.status === 200) {
         navigate("/stackforge");
       }
+      
     } catch {
       return;
     }

@@ -634,6 +634,7 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
                 root_directory, 
                 output_directory, 
                 build_command, 
+                run_command,
                 install_command, 
                 env_vars, 
                 domain_id
@@ -656,6 +657,7 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
             root_directory: projectInfo.rows[0].root_directory,
             output_directory: projectInfo.rows[0].output_directory,
             build_command: projectInfo.rows[0].build_command,
+            run_command: projectInfo.rows[0].run_command,
             install_command: projectInfo.rows[0].install_command,
             env_vars: projectInfo.rows[0].env_vars,
             domain_id: projectInfo.rows[0].domain_id

@@ -87,13 +87,12 @@ const StackForgeAddProject = () => {
     const fetchUserInfo = async id => {
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch("http://localhost:3000/user-info", {
+            const response = await fetch("http://localhost:3000/user-info", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID })
             });
-            if (res.status !== 200) throw new Error("Internal Server Error");
-            const data = await res.json();
+            const data = await response.json();
             const d = data[0];
             setUserDetails({
                 email: d.email,
@@ -125,17 +124,16 @@ const StackForgeAddProject = () => {
     const fetchRepos = async () => {
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch("http://localhost:3000/git-repos", {
+            const response = await fetch("http://localhost:3000/git-repos", {
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
             });
-            if (res.status !== 200) throw new Error("Error fetching git repos");
-            const data = await res.json();
+            const data = await response.json();
             const formattedRepos = data.map(repo => ({
                 name: repo.name,
                 date: new Date(repo.updated_at).toLocaleDateString()
             }));
             setRepositories(formattedRepos);
-        } catch (eerror) {}
+        } catch (error) {}
     };
 
     return (
@@ -204,28 +202,61 @@ const StackForgeAddProject = () => {
                             <div className="addProjectsCellContent">
                                 <div className="templateList">
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="" />
-                                        <p>Next.js Boilerplate</p>
+                                        <img src={"/TemplateScreenshots/Next.png"} alt="" />
+                                        <p>
+                                            <img src={"/StackForgeProjectIcons/next.png"}/>
+                                            Next.js
+                                        </p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="" />
-                                        <p>AI Chatbot</p>
+                                        <img src={"/TemplateScreenshots/Django.png"} alt="" />
+                                        <p>
+                                            <img src={"/StackForgeProjectIcons/django.png"}/>
+                                            Django
+                                        </p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="" />
-                                        <p>Commerce</p>
+                                        <img src={"/TemplateScreenshots/Flask.png"} alt="" />
+                                        <p>
+                                            <img src={"/StackForgeProjectIcons/flask.png"}/>
+                                            Flask
+                                        </p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="" />
-                                        <p>Vite + React Starter</p>
+                                        <img src={"/TemplateScreenshots/Svelte.png"} alt="" />
+                                        <p>
+                                            <img src={"/StackForgeProjectIcons/svelte.png"}/>
+                                            Svelte
+                                        </p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="" />
-                                        <p>Commerce</p>
+                                        <img src={"/TemplateScreenshots/Express.png"} alt="" />
+                                        <p>
+                                            <img src={"/StackForgeProjectIcons/express.png"}/>
+                                            Express
+                                        </p>
                                     </div>
                                     <div className="templateItem">
-                                        <img src={"TestImage.png"} alt="" />
-                                        <p>Vite + React Starter</p>
+                                        <img src={"/TemplateScreenshots/Laravel.png"} alt="" />
+                                        <p>
+                                            <img src={"/StackForgeProjectIcons/laravel.png"} alt="" />
+                                            Laravel
+                                        </p>
+                                    </div>
+
+                                    <div className="templateItem">
+                                        <img src={"/TemplateScreenshots/Vite_React_JavaScript.png"} alt="" />
+                                        <p>
+                                            <img src={"/StackForgeProjectIcons/vite.png"} alt="" />
+                                            Vite JavaScript
+                                        </p>
+                                    </div>
+                                    <div className="templateItem">
+                                        <img src={"/TemplateScreenshots/Vite_React_TypeScript.png"} alt="" />
+                                        <p>
+                                            <img src={"/StackForgeProjectIcons/vite.png"} alt="" />
+                                            Vite TypeScript
+                                        </p>
                                     </div>
                                 </div>
                             </div>

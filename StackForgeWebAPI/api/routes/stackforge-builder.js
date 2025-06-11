@@ -11,6 +11,65 @@ const { pool } = require("../config/db");
 const { authenticateToken } = require("../middleware/auth");
 const deployManager = require("./drivers/deployManager");
 
+router.post("/deploy-project", async (req, res, next) => {
+    authenticateToken(req, res, async () => {
+        try {
+            const {
+                userID,
+                organizationID,
+                repository,
+                branch,
+                teamName,
+                projectName,
+                rootDirectory,
+                outputDirectory,
+                buildCommand,
+                runCommand,
+                installCommand,
+                envVars
+            } = req.body;
+
+            if (!projectName?.trim()) {
+                return res.status(400).json({ error: "projectName is required and cannot be empty." });
+            }
+            if (!repository || !branch) {
+                return res.status(400).json({ error: "repository and branch are required." });
+            }
+
+            const domainName = projectName.toLowerCase().replace(/\s+/g, "-");
+            const result = await deployManager.launchWebsite({
+                userID,
+                organizationID,
+                projectName,
+                domainNames: [domainName],
+                template: "default",
+                repository,
+                branch,
+                teamName,
+                rootDirectory,
+                outputDirectory,
+                buildCommand,
+                runCommand,
+                installCommand,
+                envVars: Array.isArray(envVars) ? envVars : []
+            });
+
+            await axios.post(
+                `${req.protocol}://${req.get("host")}/validate-domain`,
+                { userID, organizationID, projectID: Object.values(result.taskDefArns)[0], domain: projectName },
+                { headers: { Authorization: req.headers.authorization } }
+            );
+
+            res.status(200).json({
+                message: "Deployment started successfully",
+                data: result
+            });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    });
+});
+
 router.get("/deploy-project-stream", (req, res, next) => {
     if (req.query.token) req.headers.authorization = `Bearer ${req.query.token}`;
 
@@ -39,14 +98,16 @@ router.get("/deploy-project-stream", (req, res, next) => {
             rootDirectory,
             outputDirectory,
             buildCommand,
-            installCommand
+            runCommand,
+            installCommand,
+            envVars
         } = req.query;
 
-        let envVars = [];
+        let parsedEnvVars = [];
         try {
-            envVars = JSON.parse(req.query.envVars || "[]");
+            parsedEnvVars = JSON.parse(envVars || "[]");
         } catch {
-            envVars = [];
+            parsedEnvVars = [];
         }
 
         const sendLine = (chunk) => {
@@ -83,7 +144,7 @@ router.get("/deploy-project-stream", (req, res, next) => {
                     organizationID,
                     projectName,
                     domainName,
-                    domainNames: [domainName],      
+                    domainNames: [domainName],
                     template: "default",
                     repository,
                     branch,
@@ -91,8 +152,9 @@ router.get("/deploy-project-stream", (req, res, next) => {
                     rootDirectory,
                     outputDirectory,
                     buildCommand,
+                    runCommand,
                     installCommand,
-                    envVars
+                    envVars: parsedEnvVars
                 },
                 sendLine
             );
@@ -123,561 +185,138 @@ router.get("/deploy-project-stream", (req, res, next) => {
     });
 });
 
-router.post("/deploy-project", authenticateToken, async (req, res, next) => {
-    const {
-        userID,
-        organizationID,
-        repository,
-        branch,
-        teamName,
-        projectName,
-        rootDirectory,
-        outputDirectory,
-        buildCommand,
-        installCommand,
-        envVars
-    } = req.body;
-
-    if (!repository || !branch || !projectName) {
-        return res
-            .status(400)
-            .json({ message: "Missing required deployment information." });
-    }
-
-    try {
-        const domainName = projectName.toLowerCase().replace(/\s+/g, "-");
-
-        const deploymentResult = await deployManager.launchWebsite({
-            userID,
-            organizationID,
-            projectName,
-            domainName,
-            domainNames: [domainName],      
-            template: "default",
-            repository,
-            branch,
-            teamName,
-            rootDirectory,
-            outputDirectory,
-            buildCommand,
-            installCommand,
-            envVars
-        });
-
-        return res.status(200).json({
-            message: "Project deployed successfully.",
-            url: deploymentResult.url,
-            deploymentID: deploymentResult.deploymentID,
-            buildLog: deploymentResult.logPath
-        });
-    } catch (error) {
-        const buildLog = error?.logPath || undefined;
-        return res.status(500).json({ message: error.message, buildLog });
-    }
-});
-
-router.post("/update-project", authenticateToken, async (req, res, next) => {
-    const { userID, organizationID, projectName, subdomains, repository, branch, teamName, rootDirectory, outputDirectory, buildCommand, installCommand, envVars } = req.body;
-    const timestamp = new Date().toISOString();
-
-    if (!userID || !organizationID || !projectName || !subdomains || !Array.isArray(subdomains) || subdomains.length === 0) {
-        return res.status(400).json({
-            message: "userID, organizationID, projectName, and subdomains (non-empty array) are required."
-        });
-    }
-
-    try {
-        const projectResult = await pool.query(
-            "SELECT project_id FROM projects WHERE orgid = $1 AND username = $2 AND name = $3",
-            [organizationID, userID, projectName]
-        );
-        if (projectResult.rows.length === 0) {
-            return res.status(404).json({ message: "Project not found." });
-        }
-        const projectID = projectResult.rows[0].project_id;
-
-        const domainResult = await pool.query(
-            "SELECT domain_name, domain_id FROM domains WHERE project_id = $1 AND orgid = $2",
-            [projectID, organizationID]
-        );
-        const validDomains = domainResult.rows.map(row => row.domain_name);
-        const invalidSubdomains = subdomains.filter(sub => !validDomains.includes(sub));
-        if (invalidSubdomains.length > 0) {
-            return res.status(400).json({
-                message: `Invalid subdomains: ${invalidSubdomains.join(", ")}. Must be one of: ${validDomains.join(", ")}.`
-            });
-        }
-
-        const tokenResult = await pool.query(
-            "SELECT github_access_token FROM users WHERE username = $1",
-            [userID]
-        );
-        if (tokenResult.rows.length === 0 || !tokenResult.rows[0].github_access_token) {
-            return res.status(400).json({ message: "GitHub account not connected." });
-        }
-        const githubAccessToken = tokenResult.rows[0].github_access_token;
-
-        let commitSha;
+router.post("/update-project", async (req, res) => {
+    authenticateToken(req, res, async () => {
         try {
-            commitSha = await deployManager.getLatestCommitSha(repository, branch, githubAccessToken);
-        } catch (error) {
-            return res.status(500).json({ message: `Failed to fetch commit SHA: ${error.message}` });
-        }
+            const {
+                userID,
+                organizationID,
+                projectName,
+                subdomains,
+                repository,
+                branch,
+                teamName,
+                rootDirectory,
+                outputDirectory,
+                buildCommand,
+                runCommand,
+                installCommand,
+                envVars
+            } = req.body;
 
-        const results = [];
-        const logDir = path.join("/tmp", `${projectName}-${uuidv4()}`, "logs");
-        fs.mkdirSync(logDir, { recursive: true });
-
-        for (const subdomain of subdomains) {
-            const deploymentID = uuidv4();
-            const isBaseDomain = subdomain === projectName;
-            const url = `https://${subdomain}.stackforgeengine.com`;
-
-            const domainDetailsResult = await pool.query(
-                `SELECT repository, branch, root_directory, output_directory, install_command, build_command, env_vars, domain_id
-                 FROM domains
-                 WHERE domain_name = $1 AND project_id = $2`,
-                [subdomain, projectID]
-            );
-            if (domainDetailsResult.rows.length === 0) {
-                return res.status(404).json({ message: `Domain ${subdomain} not found for project ${projectName}.` });
+            if (!projectName?.trim()) {
+                return res.status(400).json({ error: "projectName is required and cannot be empty." });
             }
-            const domainDetails = domainDetailsResult.rows[0];
-            const domainI = domainDetails.domain_id;
-
-            const config = {
-                repository: repository || domainDetails.repository,
-                branch: branch || domainDetails.branch || "main",
-                rootDirectory: rootDirectory || domainDetails.root_directory || ".",
-                outputDirectory: outputDirectory || domainDetails.output_directory || "",
-                buildCommand: buildCommand || domainDetails.build_command || "",
-                installCommand: installCommand || domainDetails.install_command || "npm install",
-                envVars: envVars || (domainDetails.env_vars ? JSON.parse(domainDetails.env_vars) : [])
-            };
-
-            await deployManager.ensureECRRepo(projectName);
-
-            await deployManager.createCodeBuildProject({
-                projectName,
-                subdomain: isBaseDomain ? null : subdomain,
-                repository: config.repository,
-                branch: config.branch,
-                rootDirectory: config.rootDirectory,
-                installCommand: config.installCommand,
-                buildCommand: config.buildCommand,
-                outputDirectory: config.outputDirectory,
-                githubAccessToken
-            });
-
-            const { imageUri, logFile } = await deployManager.startCodeBuild({
-                projectName,
-                subdomain: isBaseDomain ? null : subdomain,
-                repository: config.repository,
-                branch: config.branch,
-                logDir,
-                githubAccessToken
-            });
-
-            const taskDefArn = await deployManager.createTaskDef({
-                projectName,
-                subdomain: isBaseDomain ? null : subdomain,
-                imageUri,
-                envVars: config.envVars
-            });
-
-            const targetGroupArn = await deployManager.ensureTargetGroup(projectName, isBaseDomain ? null : subdomain);
-
-            await deployManager.createOrUpdateService({
-                projectName,
-                subdomain: isBaseDomain ? null : subdomain,
-                taskDefArn,
-                targetGroupArn
-            });
-
-            const updateResult = await pool.query(
-                "UPDATE deployments SET status = $1, updated_at = $2 WHERE project_id = $3 AND domain_id = $4 AND status = $5",
-                ["inactive", timestamp, projectID, domainI, "active"]
-            );
-
-            const insertResult = await pool.query(
-                `INSERT INTO deployments 
-                 (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-                 RETURNING deployment_id`,
-                [
-                    organizationID,
-                    userID,
-                    deploymentID,
-                    projectID,
-                    domainI,
-                    "active",
-                    url,
-                    "default",
-                    timestamp,
-                    timestamp,
-                    timestamp,
-                    taskDefArn,
-                    commitSha,
-                    config.rootDirectory,
-                    config.outputDirectory,
-                    config.buildCommand,
-                    config.installCommand,
-                    JSON.stringify(config.envVars)
-                ]
-            );
-            if (insertResult.rows.length === 0) {
-                throw new Error("Failed to insert new deployment record.");
+            if (!subdomains?.length) {
+                return res.status(400).json({ error: "subdomains must be a non-empty array." });
             }
 
-            await pool.query(
-                `UPDATE domains
-                 SET repository = $1, branch = $2, root_directory = $3, output_directory = $4, build_command = $5, install_command = $6, env_vars = $7, deployment_id = $8, updated_at = $9
-                 WHERE domain_name = $10 AND project_id = $11`,
-                [
-                    config.repository,
-                    config.branch,
-                    config.rootDirectory,
-                    config.outputDirectory,
-                    config.buildCommand,
-                    config.installCommand,
-                    JSON.stringify(config.envVars),
-                    deploymentID,
-                    timestamp,
-                    subdomain,
-                    projectID
-                ]
-            );
+            const result = await deployManager.launchWebsite({
+                userID,
+                organizationID,
+                projectName,
+                domainNames: subdomains,
+                repository,
+                branch,
+                teamName,
+                rootDirectory,
+                outputDirectory,
+                buildCommand,
+                runCommand,
+                installCommand,
+                envVars: Array.isArray(envVars) ? envVars : [],
+            });
 
-            await pool.query(
-                `UPDATE projects
-                 SET previous_deployment = current_deployment,
-                     current_deployment = $1,
-                     updated_at = $2
-                 WHERE project_id = $3`,
-                [deploymentID, timestamp, projectID]
-            );
-
-            await pool.query(
-                `INSERT INTO deployment_logs 
-                 (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [
-                    organizationID,
-                    userID,
-                    projectID,
-                    projectName,
-                    "update",
-                    deploymentID,
-                    timestamp,
-                    "127.0.0.1"
-                ]
-            );
-
-            await deployManager.updateDNSRecord(projectName, subdomains, targetGroupArn);
-            await deployManager.recordBuildLogs(organizationID, userID, deploymentID, logDir);
-            await deployManager.recordRuntimeLogs(organizationID, userID, deploymentID, projectName);
-
-            results.push({ subdomain, url, deploymentID, taskDefArn });
+            res.status(200).json({
+                message: "Project update started successfully",
+                data: result
+            });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
         }
-
-        return res.status(200).json({
-            message: `Successfully updated project ${projectName} for subdomains: ${subdomains.join(", ")}.`,
-            results
-        });
-    } catch (error) {
-        return res.status(500).json({ message: `Failed to update project: ${error.message}` });
-    }
+    });
 });
 
-router.post("/update-project-stream", authenticateToken, async (req, res, next) => {
-    const {
-        userID,
-        organizationID,
-        projectName,
-        subdomains,
-        repository,
-        branch,
-        teamName,
-        rootDirectory,
-        outputDirectory,
-        buildCommand,
-        installCommand,
-        envVars
-    } = req.body;
-
-    if (!userID || !organizationID || !projectName || !subdomains || !Array.isArray(subdomains) || subdomains.length === 0) {
-        return res.status(400).json({
-            message: "userID, organizationID, projectName, and subdomains (non-empty array) are required."
+router.post("/update-project-stream", async (req, res) => {
+    authenticateToken(req, res, async () => {
+        req.socket.setTimeout(0);
+        res.set({
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+            "X-Accel-Buffering": "no"
         });
-    }
+        res.flushHeaders();
+        const heartbeat = setInterval(() => {
+            res.write(`: heartbeat\n\n`);
+            if (res.flush) res.flush();
+        }, 15000);
+        res.write(`: connected\n\n`);
 
-    const timestamp = new Date().toISOString();
-    const logDir = path.join("/tmp", `${projectName}-${uuidv4()}`, "logs");
-    fs.mkdirSync(logDir, { recursive: true });
-
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.setHeader("Transfer-Encoding", "chunked");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-
-    const writeChunk = (chunk) => {
-        if (!res.writable) return;
-        res.write(chunk);
-        res.flush();
-    };
-
-    try {
-        writeChunk(`Starting update for project: ${projectName}, subdomains: ${subdomains.join(", ")}\n`);
-        writeChunk(`Verifying project exists: ${projectName}\n`);
-
-        const projectResult = await pool.query(
-            "SELECT project_id FROM projects WHERE orgid = $1 AND username = $2 AND name = $3",
-            [organizationID, userID, projectName]
-        );
-        if (projectResult.rows.length === 0) {
-            writeChunk(`Project ${projectName} not found\n`);
-            res.status(404).end();
-            return;
-        }
-        const projectID = projectResult.rows[0].project_id;
-
-        writeChunk(`Validating subdomains: ${subdomains.join(", ")}\n`);
-
-        const domainResult = await pool.query(
-            "SELECT domain_name, domain_id FROM domains WHERE project_id = $1 AND orgid = $2",
-            [projectID, organizationID]
-        );
-        const validDomains = domainResult.rows.map(row => row.domain_name);
-        const invalidSubdomains = subdomains.filter(sub => !validDomains.includes(sub));
-        if (invalidSubdomains.length > 0) {
-            writeChunk(`Invalid subdomains: ${invalidSubdomains.join(", ")}\n`);
-            res.status(400).end();
-            return;
-        }
-
-        writeChunk(`Fetching GitHub access token for user: ${userID}\n`);
-
-        const tokenResult = await pool.query(
-            "SELECT github_access_token FROM users WHERE username = $1",
-            [userID]
-        );
-        if (tokenResult.rows.length === 0 || !tokenResult.rows[0].github_access_token) {
-            writeChunk(`No GitHub access token found\n`);
-            res.status(400).end();
-            return;
-        }
-        const githubAccessToken = tokenResult.rows[0].github_access_token;
-
-        writeChunk(`Fetching commit SHA for repository: ${repository}, branch: ${branch}\n`);
-
-        let commitSha;
-        try {
-            commitSha = await deployManager.getLatestCommitSha(repository, branch, githubAccessToken);
-            writeChunk(`Fetched commit SHA: ${commitSha}\n`);
-        } catch (error) {
-            writeChunk(`Failed to fetch commit SHA: ${error.message}\n`);
-            res.status(500).end();
-            return;
-        }
-
-        const results = [];
-        let streamBuffer = "";
-
-        const capturingOnData = (chunk) => {
-            streamBuffer += chunk;
-            writeChunk(chunk);
+        const sendLine = (chunk) => {
+            let safe = chunk.replace(/\r/g, "\\r").replace(/\n/g, "\\n");
+            while (safe.length > 3500) {
+                res.write(`data: ${safe.slice(0, 3500)}\n\n`);
+                safe = safe.slice(3500);
+            }
+            res.write(`data: ${safe}\n\n`);
+            if (res.flush) res.flush();
         };
 
-        for (const subdomain of subdomains) {
-            const deploymentID = uuidv4();
-            const isBaseDomain = subdomain === projectName;
-            const url = `https://${subdomain}.stackforgeengine.com`;
-
-            writeChunk(`Processing subdomain: ${subdomain}, isBaseDomain: ${isBaseDomain}, projectName: ${projectName}\n`);
-
-            const domainDetailsResult = await pool.query(
-                `SELECT repository, branch, root_directory, output_directory, install_command, build_command, env_vars, domain_id
-                 FROM domains
-                 WHERE domain_name = $1 AND project_id = $2`,
-                [subdomain, projectID]
-            );
-            if (domainDetailsResult.rows.length === 0) {
-                writeChunk(`Domain ${subdomain} not found\n`);
-                res.status(404).end();
-                return;
-            }
-            const domainDetails = domainDetailsResult.rows[0];
-            const domainI = domainDetails.domain_id;
-
-            const config = {
-                repository: repository || domainDetails.repository,
-                branch: branch || domainDetails.branch || "main",
-                rootDirectory: rootDirectory || domainDetails.root_directory || ".",
-                outputDirectory: outputDirectory || domainDetails.output_directory || "",
-                buildCommand: buildCommand || domainDetails.build_command || "",
-                installCommand: installCommand || domainDetails.install_command || "npm install",
-                envVars: envVars || (domainDetails.env_vars ? JSON.parse(domainDetails.env_vars) : [])
-            };
-            writeChunk(`Config for subdomain ${subdomain}: ${JSON.stringify(config)}\n`);
-
-            writeChunk(`Ensuring ECR repository for projectName: ${projectName}\n`);
-            await deployManager.ensureECRRepo(projectName);
-
-            writeChunk(`Creating CodeBuild project: projectName=${projectName}, subdomain=${isBaseDomain ? null : subdomain}\n`);
-            await deployManager.createCodeBuildProject({
+        try {
+            const {
+                userID,
+                organizationID,
                 projectName,
-                subdomain: isBaseDomain ? null : subdomain,
-                repository: config.repository,
-                branch: config.branch,
-                rootDirectory: config.rootDirectory,
-                installCommand: config.installCommand,
-                buildCommand: config.buildCommand,
-                outputDirectory: config.outputDirectory,
-                githubAccessToken
-            });
+                subdomains,
+                repository,
+                branch,
+                teamName,
+                rootDirectory,
+                outputDirectory,
+                buildCommand,
+                runCommand,
+                installCommand,
+                envVars
+            } = req.body;
 
-            writeChunk(`Starting CodeBuild: projectName=${projectName}, subdomain=${isBaseDomain ? null : subdomain}\n`);
-            const imageUri = await deployManager.streamCodeBuild(
+            if (!projectName?.trim()) {
+                sendLine("Error: projectName is required and cannot be empty\n");
+                throw new Error("projectName is required and cannot be empty.");
+            }
+            if (!subdomains?.length) {
+                sendLine("Error: subdomains must be a non-empty array\n");
+                throw new Error("subdomains must be a non-empty array.");
+            }
+
+            await deployManager.launchWebsiteStream(
                 {
+                    userID,
+                    organizationID,
                     projectName,
-                    subdomain: isBaseDomain ? null : subdomain,
-                    repository: config.repository,
-                    branch: config.branch,
-                    githubAccessToken
+                    domainNames: subdomains,
+                    repository,
+                    branch,
+                    teamName,
+                    rootDirectory,
+                    outputDirectory,
+                    buildCommand,
+                    runCommand,
+                    installCommand,
+                    envVars: Array.isArray(envVars) ? envVars : []
                 },
-                capturingOnData
-            );
-            writeChunk(`CodeBuild completed: imageUri=${imageUri}\n`);
-
-            writeChunk(`Creating task definition: projectName=${projectName}, subdomain=${isBaseDomain ? null : subdomain}\n`);
-            const taskDefArn = await deployManager.createTaskDef({
-                projectName,
-                subdomain: isBaseDomain ? null : subdomain,
-                imageUri,
-                envVars: config.envVars
-            });
-            writeChunk(`Task definition created: taskDefArn=${taskDefArn}\n`);
-
-            writeChunk(`Ensuring target group: projectName=${projectName}, subdomain=${isBaseDomain ? null : subdomain}\n`);
-            const targetGroupArn = await deployManager.ensureTargetGroup(projectName, isBaseDomain ? null : subdomain);
-            writeChunk(`Target group ensured: targetGroupArn=${targetGroupArn}\n`);
-
-            writeChunk(`Creating/updating ECS service: projectName=${projectName}, subdomain=${isBaseDomain ? null : subdomain}\n`);
-            await deployManager.createOrUpdateService({
-                projectName,
-                subdomain: isBaseDomain ? null : subdomain,
-                taskDefArn,
-                targetGroupArn
-            });
-
-            writeChunk(`Updating deployments table for deploymentID: ${deploymentID}\n`);
-            const updateResult = await pool.query(
-                "UPDATE deployments SET status = $1, updated_at = $2 WHERE project_id = $3 AND domain_id = $4 AND status = $5",
-                ["inactive", timestamp, projectID, domainI, "active"]
+                sendLine
             );
 
-            const insertResult = await pool.query(
-                `INSERT INTO deployments 
-                 (orgid, username, deployment_id, project_id, domain_id, status, url, template, created_at, updated_at, last_deployed_at, task_def_arn, commit_sha, root_directory, output_directory, build_command, install_command, env_vars) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
-                 RETURNING deployment_id`,
-                [
-                    organizationID,
-                    userID,
-                    deploymentID,
-                    projectID,
-                    domainI,
-                    "active",
-                    url,
-                    "default",
-                    timestamp,
-                    timestamp,
-                    timestamp,
-                    taskDefArn,
-                    commitSha,
-                    config.rootDirectory,
-                    config.outputDirectory,
-                    config.buildCommand,
-                    config.installCommand,
-                    JSON.stringify(config.envVars)
-                ]
-            );
-            if (insertResult.rows.length === 0) {
-                throw new Error("Failed to insert new deployment record.");
-            }
-
-            writeChunk(`Updating domains table for subdomain: ${subdomain}\n`);
-            await pool.query(
-                `UPDATE domains
-                 SET repository = $1, branch = $2, root_directory = $3, output_directory = $4, build_command = $5, install_command = $6, env_vars = $7, deployment_id = $8, updated_at = $9
-                 WHERE domain_name = $10 AND project_id = $11`,
-                [
-                    config.repository,
-                    config.branch,
-                    config.rootDirectory,
-                    config.outputDirectory,
-                    config.buildCommand,
-                    config.installCommand,
-                    JSON.stringify(config.envVars),
-                    deploymentID,
-                    timestamp,
-                    subdomain,
-                    projectID
-                ]
-            );
-
-            writeChunk(`Updating projects table for deploymentID: ${deploymentID}\n`);
-            await pool.query(
-                `UPDATE projects
-                 SET previous_deployment = current_deployment,
-                     current_deployment = $1,
-                     updated_at = $2
-                 WHERE project_id = $3`,
-                [deploymentID, timestamp, projectID]
-            );
-
-            writeChunk(`Logging deployment: deploymentID=${deploymentID}\n`);
-            await pool.query(
-                `INSERT INTO deployment_logs 
-                 (orgid, username, project_id, project_name, action, deployment_id, timestamp, ip_address) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-                [
-                    organizationID,
-                    userID,
-                    projectID,
-                    projectName,
-                    "update",
-                    deploymentID,
-                    timestamp,
-                    "127.0.0.1"
-                ]
-            );
-
-            writeChunk(`Updating DNS records for projectName: ${projectName}, subdomains: ${subdomains.join(", ")}\n`);
-            await deployManager.updateDNSRecord(projectName, subdomains, targetGroupArn);
-
-            writeChunk(`Recording build logs for deploymentID: ${deploymentID}\n`);
-            await deployManager.recordBuildLogs(organizationID, userID, deploymentID, logDir, streamBuffer);
-
-            writeChunk(`Recording runtime logs for deploymentID: ${deploymentID}\n`);
-            await deployManager.recordRuntimeLogs(organizationID, userID, deploymentID, projectName);
-
-            results.push({ subdomain, url, deploymentID, taskDefArn });
+            clearInterval(heartbeat);
+            res.write(`data: __BUILD_COMPLETE__\n\n`);
+            res.end();
+        } catch (error) {
+            clearInterval(heartbeat);
+            sendLine(`__BUILD_ERROR__${error.message}\n`);
+            res.end();
         }
-
-        writeChunk(`Update completed successfully for subdomains: ${subdomains.join(", ")}\n`);
-        res.write(JSON.stringify({
-            message: `Successfully updated project ${projectName} for subdomains: ${subdomains.join(", ")}.`,
-            results
-        }));
-        res.end();
-    } catch (error) {
-        writeChunk(`Error updating project: ${error.message}\n`);
-        if (!res.headersSent) {
-            return res.status(500).json({ message: error.message });
-        }
-        next(error);
-    }
+    });
 });
 
 router.post("/delete-project", authenticateToken, async (req, res, next) => {
@@ -775,6 +414,7 @@ router.post("/status", authenticateToken, async (req, res, next) => {
         next(error);
     }
 });
+
 router.post("/project-details", authenticateToken, async (req, res, next) => {
     const { organizationID, userID, projectID, domainName } = req.body;
     try {

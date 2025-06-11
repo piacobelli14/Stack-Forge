@@ -56,6 +56,7 @@ const StackForgeBuildProject = () => {
   const [rootDirectory, setRootDirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
   const [buildCommand, setBuildCommand] = useState("");
+  const [runCommand, setRunCommand] = useState("");
   const [installCommand, setInstallCommand] = useState("");
   const buildLogsString = buildLogs.join("\n");
   const [successfulDeployment, setSuccessfulDeployment] = useState(false);
@@ -192,13 +193,12 @@ const StackForgeBuildProject = () => {
     try {
       const [owner, repoName] = repository.split("/");
       const token = localStorage.getItem("token");
-      const r = await fetch("http://localhost:3000/git-branches", {
+      const response = await fetch("http://localhost:3000/git-branches", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ userID, owner, repo: repoName })
       });
-      if (!r.ok) throw new Error("Error fetching branches.");
-      const data = await r.json();
+      const data = await response.json();
       setBranches(data);
       if (data.length > 0) setSelectedBranch(data[0].name);
     } catch {}
@@ -220,6 +220,7 @@ const StackForgeBuildProject = () => {
       rootDirectory,
       outputDirectory,
       buildCommand,
+      runCommand,
       installCommand,
       envVars: JSON.stringify(envVars),
       token: localStorage.getItem("token")
@@ -408,6 +409,26 @@ const StackForgeBuildProject = () => {
                     </div>
                   </div>
                 </div>
+
+                <div className="importProjectsOperationsBar">
+                  <div className="importProjectsOperationsFlex">
+                    <div className="importProjectsOperationsContainerWrapperWide">
+                      <p>Run Command (optional)</p>
+                      <div className="importProjectsOperationsField">
+                        <input
+                          type="text"
+                          className="rootInput"
+                          placeholder="Ex. 'npm run build'"
+                          value={runCommand}
+                          onChange={e => setRunCommand(e.target.value)}
+                          disabled={isDeploying}
+                        />
+                        <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="importProjectsOperationsBar">
                   <div className="importProjectsOperationsFlex">
                     <div className="importProjectsOperationsContainerWrapperWide">

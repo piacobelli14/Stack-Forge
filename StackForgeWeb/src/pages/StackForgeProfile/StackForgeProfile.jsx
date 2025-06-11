@@ -156,13 +156,12 @@ const StackForgeProfile = () => {
     const fetchUserInfo = async (userID) => {
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch("http://localhost:3000/user-info", {
+            const response = await fetch("http://localhost:3000/user-info", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID })
             });
-            if (res.status !== 200) throw new Error("Internal Server Error");
-            const data = await res.json();
+            const data = await response.json();
             const d = data[0];
             setUserDetails({
                 email: d.email,
@@ -202,12 +201,12 @@ const StackForgeProfile = () => {
                 try {
                     const token = localStorage.getItem("token");
                     if (!token) return;
-                    const res = await fetch("http://localhost:3000/edit-user-image", {
+                    const response = await fetch("http://localhost:3000/edit-user-image", {
                         method: "POST",
                         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                         body: JSON.stringify({ userID, image: base64Data })
                     });
-                    if (!res.ok) return await showDialog({ title: "Alert", message: `Error uploading image: ${res.status} - ${await res.text()}` });
+                    if (!response.ok) return await showDialog({ title: "Alert", message: `Error uploading image: ${response.status} - ${await response.text()}` });
                     e.target.value = "";
                 } catch (uploadError) {
                     await showDialog({ title: "Alert", message: `Image upload failed: ${uploadError.message}` });
@@ -230,12 +229,12 @@ const StackForgeProfile = () => {
                 try {
                     const token = localStorage.getItem("token");
                     if (!token) return;
-                    const res = await fetch("http://localhost:3000/edit-team-image", {
+                    const response = await fetch("http://localhost:3000/edit-team-image", {
                         method: "POST",
                         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                         body: JSON.stringify({ userID, organizationID, image: base64Data })
                     });
-                    if (!res.ok) return await showDialog({ title: "Alert", message: `Error uploading image: ${res.status} - ${await res.text()}` });
+                    if (!response.ok) return await showDialog({ title: "Alert", message: `Error uploading image: ${response.status} - ${await response.text()}` });
                     e.target.value = "";
                 } catch (uploadError) {
                     await showDialog({ title: "Alert", message: `Image upload failed: ${uploadError.message}` });
@@ -260,12 +259,11 @@ const StackForgeProfile = () => {
         }
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch("http://localhost:3000/" + endpoints[fieldKey], {
+            const response = await fetch("http://localhost:3000/" + endpoints[fieldKey], {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, [fieldKey]: value })
             });
-            if (res.status !== 200) throw new Error("Internal Server Error");
             setEditModes(prev => ({ ...prev, [fieldKey]: false }));
         } catch (error) { }
     };
@@ -281,12 +279,12 @@ const StackForgeProfile = () => {
         }
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch("http://localhost:3000/" + endpoints[fieldKey], {
+            const response = await fetch("http://localhost:3000/" + endpoints[fieldKey], {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ userID, organizationID, [fieldKey]: value })
             });
-            if (res.status !== 200) throw new Error("Internal Server Error");
+
             setEditModes(prev => ({ ...prev, [fieldKey]: false }));
             await fetchUserInfo(userID);
         } catch (error) {}
@@ -312,9 +310,7 @@ const StackForgeProfile = () => {
                 },
                 body: JSON.stringify({ userID })
             });
-            if (response.status !== 200) {
-                throw new Error("Internal Server Error");
-            } else {
+            if (response.status === 200) {
                 navigate("/login");
             }
         } catch (error) {
@@ -342,9 +338,7 @@ const StackForgeProfile = () => {
                 },
                 body: JSON.stringify({ userID, organizationID })
             });
-            if (response.status !== 200) {
-                throw new Error("Internal Server Error");
-            } else {
+            if (response.status === 200) {
                 navigate("/login");
             }
         } catch (error) {
@@ -439,15 +433,15 @@ const StackForgeProfile = () => {
         try {
             const token = localStorage.getItem("token");
             if (!token) return;
-            const res = await fetch("http://localhost:3000/delete-github", {
+            const response = await fetch("http://localhost:3000/delete-github", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
             });
-            if (res.ok) {
+            if (response.ok) {
                 await fetchUserInfo(userID);
                 window.location.reload();
             } else {
-                const errorData = await res.json();
+                const errorData = await response.json();
             }
         } catch (error) {
             await showDialog({ title: "Alert", message: "Error disconnecting GitHub: " + error.message });
@@ -456,7 +450,7 @@ const StackForgeProfile = () => {
 
     const fetchAccessRequests = async (userID) => {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:3000/personal-access-requests", {
+        const response = await fetch("http://localhost:3000/personal-access-requests", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -464,10 +458,8 @@ const StackForgeProfile = () => {
             },
             body: JSON.stringify({ userID })
         });
-        if (res.status !== 200) {
-            throw new Error(`Server responded with ${res.status}`);
-        }
-        const data = await res.json();
+
+        const data = await response.json();
         const requests = data.accessRequests;
         if (requests.length > 0 &&
             requests[0].request_username === userID &&
@@ -483,7 +475,7 @@ const StackForgeProfile = () => {
 
     const handleRevokeAccessRequest = async () => {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:3000/revoke-access-request", {
+        const response = await fetch("http://localhost:3000/revoke-access-request", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -491,9 +483,7 @@ const StackForgeProfile = () => {
             },
             body: JSON.stringify({ userID })
         });
-        if (res.status !== 200) {
-            throw new Error("Internal Server Error");
-        } else {
+        if (response.status === 200) {
             window.location.reload();
         }
     };
@@ -532,7 +522,7 @@ const StackForgeProfile = () => {
         const token = localStorage.getItem("token");
         const newValue = !userDetails.twofaEnabled;
         try {
-            const res = await fetch("http://localhost:3000/edit-user-twofa", {
+            const response = await fetch("http://localhost:3000/edit-user-twofa", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -540,11 +530,11 @@ const StackForgeProfile = () => {
                 },
                 body: JSON.stringify({ userID, twoFA: newValue })
             });
-            if (res.ok) {
+            if (response.ok) {
                 setUserDetails(prev => ({ ...prev, twofaEnabled: newValue }));
             } else {
-                const msg = await res.text();
-                await showDialog({ title: "Alert", message: `Error toggling 2FA: ${res.status} - ${msg}` });
+                const msg = await response.text();
+                await showDialog({ title: "Alert", message: `Error toggling 2FA: ${response.status} - ${msg}` });
             }
         } catch (error) {
             await showDialog({ title: "Alert", message: `Error toggling 2FA: ${error.message}` });
@@ -555,7 +545,7 @@ const StackForgeProfile = () => {
         const token = localStorage.getItem("token");
         const newValue = !userDetails.loginNotis;
         try {
-            const res = await fetch("http://localhost:3000/edit-user-loginnotifs", {
+            const response = await fetch("http://localhost:3000/edit-user-loginnotifs", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -563,11 +553,11 @@ const StackForgeProfile = () => {
                 },
                 body: JSON.stringify({ userID, loginNotif: newValue })
             });
-            if (res.ok) {
+            if (response.ok) {
                 setUserDetails(prev => ({ ...prev, loginNotis: newValue }));
             } else {
-                const msg = await res.text();
-                await showDialog({ title: "Alert", message: `Error toggling login notifications: ${res.status} - ${msg}` });
+                const msg = await response.text();
+                await showDialog({ title: "Alert", message: `Error toggling login notifications: ${response.status} - ${msg}` });
             }
         } catch (error) {
             await showDialog({ title: "Alert", message: `Error toggling login notifications: ${error.message}` });
@@ -578,7 +568,7 @@ const StackForgeProfile = () => {
         const token = localStorage.getItem("token");
         const newValue = !userDetails.exportNotis;
         try {
-            const res = await fetch("http://localhost:3000/edit-user-exportnotifs", {
+            const response = await fetch("http://localhost:3000/edit-user-exportnotifs", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -586,11 +576,11 @@ const StackForgeProfile = () => {
                 },
                 body: JSON.stringify({ userID, exportNotif: newValue })
             });
-            if (res.ok) {
+            if (response.ok) {
                 setUserDetails(prev => ({ ...prev, exportNotis: newValue }));
             } else {
-                const msg = await res.text();
-                await showDialog({ title: "Alert", message: `Error toggling export notifications: ${res.status} - ${msg}` });
+                const msg = await response.text();
+                await showDialog({ title: "Alert", message: `Error toggling export notifications: ${response.status} - ${msg}` });
             }
         } catch (error) {
             await showDialog({ title: "Alert", message: `Error toggling export notifications: ${error.message}` });
@@ -601,7 +591,7 @@ const StackForgeProfile = () => {
         const token = localStorage.getItem("token");
         const newValue = !userDetails.dataSharing;
         try {
-            const res = await fetch("http://localhost:3000/edit-user-datashare", {
+            const response = await fetch("http://localhost:3000/edit-user-datashare", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -609,11 +599,11 @@ const StackForgeProfile = () => {
                 },
                 body: JSON.stringify({ userID, dataShare: newValue })
             });
-            if (res.ok) {
+            if (response.ok) {
                 setUserDetails(prev => ({ ...prev, dataSharing: newValue }));
             } else {
-                const msg = await res.text();
-                await showDialog({ title: "Alert", message: `Error toggling Data Sharing: ${res.status} - ${msg}` });
+                const msg = await response.text();
+                await showDialog({ title: "Alert", message: `Error toggling Data Sharing: ${response.status} - ${msg}` });
             }
         } catch (error) {
             await showDialog({ title: "Alert", message: `Error toggling Data Sharing: ${error.message}` });
@@ -624,7 +614,7 @@ const StackForgeProfile = () => {
         try {
             const token = localStorage.getItem("token");
             const priceID = "price_XXXXXXXXXXXXXX";
-            const res = await fetch("http://localhost:3000/create-checkout-session", {
+            const response = await fetch("http://localhost:3000/create-checkout-session", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -632,7 +622,7 @@ const StackForgeProfile = () => {
                 },
                 body: JSON.stringify({ userID, priceID })
             });
-            const data = await res.json();
+            const data = await response.json();
             if (data.sessionID) {
                 window.location.href = `https://checkout.stripe.com/pay/${data.sessionID}`;
             } else {
@@ -646,7 +636,7 @@ const StackForgeProfile = () => {
     const handleManageBilling = async () => {
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch("http://localhost:3000/billing-portal", {
+            const response = await fetch("http://localhost:3000/billing-portal", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -654,7 +644,7 @@ const StackForgeProfile = () => {
                 },
                 body: JSON.stringify({ userID })
             });
-            const data = await res.json();
+            const data = await response.json();
             if (data.url) {
                 window.location.href = data.url;
             } else {
@@ -668,7 +658,7 @@ const StackForgeProfile = () => {
     const handleCancelSubscription = async () => {
         try {
             const token = localStorage.getItem("token");
-            const res = await fetch("http://localhost:3000/cancel-subscription", {
+            const response = await fetch("http://localhost:3000/cancel-subscription", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -680,8 +670,8 @@ const StackForgeProfile = () => {
                 await fetchUserInfo(userID);
                 window.location.reload();
             } else {
-                const msg = await res.text();
-                await showDialog({ title: "Alert", message: `Error canceling subscription: ${res.status} - ${msg}` });
+                const msg = await response.text();
+                await showDialog({ title: "Alert", message: `Error canceling subscription: ${response.status} - ${msg}` });
             }
         } catch (error) {
             await showDialog({ title: "Alert", message: `Error canceling subscription: ${error.message}` });

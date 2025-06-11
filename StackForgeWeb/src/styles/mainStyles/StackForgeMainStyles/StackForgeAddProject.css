@@ -2,6 +2,7 @@
     from {
         opacity: 0;
     }
+
     to {
         opacity: 1;
     }
@@ -32,7 +33,7 @@
     position: relative;
     padding: 4vw 6vw 4vw 6vw;
     box-sizing: border-box;
-    overflow: scroll; 
+    overflow: scroll;
 }
 
 .addProjectsFlexCellWrapper {
@@ -69,8 +70,8 @@
 
 @media (max-width: 600px) {
     .addProjectsFlexCell {
-        width: 100%; 
-        margin-bottom: 20px; 
+        width: 100%;
+        margin-bottom: 20px;
     }
 }
 
@@ -95,7 +96,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     padding: 0 2rem;
-    width: 100%; 
+    width: 100%;
     text-align: left;
 }
 
@@ -175,7 +176,7 @@
 @media (max-width: 800px) {
     .importSearchBarWrapper {
         width: 100%;
-    } 
+    }
 }
 
 .importNewButton {
@@ -286,13 +287,16 @@
     .repoItem {
         flex-direction: column;
     }
+
     .repoDate {
         display: none;
     }
+
     .repoName {
         padding: 0 1rem;
         margin-bottom: 1rem;
     }
+
     .repoNameDate {
         margin: 0;
     }
@@ -320,7 +324,7 @@
 .templateList {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    grid-auto-rows: 150px; 
+    grid-auto-rows: 150px;
     gap: 20px;
     width: 100%;
     height: 100%;
@@ -332,37 +336,31 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
     box-shadow: 0 0 8px black;
-    display: flex; 
+    display: flex;
     flex-direction: column;
     align-items: center;
-    max-height: 150px; 
-    min-height: 150px; 
+    max-height: 150px;
+    min-height: 150px;
     height: 150px;
     overflow: hidden;
-    gap: 0; 
-    cursor: pointer; 
+    gap: 0;
+    cursor: pointer;
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
-.templateItem img {
+.templateItem>img {
     width: 100%;
-    min-height: 70%; 
-    max-height: 70%; 
-    height: 70%; 
-    flex: 1;  
+    height: 70%;
+    object-fit: cover;
 }
 
 .templateItem p {
     margin: 0;
-    min-width: 0; 
-    min-height: 30%;
-    max-height: 30%;
-    height: 30%;
     width: 100%;
+    height: 30%;
     display: flex;
-    justify-content: flex-start;
     align-items: center;
-    background-color: #272727;
+    background-color: #212121;
     font-size: 0.7rem;
     font-weight: 600;
     color: #c1c1c1;
@@ -374,6 +372,18 @@
     white-space: nowrap;
 }
 
+.templateItem p img {
+    width: 20px;
+    height: 20px;
+    margin-right: 0.5rem;
+    background-color: #212121;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #c1c1c1;
+    font-style: italic;
+    border-radius: 4px;
+}
+
 .templateItem:hover {
-    opacity: 0.6; 
+    opacity: 0.6;
 }

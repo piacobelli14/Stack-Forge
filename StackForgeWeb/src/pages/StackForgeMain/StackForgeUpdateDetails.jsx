@@ -65,11 +65,13 @@ const StackForgeUpdateDetails = () => {
     root_directory: "",
     output_directory: "",
     build_command: "",
+    run_command: "",
     install_command: ""
   });
   const [rootDirectory, setRootDirectory] = useState("");
   const [outputDirectory, setOutputDirectory] = useState("");
   const [buildCommand, setBuildCommand] = useState("");
+  const [runCommand, setRunCommand] = useState("");
   const [installCommand, setInstallCommand] = useState("");
   const [changeEnvironmentOpen, setChangeEnvironmentOpen] = useState(false);
   const [envVars, setEnvVars] = useState([]);
@@ -126,6 +128,7 @@ const StackForgeUpdateDetails = () => {
     setRootDirectory(normalize(fetchedBuildParams.root_directory) || "");
     setOutputDirectory(normalize(fetchedBuildParams.output_directory) || "");
     setBuildCommand(fetchedBuildParams.build_command || "");
+    setRunCommand(fetchedBuildParams.run_command || "");
     setInstallCommand(fetchedBuildParams.install_command || "");
   }, [fetchedBuildParams]);
 
@@ -184,7 +187,7 @@ const StackForgeUpdateDetails = () => {
 
   const fetchCommitDetails = async () => {
     try {
-      const r = await fetch("http://localhost:3000/git-commit-details", {
+      const response = await fetch("http://localhost:3000/git-commit-details", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -197,14 +200,14 @@ const StackForgeUpdateDetails = () => {
           commitSha: commitDetails?.sha
         })
       });
-      if (!r.ok) throw new Error("Failed to fetch commit details");
-      setCommitData(await r.json());
+
+      setCommitData(await response.json());
     } catch {}
   };
 
   const fetchPreviousBuildParams = async () => {
     try {
-      const r = await fetch("http://localhost:3000/fetch-current-build-info", {
+      const response = await fetch("http://localhost:3000/fetch-current-build-info", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -212,22 +215,23 @@ const StackForgeUpdateDetails = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID })
       });
-      if (!r.ok) throw new Error("Failed to fetch build parameters");
-      const d = await r.json();
+
+      const data = await response.json();
       setFetchedBuildParams({
-        root_directory: d.root_directory || "",
-        output_directory: d.output_directory || "",
-        build_command: d.build_command || "",
-        install_command: d.install_command || ""
+        root_directory: data.root_directory || "",
+        output_directory: data.output_directory || "",
+        build_command: data.build_command || "",
+        run_command: data.run_command || "", 
+        install_command: data.install_command || ""
       });
-      setEnvVars(d.env_vars || []);
-      if ((d.env_vars || []).length > 0) setChangeEnvironmentOpen(true);
+      setEnvVars(data.env_vars || []);
+      if ((data.env_vars || []).length > 0) setChangeEnvironmentOpen(true);
     } catch {}
   };
 
   const fetchDomains = async () => {
     try {
-      const r = await fetch("http://localhost:3000/project-domains", {
+      const response = await fetch("http://localhost:3000/project-domains", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -235,10 +239,10 @@ const StackForgeUpdateDetails = () => {
         },
         body: JSON.stringify({ userID, organizationID, projectID })
       });
-      if (!r.ok) throw new Error(`Failed to fetch domains: ${r.status}`);
-      const d = await r.json();
+
+      const data = await response.json();
       const enriched = await Promise.all(
-        d.domains.map(async (dom) => {
+        data.domains.map(async (dom) => {
           const res = await fetch(
             "http://localhost:3000/git-repo-update-details-relative-to-deployment",
             {
@@ -286,7 +290,7 @@ const StackForgeUpdateDetails = () => {
     }
     if (!fileContents[file.sha]) {
       try {
-        const r = await fetch("http://localhost:3000/git-commit-details-file-content", {
+        const response = await fetch("http://localhost:3000/git-commit-details-file-content", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -300,7 +304,7 @@ const StackForgeUpdateDetails = () => {
             filePath: file.filename
           })
         });
-        const txt = r.ok ? await r.text() : "Unable to load file.";
+        const txt = response.ok ? await response.text() : "Unable to load file.";
         setFileContents((p) => ({ ...p, [file.sha]: txt }));
         setDiffHighlight((p) => ({
           ...p,
@@ -316,7 +320,7 @@ const StackForgeUpdateDetails = () => {
 
   const checkCommitRelativeToDeployment = async () => {
     try {
-      const r = await fetch(
+      const result = await fetch(
         "http://localhost:3000/git-repo-update-details-relative-to-deployment",
         {
           method: "POST",
@@ -335,8 +339,8 @@ const StackForgeUpdateDetails = () => {
           })
         }
       );
-      if (!r.ok) throw new Error("Failed to check commit");
-      setCommitStatus(await r.json());
+
+      setCommitStatus(await result.json());
     } catch {}
   };
 
@@ -653,6 +657,7 @@ const StackForgeUpdateDetails = () => {
             ? ""
             : outputDirectory || "",
         buildCommand: buildCommand || "",
+        runCommand: runCommand || "", 
         installCommand: installCommand || "",
         envVars: envVars.filter((e) => e.key && e.value),
         template: "default",
@@ -666,7 +671,7 @@ const StackForgeUpdateDetails = () => {
         setBuildLogs((p) => [...p, "ERROR: Request timed out after 30 minutes."]);
       }, 1800000);
 
-      const r = await fetch("http://localhost:3000/update-project-stream", {
+      const response = await fetch("http://localhost:3000/update-project-stream", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -677,9 +682,8 @@ const StackForgeUpdateDetails = () => {
       });
 
       clearTimeout(timeoutID);
-      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
 
-      const reader = r.body.getReader();
+      const reader =  response.body.getReader();
       let buf = "";
       const successMessage = `Update completed successfully for subdomains: ${subs.join(
         ", "
@@ -729,9 +733,9 @@ const StackForgeUpdateDetails = () => {
         }
       }
       setIsBuilding(false);
-    } catch (err) {
+    } catch (error) {
       setIsBuilding(false);
-      setBuildLogs((p) => [...p, `ERROR: Build failed: ${err.message}`]);
+      setBuildLogs((p) => [...p, `ERROR: Build failed: ${error.message}`]);
     }
   };
 
@@ -800,6 +804,7 @@ const StackForgeUpdateDetails = () => {
     setRootDirectory("");
     setOutputDirectory("");
     setBuildCommand("");
+    setRunCommand("");
     setInstallCommand("");
     setChangeEnvironmentOpen(false);
     setEnvVars([]);
@@ -1052,6 +1057,18 @@ const StackForgeUpdateDetails = () => {
                     </div>
                   </div>
                   <div className="projectUpdateInputContainer">
+                    <label>Run Command</label>
+                    <div className="projectUpdateInputWrapperRounded">
+                      <input
+                        type="text"
+                        className="projectUpdateInput"
+                        placeholder="Change your install command?"
+                        value={runCommand}
+                        onChange={(e) => setRunCommand(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="projectUpdateInputContainer">
                     <label>Install Command</label>
                     <div className="projectUpdateInputWrapperRounded">
                       <input
@@ -1191,6 +1208,15 @@ const StackForgeUpdateDetails = () => {
                     <span>
                       <label>Build Command:</label>
                       <i>{buildCommand || "N/A"}</i>
+                    </span>
+                  </div>
+                  <div
+                    className="projectUpdateDomainItemSupplement"
+                    onClick={() => setModalStep(2)}
+                  >
+                    <span>
+                      <label>Run Command:</label>
+                      <i>{runCommand || "N/A"}</i>
                     </span>
                   </div>
                   <div

@@ -118,7 +118,6 @@ const StackForgeProjectDetails = () => {
           domainName: subdomain,
         }),
       });
-      if (!response.ok) throw new Error("Failed to fetch project details");
       const data = await response.json();
       setProjectDetails(data);
     } catch (error) {}
@@ -137,9 +136,8 @@ const StackForgeProjectDetails = () => {
           domainName: subdomain,
         }),
       });
-      if (!response.ok) throw new Error("Failed to fetch snapshot");
-      const blob = await response.blob();
-      setSnapshotUrl(URL.createObjectURL(blob));
+      const data = await response.blob();
+      setSnapshotUrl(URL.createObjectURL(data));
     } catch (error) {}
   };
 
@@ -161,7 +159,6 @@ const StackForgeProjectDetails = () => {
           domainName: subdomain,
         }),
       });
-      if (!response.ok) throw new Error("Failed to fetch update mismatch");
       const data = await response.json();
       setUpdateMismatch(data);
     } catch (error) {}
@@ -185,7 +182,6 @@ const StackForgeProjectDetails = () => {
           domainName: subdomain,
         }),
       });
-      if (!response.ok) throw new Error("Failed to fetch commits");
       const data = await response.json();
       setCommits(data);
     } catch (error) {}
@@ -209,7 +205,6 @@ const StackForgeProjectDetails = () => {
           projectName: projectDetails.project.name,
         }),
       });
-      if (!response.ok) throw new Error("Failed to fetch analytics");
       const data = await response.json();
       setAnalytics(data);
     } catch (error) {}
@@ -279,20 +274,14 @@ const StackForgeProjectDetails = () => {
       });
       setIsRollbackLoading(false);
       closeRollbackModal();
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.message || `Rollback failed with status ${response.status}`
-        );
-      }
+
       const data = await response.json();
       showDialog({
         title: "Success",
-        message: data.message || "Rollback completed successfully",
+        message: data.message || "Rollback completed successfully.",
         showCancel: false,
         onConfirm: async () => {
-          await fetchProjectInfo(selectedSubdomain);
-          await fetchAllData(selectedSubdomain);
+          navigate("/stackforge");
         },
       });
     } catch (error) {
