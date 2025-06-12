@@ -22,7 +22,7 @@ const {
   DeleteTargetGroupCommand
 } = require("@aws-sdk/client-elastic-load-balancing-v2");
 const { Route53Client, ChangeResourceRecordSetsCommand } = require("@aws-sdk/client-route-53");
-const { ACMClient, RequestCertificateCommand, DescribeCertificateCommand, DeleteCertificateCommand } = require("@aws-sdk/client-acm");
+const { ACMClient, RequestCertificateCommand, DescribeCertificateCommand, DeleteCertificateCommand, ListCertificatesCommand } = require("@aws-sdk/client-acm");
 const { CloudFrontClient, CreateInvalidationCommand } = require("@aws-sdk/client-cloudfront");
 
 const deployManager = require("./drivers/deployManager");
