@@ -622,84 +622,33 @@ class DeployManager {
     }
 
     async createTaskDef({ projectName, subdomain, imageUri, envVars, runCommand }) {
-        const taskFamily = subdomain ? `${projectName}-${subdomain.replace(/\./g, '-')}` : projectName;
-        const logGroupName = `/ecs/${taskFamily}`;
-
+        const taskFamily = subdomain ? `${projectName}-${subdomain.replace(/\./g, '-')}` : projectName
+        const logGroupName = `/ecs/${taskFamily}`
         try {
-            await cloudWatchLogsClient.send(new CreateLogGroupCommand({ logGroupName }));
+            await cloudWatchLogsClient.send(new CreateLogGroupCommand({ logGroupName }))
         } catch (error) {
-            if (error.name !== "ResourceAlreadyExistsException") {
-                throw new Error(`Failed to create CloudWatch log group: ${error.message}.`);
-            }
+            if (error.name !== "ResourceAlreadyExistsException") throw new Error(`Failed to create CloudWatch log group: ${error.message}.`)
         }
-
-        const containerEnvVars = Array.isArray(envVars)
-            ? envVars
-                .filter(e => e.key && e.key.trim() && e.value != null)
-                .map(e => ({ name: e.key.trim(), value: e.value.toString() }))
-            : [];
-
-        if (!containerEnvVars.some(e => e.name === "PORT")) {
-            containerEnvVars.push({ name: "PORT", value: "3000" });
-        }
-        if (!containerEnvVars.some(e => e.name === "HOST")) {
-            containerEnvVars.push({ name: "HOST", value: "0.0.0.0" });
-        }
-
-        const fqdn = subdomain
-            ? `${subdomain}.stackforgeengine.com`
-            : `${projectName}.stackforgeengine.com`;
-        const allowedKeys = [
-            "VITE_EXTRA_SERVER_ALLOWED_HOSTS",
-            "VITE_SERVER_ALLOWED_HOSTS",
-            "__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS"
-        ];
-        for (const k of allowedKeys) {
-            if (!containerEnvVars.some(e => e.name === k)) {
-                containerEnvVars.push({ name: k, value: fqdn });
-            }
-        }
-
-        let commandArray = ["npx", "serve", "-s", "dist", "-l", "3000"];  
-
+        const containerEnvVars = Array.isArray(envVars) ? envVars.filter(e => e.key && e.key.trim() && e.value != null).map(e => ({ name: e.key.trim(), value: e.value.toString() })) : []
+        if (!containerEnvVars.some(e => e.name === "PORT")) containerEnvVars.push({ name: "PORT", value: "3000" })
+        if (!containerEnvVars.some(e => e.name === "HOST")) containerEnvVars.push({ name: "HOST", value: "0.0.0.0" })
+        const fqdn = subdomain ? `${subdomain}.stackforgeengine.com` : `${projectName}.stackforgeengine.com`
+        const allowedKeys = ["VITE_EXTRA_SERVER_ALLOWED_HOSTS", "VITE_SERVER_ALLOWED_HOSTS", "__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS"]
+        for (const k of allowedKeys) if (!containerEnvVars.some(e => e.name === k)) containerEnvVars.push({ name: k, value: fqdn })
+        let commandArray = null
         if (runCommand && typeof runCommand === "string" && runCommand.trim()) {
             try {
-                commandArray = JSON.parse(runCommand);
-                if (!Array.isArray(commandArray) || !commandArray.every(c => typeof c === "string")) {
-                    throw new Error("runCommand must be a JSON array of strings.");
-                }
+                commandArray = JSON.parse(runCommand)
+                if (!Array.isArray(commandArray) || !commandArray.every(c => typeof c === "string")) throw new Error("runCommand must be a JSON array of strings.")
             } catch (_) {
-                commandArray = runCommand.trim().split(/\s+/);
+                commandArray = runCommand.trim().split(/\s+/)
             }
         }
-
-        const joined = commandArray.join(" ");
-        const looksLikeViteDev =
-            /(^|\/)vite(\.js)?(\s|$)/.test(joined) ||
-            /npm\s+run\s+(dev|preview)/.test(joined);
-
-        if (looksLikeViteDev) {
-            commandArray = ["npx", "serve", "-s", "dist", "-l", "3000"];
-        } else {
-            const needsPort = !commandArray.some(c => c === "--port" || c.startsWith("--port="));
-            const needsHost = !commandArray.some(c => c === "--host" || c.startsWith("--host="));
-            const needsAllowed = !commandArray.some(c => c === "--allowedHosts" || c.startsWith("--allowedHosts="));
-
-            const pushArgs = (args) => {
-                if (commandArray[0] === "npm" && commandArray[1] === "run") {
-                    commandArray.push("--", ...args);
-                } else {
-                    commandArray.push(...args);
-                }
-            };
-
-            const extra = [];
-            if (needsPort) extra.push("--port", "3000");
-            if (needsHost) extra.push("--host", "0.0.0.0");
-            if (needsAllowed) extra.push("--allowedHosts", fqdn);
-            if (extra.length) pushArgs(extra);
+        if (commandArray) {
+            const joined = commandArray.join(" ")
+            const looksLikeViteDev = /(^|\/|\s)vite(\.js)?(\s|$)/.test(joined) || /npm\s+run\s+(dev|preview)/.test(joined)
+            if (looksLikeViteDev) commandArray = ["npx", "serve", "-s", "dist", "-l", "3000"]
         }
-
         const params = {
             family: taskFamily,
             networkMode: "awsvpc",
@@ -707,34 +656,29 @@ class DeployManager {
             cpu: "256",
             memory: "512",
             executionRoleArn: process.env.ECS_EXECUTION_ROLE,
-            containerDefinitions: [
-                {
-                    name: taskFamily,
-                    image: imageUri,
-                    portMappings: [{ containerPort: 3000, protocol: "tcp" }],
-                    essential: true,
-                    environment: containerEnvVars,
-                    command: commandArray,
-                    logConfiguration: {
-                        logDriver: "awslogs",
-                        options: {
-                            "awslogs-group": logGroupName,
-                            "awslogs-region": process.env.AWS_REGION,
-                            "awslogs-stream-prefix": "ecs"
-                        }
+            containerDefinitions: [{
+                name: taskFamily,
+                image: imageUri,
+                portMappings: [{ containerPort: 3000, protocol: "tcp" }],
+                essential: true,
+                environment: containerEnvVars,
+                command: commandArray || undefined,
+                logConfiguration: {
+                    logDriver: "awslogs",
+                    options: {
+                        "awslogs-group": logGroupName,
+                        "awslogs-region": process.env.AWS_REGION,
+                        "awslogs-stream-prefix": "ecs"
                     }
                 }
-            ]
-        };
-
+            }]
+        }
         try {
-            const res = await this.ecs.send(new RegisterTaskDefinitionCommand(params));
-            return res.taskDefinition.taskDefinitionArn;
+            const res = await this.ecs.send(new RegisterTaskDefinitionCommand(params))
+            return res.taskDefinition.taskDefinitionArn
         } catch (error) {
-            if (error.name === "AccessDeniedException") {
-                throw new Error(`IAM permissions error: ${error.message}. Ensure 'iam:PassRole' is allowed on ${process.env.ECS_EXECUTION_ROLE}.`);
-            }
-            throw error;
+            if (error.name === "AccessDeniedException") throw new Error(`IAM permissions error: ${error.message}. Ensure 'iam:PassRole' is allowed on ${process.env.ECS_EXECUTION_ROLE}.`)
+            throw error
         }
     }
 
@@ -1330,7 +1274,6 @@ class DeployManager {
             );
         }
     }
-
 
     async startCodeBuild({
         projectName,
