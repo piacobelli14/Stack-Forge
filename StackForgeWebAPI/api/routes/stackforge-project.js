@@ -637,7 +637,8 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
                 run_command,
                 install_command, 
                 env_vars, 
-                domain_id
+                domain_id, 
+                template
             FROM deployments
             WHERE orgid = $1
             AND username = $2
@@ -660,7 +661,8 @@ router.post("/fetch-current-build-info", authenticateToken, async (req, res, nex
             run_command: projectInfo.rows[0].run_command,
             install_command: projectInfo.rows[0].install_command,
             env_vars: projectInfo.rows[0].env_vars,
-            domain_id: projectInfo.rows[0].domain_id
+            domain_id: projectInfo.rows[0].domain_id, 
+            framework: projectInfo.rows[0].template
         });
 
     } catch (error) {

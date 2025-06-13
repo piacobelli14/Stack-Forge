@@ -26,7 +26,8 @@ router.post("/deploy-project", async (req, res, next) => {
                 buildCommand,
                 runCommand,
                 installCommand,
-                envVars
+                envVars,
+                framework
             } = req.body;
 
             if (!projectName?.trim()) {
@@ -42,7 +43,6 @@ router.post("/deploy-project", async (req, res, next) => {
                 organizationID,
                 projectName,
                 domainNames: [domainName],
-                template: "default",
                 repository,
                 branch,
                 teamName,
@@ -51,7 +51,8 @@ router.post("/deploy-project", async (req, res, next) => {
                 buildCommand,
                 runCommand,
                 installCommand,
-                envVars: Array.isArray(envVars) ? envVars : []
+                envVars: Array.isArray(envVars) ? envVars : [], 
+                framework
             });
 
             await axios.post(
@@ -100,8 +101,25 @@ router.get("/deploy-project-stream", (req, res, next) => {
             buildCommand,
             runCommand,
             installCommand,
-            envVars
+            envVars, 
+            framework
         } = req.query;
+
+        console.log({
+            userID: userID,
+            organizationID: organizationID,
+            repository: repository,
+            branch: branch,
+            teamName: teamName,
+            projectName: projectName,
+            rootDirectory: rootDirectory,
+            outputDirectory: outputDirectory,
+            buildCommand: buildCommand,
+            runCommand: runCommand,
+            installCommand: installCommand,
+            envVars: envVars, 
+            framework: framework
+        }); 
 
         let parsedEnvVars = [];
         try {
@@ -145,7 +163,6 @@ router.get("/deploy-project-stream", (req, res, next) => {
                     projectName,
                     domainName,
                     domainNames: [domainName],
-                    template: "default",
                     repository,
                     branch,
                     teamName,
@@ -154,7 +171,8 @@ router.get("/deploy-project-stream", (req, res, next) => {
                     buildCommand,
                     runCommand,
                     installCommand,
-                    envVars: parsedEnvVars
+                    envVars: parsedEnvVars, 
+                    framework
                 },
                 sendLine
             );
@@ -201,7 +219,8 @@ router.post("/update-project", async (req, res) => {
                 buildCommand,
                 runCommand,
                 installCommand,
-                envVars
+                envVars, 
+                framework
             } = req.body;
 
             if (!projectName?.trim()) {
@@ -225,6 +244,7 @@ router.post("/update-project", async (req, res) => {
                 runCommand,
                 installCommand,
                 envVars: Array.isArray(envVars) ? envVars : [],
+                framework
             });
 
             res.status(200).json({
@@ -277,7 +297,8 @@ router.post("/update-project-stream", async (req, res) => {
                 buildCommand,
                 runCommand,
                 installCommand,
-                envVars
+                envVars, 
+                framework
             } = req.body;
 
             if (!projectName?.trim()) {
@@ -303,7 +324,8 @@ router.post("/update-project-stream", async (req, res) => {
                     buildCommand,
                     runCommand,
                     installCommand,
-                    envVars: Array.isArray(envVars) ? envVars : []
+                    envVars: Array.isArray(envVars) ? envVars : [], 
+                    framework
                 },
                 sendLine
             );

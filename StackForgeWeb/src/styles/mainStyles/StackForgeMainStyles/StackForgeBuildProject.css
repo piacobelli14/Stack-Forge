@@ -310,9 +310,17 @@
   width: 35%; 
 }
 
+.importProjectsTemplateContainerWrapper {
+  box-sizing: border-box;
+  overflow: hidden; 
+  width: 100%; 
+  margin-top: 1rem;
+} 
+
 .importProjectsOperationsContainerWrapper p, 
 .importProjectsOperationsContainerWrapperWide p,
-.importProjectsOperationsContainerWrapperShort p {
+.importProjectsOperationsContainerWrapperShort p, 
+.importProjectsTemplateContainerWrapper p {
   font-size: 0.7rem; 
   font-weight: 600; 
   color: #A3A3A3; 
@@ -321,6 +329,12 @@
   white-space: nowrap; 
   overflow: hidden; 
   text-overflow: ellipsis; 
+}
+
+.importProjectsTemplateContainerWrapper span img {
+  height: 20px; 
+  width: 20px; 
+  border-radius: 4px; 
 }
 
 .importProjectsOperationsStack {
@@ -370,7 +384,8 @@
   align-items: center;
 }
 
-.importProjectsOperationsField p {
+.importProjectsOperationsField p, 
+.importProjectsOperationsField span {
   font-size: 0.7rem;
   font-weight: 700;
   overflow: hidden;
@@ -398,7 +413,8 @@
   margin: 2rem 0 1rem 0
 }
 
-.importProjectsOperationsDropdownMenu {
+.importProjectsOperationsDropdownMenu, 
+.importProjectsTemplateSelectionDropdownMenu {
   position: fixed;
   background: #222222;
   border: 2px solid #414141;
@@ -411,19 +427,30 @@
   box-shadow: 0 0 20px black;
 }
 
-.importProjectsOperationsDropdownMenu button span {
+.importProjectsOperationsDropdownMenu {
+  min-width: 200px;
+}
+
+.importProjectsTemplateSelectionDropdownMenu {
+  min-width: 400px;
+}
+
+.importProjectsOperationsDropdownMenu button span, 
+.importProjectsTemplateSelectionDropdownMenu button span {
   display: flex; 
   align-items: center;
   gap: 10px; 
 }
 
-.importProjectsOperationsDropdownMenu button span p {
+.importProjectsOperationsDropdownMenu button span p, 
+.importProjectsTemplateSelectionDropdownMenu button span p {
   font-size: 0.5rem; 
   font-weight: 600; 
   margin-top: 4px;
 }
 
-.importProjectsOperationsDropdownMenu button {
+.importProjectsOperationsDropdownMenu button, 
+.importProjectsTemplateSelectionDropdownMenu button {
   background: transparent;
   border: none;
   border-radius: 0;
@@ -439,25 +466,29 @@
   align-items: center;
 }
 
-.importProjectsOperationsDropdownMenu button svg {
+.importProjectsOperationsDropdownMenu button svg, 
+.importProjectsTemplateSelectionDropdownMenu button svg {
   font-size: 0.7rem;
 }
 
-.importProjectsOperationsDropdownMenu button:hover {
+.importProjectsOperationsDropdownMenu button:hover, 
+.importProjectsTemplateSelectionDropdownMenu button:hover {
   background: #2a2a2a;
   border: none;
   outline: none;
 }
 
-.importProjectsOperationsDropdownMenu button:focus {
+.importProjectsOperationsDropdownMenu button:focus, 
+.importProjectsTemplateSelectionDropdownMenu button:focus {
   background: #2a2a2a;
   border: none;
   outline: none;
 }
 
-.importProjectsOperationsDropdownMenu img {
-  height: 30px; 
-  width: 30px;
+.importProjectsOperationsDropdownMenu img, 
+.importProjectsTemplateSelectionDropdownMenu img {
+  height: 20px; 
+  width: 20px;
   border-radius: 4px;  
   box-shadow: 0 0 6px black; 
 }

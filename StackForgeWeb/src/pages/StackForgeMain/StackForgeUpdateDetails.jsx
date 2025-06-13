@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -73,6 +74,7 @@ const StackForgeUpdateDetails = () => {
   const [buildCommand, setBuildCommand] = useState("");
   const [runCommand, setRunCommand] = useState("");
   const [installCommand, setInstallCommand] = useState("");
+  const [framework, setFramework] = useState("");
   const [changeEnvironmentOpen, setChangeEnvironmentOpen] = useState(false);
   const [envVars, setEnvVars] = useState([]);
   const [buildLogs, setBuildLogs] = useState([]);
@@ -130,6 +132,7 @@ const StackForgeUpdateDetails = () => {
     setBuildCommand(fetchedBuildParams.build_command || "");
     setRunCommand(fetchedBuildParams.run_command || "");
     setInstallCommand(fetchedBuildParams.install_command || "");
+    setFramework(fetchedBuildParams.framework || "other"); 
   }, [fetchedBuildParams]);
 
   useEffect(() => {
@@ -222,7 +225,8 @@ const StackForgeUpdateDetails = () => {
         output_directory: data.output_directory || "",
         build_command: data.build_command || "",
         run_command: data.run_command || "", 
-        install_command: data.install_command || ""
+        install_command: data.install_command || "", 
+        framework: data.framework || "other"
       });
       setEnvVars(data.env_vars || []);
       if ((data.env_vars || []).length > 0) setChangeEnvironmentOpen(true);
@@ -660,7 +664,7 @@ const StackForgeUpdateDetails = () => {
         runCommand: runCommand || "", 
         installCommand: installCommand || "",
         envVars: envVars.filter((e) => e.key && e.value),
-        template: "default",
+        framework: framework,
         teamName: ""
       };
 
@@ -806,6 +810,7 @@ const StackForgeUpdateDetails = () => {
     setBuildCommand("");
     setRunCommand("");
     setInstallCommand("");
+    setFramework("");
     setChangeEnvironmentOpen(false);
     setEnvVars([]);
     setBuildLogs([]);

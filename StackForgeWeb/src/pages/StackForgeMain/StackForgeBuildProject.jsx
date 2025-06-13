@@ -60,6 +60,11 @@ const StackForgeBuildProject = () => {
   const [installCommand, setInstallCommand] = useState("");
   const buildLogsString = buildLogs.join("\n");
   const [successfulDeployment, setSuccessfulDeployment] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const buildTemplateOpenRef = useRef(null);
+  const [buildTemplateOpen, setBuildTemplateOpen] = useState(false);
+  const buildTemplateDropdownRef = useRef(null);
+  const [buildTemplateDropdownPosition, setBuildTemplateDropdownPosition] = useState({ top: 0, left: 0 });
 
   const handleEnvVarsPaste = (index, e) => {
     const text = e.clipboardData.getData("text");
@@ -103,6 +108,7 @@ const StackForgeBuildProject = () => {
       setIsLoaded(false);
       setChangeTeamOpen(false);
       setBranchOpen(false);
+      setBuildTemplateOpen(false);
       setScreenSize(window.innerWidth);
       setTimeout(() => setIsLoaded(true), 300);
     };
@@ -119,10 +125,17 @@ const StackForgeBuildProject = () => {
         !changeTeamDropdownRef.current.contains(e.target)
       )
         setChangeTeamOpen(false);
+      if (
+        buildTemplateOpenRef.current &&
+        !buildTemplateOpenRef.current.contains(e.target) &&
+        buildTemplateDropdownRef.current &&
+        !buildTemplateDropdownRef.current.contains(e.target)
+      )
+        setBuildTemplateOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [changeTeamOpen, buildTemplateOpen]);
 
   useEffect(() => {
     if (changeTeamOpen && changeTeamOpenRef.current && changeTeamDropdownRef.current) {
@@ -163,6 +176,24 @@ const StackForgeBuildProject = () => {
   }, [branchOpen]);
 
   useEffect(() => {
+    if (
+      buildTemplateOpen &&
+      buildTemplateOpenRef.current &&
+      buildTemplateDropdownRef.current
+    ) {
+      const b = buildTemplateOpenRef.current.getBoundingClientRect();
+      const d = buildTemplateDropdownRef.current.getBoundingClientRect();
+      let top = b.bottom + 5;
+      let left = b.right - d.width;
+      if (top + d.height > window.innerHeight) {
+        top = window.innerHeight - d.height;
+      }
+      if (left < 0) left = 0;
+      setBuildTemplateDropdownPosition({ top, left });
+    }
+  }, [buildTemplateOpen]);
+
+  useEffect(() => {
     if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
     if (typedText.length >= buildLogsString.length) return;
     typingIntervalRef.current = setInterval(() => {
@@ -180,11 +211,16 @@ const StackForgeBuildProject = () => {
   }, [typedText, successfulDeployment]);
 
   useEffect(() => {
-    if (buildFinished && typedText.length === buildLogsString.length) setIsDeploying(false);
+    if (buildFinished && typedText.length === buildLogsString.length)
+      setIsDeploying(false);
   }, [buildFinished, typedText, buildLogsString]);
 
   useEffect(() => {
-    if (buildFinished && typedText.length === buildLogsString.length && buildLogs.includes("Deployment successful!")) {
+    if (
+      buildFinished &&
+      typedText.length === buildLogsString.length &&
+      buildLogs.includes("Deployment successful!")
+    ) {
       setSuccessfulDeployment(true);
     }
   }, [buildFinished, typedText, buildLogsString, buildLogs]);
@@ -223,9 +259,12 @@ const StackForgeBuildProject = () => {
       runCommand,
       installCommand,
       envVars: JSON.stringify(envVars),
+      framework: selectedTemplate,
       token: localStorage.getItem("token")
     });
-    const sse = new EventSource(`http://localhost:3000/deploy-project-stream?${params.toString()}`);
+    const sse = new EventSource(
+      `http://localhost:3000/deploy-project-stream?${params.toString()}`
+    );
     sse.onmessage = e => {
       const raw = e.data;
       if (raw === "__BUILD_COMPLETE__") {
@@ -273,14 +312,17 @@ const StackForgeBuildProject = () => {
   const handleContainerScroll = () => {
     setChangeTeamOpen(false);
     setBranchOpen(false);
+    setBuildTemplateOpen(false);
   };
 
   const toggleChangeTeamDropdown = () => setChangeTeamOpen(p => !p);
   const toggleChangeEnvironmentPopout = () => {
-    if (!changeEnvironmentOpen && envVars.length === 0) setEnvVars([{ key: "", value: "" }]);
+    if (!changeEnvironmentOpen && envVars.length === 0)
+      setEnvVars([{ key: "", value: "" }]);
     setChangeEnvironmentOpen(p => !p);
   };
   const toggleBranchDropdown = () => setBranchOpen(p => !p);
+  const toggleBuildTemplateDropdown = () => setBuildTemplateOpen(p => !p);
 
   const handleAddEnvVar = () => setEnvVars([...envVars, { key: "", value: "" }]);
   const handleEnvVarChange = (i, f, v) =>
@@ -289,12 +331,16 @@ const StackForgeBuildProject = () => {
       up[i][f] = v;
       return up;
     });
-  const handleRemoveEnvVar = i => setEnvVars(prev => prev.filter((_, idx) => idx !== i));
+  const handleRemoveEnvVar = i =>
+    setEnvVars(prev => prev.filter((_, idx) => idx !== i));
 
   return (
     <div
       className="importProjectsPageWrapper"
-      style={{ background: "linear-gradient(to bottom, #322A54, #29282D)", display: screenSize >= 5300 ? "none" : "" }}
+      style={{
+        background: "linear-gradient(to bottom, #322A54, #29282D)",
+        display: screenSize >= 5300 ? "none" : ""
+      }}
     >
       <StackForgeNav activePage="main" />
       {isLoaded && (
@@ -305,8 +351,15 @@ const StackForgeBuildProject = () => {
           style={{ position: "relative" }}
         >
           <div className="buildProjectsFlexCellWrapper">
-            <div className="buildProjectsFlexCellLeading" style={{ opacity: isDeploying ? 0.4 : 1 }}>
-              <div className="importProjectsCellHeader">
+            <div
+              className="buildProjectsFlexCellLeading"
+              style={{ opacity: isDeploying ? 0.4 : 1 }}
+              onScroll={handleContainerScroll}
+            >
+              <div
+                className="importProjectsCellHeader"
+                onScroll={handleContainerScroll}
+              >
                 <a className="importProjectsImportingFromGithub">
                   <span>
                     <p>Importing from GitHub</p>
@@ -316,7 +369,12 @@ const StackForgeBuildProject = () => {
                     </strong>
                   </span>
                   <div className="importProjectsBranchSelector">
-                    <button className="importProjectsBranchSelectorButton" ref={branchOpenRef} onClick={toggleBranchDropdown} disabled={isDeploying}>
+                    <button
+                      className="importProjectsBranchSelectorButton"
+                      ref={branchOpenRef}
+                      onClick={toggleBranchDropdown}
+                      disabled={isDeploying}
+                    >
                       <FontAwesomeIcon icon={faCodeBranch} />
                       <span className="importProjectsBranchSelectorButtonText">
                         {selectedBranch || "Select Branch"}
@@ -328,15 +386,25 @@ const StackForgeBuildProject = () => {
                   <div className="importProjectsOperationsFlex">
                     <div className="importProjectsOperationsContainerWrapper">
                       <p>Stack Forge Team</p>
-                      <button className="importProjectsOperationsField" ref={changeTeamOpenRef} onClick={toggleChangeTeamDropdown} disabled={isDeploying}>
+                      <button
+                        className="importProjectsOperationsField"
+                        ref={changeTeamOpenRef}
+                        onClick={toggleChangeTeamDropdown}
+                        disabled={isDeploying}
+                      >
                         <span>
                           <FontAwesomeIcon icon={faGithub} />
-                          <p>{teamName}</p>
+                          <p>{selectedTeamName}</p>
                         </span>
                         <FontAwesomeIcon
                           icon={faCaretDown}
                           className="importNewCaretIcon"
-                          style={{ transform: changeTeamOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.3s ease" }}
+                          style={{
+                            transform: changeTeamOpen
+                              ? "rotate(180deg)"
+                              : "rotate(0deg)",
+                            transition: "transform 0.3s ease"
+                          }}
                         />
                       </button>
                     </div>
@@ -349,8 +417,47 @@ const StackForgeBuildProject = () => {
                         disabled={isDeploying}
                       />
                     </div>
+                    
                   </div>
+
+                  <div className="importProjectsTemplateContainerWrapper">
+                      <p>Build Template</p>
+                      <button
+                        className="importProjectsOperationsField"
+                        ref={buildTemplateOpenRef}
+                        onClick={toggleBuildTemplateDropdown}
+                        disabled={isDeploying}
+                      >
+                        <span>
+                          {selectedTemplate ? (
+                            <>
+                              <img
+                                src={`public/StackForgeProjectIcons/${selectedTemplate
+                                  .toLowerCase()
+                                  .replace(/\./g, "")
+                                  .replace(/ /g, "")}.png`}
+                                alt={""}
+                              />
+                              <p>{selectedTemplate}</p>
+                            </>
+                          ) : (
+                            <p>Select Template</p>
+                          )}
+                        </span>
+                        <FontAwesomeIcon
+                          icon={faCaretDown}
+                          className="importNewCaretIcon"
+                          style={{
+                            transform: buildTemplateOpen
+                              ? "rotate(180deg)"
+                              : "rotate(0deg)",
+                            transition: "transform 0.3s ease"
+                          }}
+                        />
+                      </button>
+                    </div>
                 </div>
+
                 <div className="importProjectsOperationsDivider" />
                 <div className="importProjectsOperationsBar">
                   <div className="importProjectsOperationsFlex">
@@ -366,7 +473,10 @@ const StackForgeBuildProject = () => {
                           onChange={e => setRootDirectory(e.target.value)}
                           disabled={isDeploying}
                         />
-                        <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
+                        <FontAwesomeIcon
+                          icon={faCircleInfo}
+                          className="rootIconSupplement"
+                        />
                       </div>
                     </div>
                   </div>
@@ -385,7 +495,10 @@ const StackForgeBuildProject = () => {
                           onChange={e => setOutputDirectory(e.target.value)}
                           disabled={isDeploying}
                         />
-                        <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
+                        <FontAwesomeIcon
+                          icon={faCircleInfo}
+                          className="rootIconSupplement"
+                        />
                       </div>
                     </div>
                   </div>
@@ -404,12 +517,14 @@ const StackForgeBuildProject = () => {
                           onChange={e => setBuildCommand(e.target.value)}
                           disabled={isDeploying}
                         />
-                        <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
+                        <FontAwesomeIcon
+                          icon={faCircleInfo}
+                          className="rootIconSupplement"
+                        />
                       </div>
                     </div>
                   </div>
                 </div>
-
                 <div className="importProjectsOperationsBar">
                   <div className="importProjectsOperationsFlex">
                     <div className="importProjectsOperationsContainerWrapperWide">
@@ -423,12 +538,14 @@ const StackForgeBuildProject = () => {
                           onChange={e => setRunCommand(e.target.value)}
                           disabled={isDeploying}
                         />
-                        <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
+                        <FontAwesomeIcon
+                          icon={faCircleInfo}
+                          className="rootIconSupplement"
+                        />
                       </div>
                     </div>
                   </div>
                 </div>
-
                 <div className="importProjectsOperationsBar">
                   <div className="importProjectsOperationsFlex">
                     <div className="importProjectsOperationsContainerWrapperWide">
@@ -442,7 +559,10 @@ const StackForgeBuildProject = () => {
                           onChange={e => setInstallCommand(e.target.value)}
                           disabled={isDeploying}
                         />
-                        <FontAwesomeIcon icon={faCircleInfo} className="rootIconSupplement" />
+                        <FontAwesomeIcon
+                          icon={faCircleInfo}
+                          className="rootIconSupplement"
+                        />
                       </div>
                     </div>
                   </div>
@@ -458,61 +578,101 @@ const StackForgeBuildProject = () => {
                             icon={faXmark}
                             className="importProjectsClosePopout"
                             onClick={toggleChangeEnvironmentPopout}
-                            style={{ transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)", transition: "transform 0.3s ease" }}
+                            style={{
+                              transform: changeEnvironmentOpen
+                                ? "rotate(360deg)"
+                                : "rotate(270deg)",
+                              transition: "transform 0.3s ease"
+                            }}
                             disabled={isDeploying}
                           />
                           <div className="importProjectsEnvVarsWrapper">
                             {envVars.map((envVar, i) => (
                               <div key={i} className="importProjectsEnvVarsRow">
                                 <div className="importProjectsOperationsContainerWrapperShort">
-                                  <div className="importProjectsOperationsField" style={{ backgroundColor: "rgba(30, 30, 30, 0.4)" }}>
+                                  <div
+                                    className="importProjectsOperationsField"
+                                    style={{
+                                      backgroundColor: "rgba(30, 30, 30, 0.4)"
+                                    }}
+                                  >
                                     <input
                                       type="text"
                                       className="rootInput"
                                       placeholder="Key"
                                       value={envVar.key}
-                                      onChange={e => handleEnvVarChange(i, "key", e.target.value)}
-                                      onPaste={e => handleEnvVarsPaste(i, e)}
+                                      onChange={e =>
+                                        handleEnvVarChange(i, "key", e.target.value)
+                                      }
+                                      onPaste={e =>
+                                        handleEnvVarsPaste(i, e)
+                                      }
                                       style={{ color: "white" }}
                                       disabled={isDeploying}
                                     />
                                   </div>
                                 </div>
                                 <div className="importProjectsOperationsContainerWrapperShort">
-                                  <div className="importProjectsOperationsField" style={{ backgroundColor: "rgba(30, 30, 30, 0.4)" }}>
+                                  <div
+                                    className="importProjectsOperationsField"
+                                    style={{
+                                      backgroundColor: "rgba(30, 30, 30, 0.4)"
+                                    }}
+                                  >
                                     <input
                                       type="text"
                                       className="rootInput"
                                       placeholder="Value"
                                       value={envVar.value}
-                                      onChange={e => handleEnvVarChange(i, "value", e.target.value)}
-                                      onPaste={e => handleEnvVarsPaste(i, e)}
+                                      onChange={e =>
+                                        handleEnvVarChange(i, "value", e.target.value)
+                                      }
+                                      onPaste={e =>
+                                        handleEnvVarsPaste(i, e)
+                                      }
                                       style={{ color: "white" }}
                                       disabled={isDeploying}
                                     />
                                   </div>
                                 </div>
-                                <button className="importProjectsEnvVarsRemoveBtn" onClick={() => handleRemoveEnvVar(i)} disabled={isDeploying}>
+                                <button
+                                  className="importProjectsEnvVarsRemoveBtn"
+                                  onClick={() => handleRemoveEnvVar(i)}
+                                  disabled={isDeploying}
+                                >
                                   -
                                 </button>
                               </div>
                             ))}
                             <div className="importProjectsEnvVarsRow">
-                              <button className="importProjectsEnvVarsAddBtn" onClick={handleAddEnvVar} disabled={isDeploying}>
+                              <button
+                                className="importProjectsEnvVarsAddBtn"
+                                onClick={handleAddEnvVar}
+                                disabled={isDeploying}
+                              >
                                 Add More
                               </button>
                             </div>
                           </div>
                         </div>
                       ) : (
-                        <button className="importProjectsOperationsField" onClick={toggleChangeEnvironmentPopout} disabled={isDeploying}>
+                        <button
+                          className="importProjectsOperationsField"
+                          onClick={toggleChangeEnvironmentPopout}
+                          disabled={isDeploying}
+                        >
                           <span>
                             <p>Environment Variables</p>
                           </span>
                           <FontAwesomeIcon
                             icon={faCaretDown}
                             className="importNewCaretIcon"
-                            style={{ transform: changeEnvironmentOpen ? "rotate(360deg)" : "rotate(270deg)", transition: "transform 0.3s ease" }}
+                            style={{
+                              transform: changeEnvironmentOpen
+                                ? "rotate(360deg)"
+                                : "rotate(270deg)",
+                              transition: "transform 0.3s ease"
+                            }}
                           />
                         </button>
                       )}
@@ -520,7 +680,11 @@ const StackForgeBuildProject = () => {
                   </div>
                 </div>
                 <div className="importProjectsOperationsBarSupplement">
-                  <button className="importProjectsDeployButton" onClick={handleDeployProject} disabled={isDeploying}>
+                  <button
+                    className="importProjectsDeployButton"
+                    onClick={handleDeployProject}
+                    disabled={isDeploying}
+                  >
                     Deploy New Project
                   </button>
                 </div>
@@ -537,7 +701,14 @@ const StackForgeBuildProject = () => {
                 </span>
                 {isDeploying && <div className="loading-circle-supplement" />}
               </div>
-              <div className={successfulDeployment ? "importProjectsBuildLogsCellLong" : "importProjectsBuildLogsCell"} ref={logsContainerRef}>
+              <div
+                className={
+                  successfulDeployment
+                    ? "importProjectsBuildLogsCellLong"
+                    : "importProjectsBuildLogsCell"
+                }
+                ref={logsContainerRef}
+              >
                 {typedText === "" ? (
                   <div className="noBuildLogsDisplay">
                     <FontAwesomeIcon icon={faGlobe} />
@@ -546,7 +717,10 @@ const StackForgeBuildProject = () => {
                   typedText.split("\n").map((line, i) => {
                     if (line === "Deployment successful!") {
                       return (
-                        <div className="importProjectsBuildLogsCellLogDisplay" key={i}>
+                        <div
+                          className="importProjectsBuildLogsCellLogDisplay"
+                          key={i}
+                        >
                           <span className="log-content successLogLine">
                             Deployment successful!{" "}
                           </span>
@@ -560,12 +734,16 @@ const StackForgeBuildProject = () => {
 
                     let logType = "";
                     if (content.startsWith("ERROR:")) logType = "errorLogLine";
-                    else if (content.startsWith("WARNING:")) logType = "warningLogLine";
+                    else if (content.startsWith("WARNING:"))
+                      logType = "warningLogLine";
                     else if (content.startsWith("INFO:")) logType = "infoLogLine";
                     else if (content.startsWith("DEBUG:")) logType = "debugLogLine";
 
                     return (
-                      <div className="importProjectsBuildLogsCellLogDisplay" key={i}>
+                      <div
+                        className="importProjectsBuildLogsCellLogDisplay"
+                        key={i}
+                      >
                         {indent}
                         <span className={`log-content ${logType}`}>
                           {cleanedContent}
@@ -575,24 +753,29 @@ const StackForgeBuildProject = () => {
                   })
                 )}
               </div>
-              {successfulDeployment && typedText.length === buildLogsString.length && (
-                <div className="importProjectsOperationsBarSupplement">
-                  <a
-                    rel="noopener noreferrer"
-                    href={`https://${selectedProjectName}.stackforgeengine.com`}
-                    className="importProjectsDeployButton"
-                    disabled={isDeploying}
-                  >
-                    Go to project.
-                  </a>
-                </div>
-              )}
+              {successfulDeployment &&
+                typedText.length === buildLogsString.length && (
+                  <div className="importProjectsOperationsBarSupplement">
+                    <a
+                      rel="noopener noreferrer"
+                      href={`https://${selectedProjectName}.stackforgeengine.com`}
+                      className="importProjectsDeployButton"
+                      disabled={isDeploying}
+                    >
+                      Go to project.
+                    </a>
+                  </div>
+                )}
             </div>
           </div>
         </div>
       )}
       {!isLoaded && (
-        <div className="importProjectsCellHeaderContainer" onScroll={handleContainerScroll} style={{ justifyContent: "center" }}>
+        <div
+          className="importProjectsCellHeaderContainer"
+          onScroll={handleContainerScroll}
+          style={{ justifyContent: "center" }}
+        >
           <div className="loading-wrapper">
             <div className="loading-circle" />
             <label className="loading-title">Stack Forge</label>
@@ -600,7 +783,14 @@ const StackForgeBuildProject = () => {
         </div>
       )}
       {changeTeamOpen && (
-        <div className="importProjectsOperationsDropdownMenu" ref={changeTeamDropdownRef} style={{ top: changeTeamDropdownPosition.top * 1.02, left: changeTeamDropdownPosition.left }}>
+        <div
+          className="importProjectsOperationsDropdownMenu"
+          ref={changeTeamDropdownRef}
+          style={{
+            top: changeTeamDropdownPosition.top * 1.02,
+            left: changeTeamDropdownPosition.left
+          }}
+        >
           <button
             onClick={() => {
               setSelectedTeamName(teamName);
@@ -638,7 +828,14 @@ const StackForgeBuildProject = () => {
         </div>
       )}
       {branchOpen && (
-        <div className="importProjectsBranchesDropdownMenu" ref={branchDropdownRef} style={{ top: branchDropdownPosition.top * 1.02, left: branchDropdownPosition.left }}>
+        <div
+          className="importProjectsBranchesDropdownMenu"
+          ref={branchDropdownRef}
+          style={{
+            top: branchDropdownPosition.top * 1.02,
+            left: branchDropdownPosition.left
+          }}
+        >
           {branches && branches.length > 0 ? (
             branches.map(b => (
               <button
@@ -650,7 +847,9 @@ const StackForgeBuildProject = () => {
                 disabled={isDeploying}
               >
                 <span>{b.name}</span>
-                {selectedBranch === b.name && <FontAwesomeIcon icon={faCheckDouble} />}
+                {selectedBranch === b.name && (
+                  <FontAwesomeIcon icon={faCheckDouble} />
+                )}
               </button>
             ))
           ) : (
@@ -658,6 +857,41 @@ const StackForgeBuildProject = () => {
               <span>No branches available.</span>
             </button>
           )}
+        </div>
+      )}
+      {buildTemplateOpen && (
+        <div
+          className="importProjectsTemplateSelectionDropdownMenu"
+          ref={buildTemplateDropdownRef}
+          style={{
+            top: buildTemplateDropdownPosition.top * 1.02,
+            left: buildTemplateDropdownPosition.left
+          }}
+        >
+          {["Flask", "Next", "Vite", "Express", "Other"].map(template => (
+            <button
+              key={template}
+              onClick={() => {
+                setSelectedTemplate(template);
+                setBuildTemplateOpen(false);
+              }}
+              disabled={isDeploying}
+            >
+              <span>
+                <img
+                  src={`public/StackForgeProjectIcons/${template
+                    .toLowerCase()
+                    .replace(/\./g, "")
+                    .replace(/ /g, "")}.png`}
+                  alt={""}
+                />
+                {template}
+              </span>
+              {selectedTemplate === template && (
+                <FontAwesomeIcon icon={faCheckDouble} />
+              )}
+            </button>
+          ))}
         </div>
       )}
     </div>
